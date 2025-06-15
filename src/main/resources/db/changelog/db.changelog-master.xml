@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+     https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.3.xsd">
+
+    <!-- Include your changesets here -->
+   <!--  <include file="db/changelog/changeset-004-update-tables.xml" /> -->
+
+<!-- <changeSet id="005" author="thach" >
+	<sqlFile path="db/changelog/changeset-005-create-tables.sql"/>
+</changeSet> -->
+<!-- <changeSet id="006" author="thach" >
+	<sqlFile path="db/changelog/changeset-006-create-tables.sql"/>
+</changeSet> -->
+
+<!-- <changeSet id="007" author="thach" >
+	<sqlFile path="db/changelog/changeset-007-create-tables.sql"/>
+</changeSet> 
+<changeSet id="008" author="thach" >
+	<sqlFile path="db/changelog/changeset-008-update-user.sql"/>
+</changeSet> 
+<changeSet id="009" author="thach" >
+	<sqlFile path="db/changelog/changeset-009-update-user.sql"/>
+</changeSet>  -->
+</databaseChangeLog>

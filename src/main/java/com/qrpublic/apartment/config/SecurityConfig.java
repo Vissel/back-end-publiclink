@@ -2,6 +2,7 @@ package com.qrpublic.apartment.config;
 
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.List;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
@@ -106,7 +107,7 @@ public class SecurityConfig {
 		configuration.setAllowedHeaders(Arrays.asList("*"));
 		// Allow credentials (e.g., cookies, authorization headers)
 		configuration.setAllowCredentials(true);
-
+		configuration.setExposedHeaders(List.of("token"));// set token
 		UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
 		// Apply this CORS configuration to all paths
 		source.registerCorsConfiguration("/**", configuration);

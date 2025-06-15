@@ -158,14 +158,15 @@ public class RequestServiceImpl implements RequestService {
 	@Override
 	public String generateSellerAuthLink(User seller, long reqId) {
 		// gen link for seller set user name password
-		String urlparam = "?id=" + seller.getUserId() + "&username=" + seller.getUserName() + "&reqid=" + reqId;
-		return "/public/register" + Base64.getUrlEncoder().encodeToString(urlparam.getBytes());
+		String urlparam = "id=" + seller.getUserId() + "&username=" + seller.getUserName() + "&reqid=" + reqId;
+		return "/public/register?" + Base64.getUrlEncoder().encodeToString(urlparam.getBytes());
 	}
 
 	@Override
-	public Request saveRequest(long requestId) {
+	public Request saveAuthenticatedRequest(long requestId) {
 		Request request = requestRepo.findById(requestId).orElse(null);
 		if (request != null) {
+			request.setAuthenticated(true);
 			return requestRepo.save(request);
 		}
 		return null;

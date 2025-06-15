@@ -23,9 +23,14 @@ public class UserServiceImpl implements UserService {
 
 	@Override
 	public boolean saveUser(RegisterUserDTO userDTO) {
-		User user = new User(userDTO.getUserName(), encoder.encode(userDTO.getPassword()), userDTO.getName(),
-				userDTO.getRole().getRole());
-		user.setLink(userDTO.getLink());
+		Optional<User> existedUser = userRepo.findById(userDTO.getUserId());
+		User user;
+		if (existedUser.isPresent()) {
+			user = existedUser.get();
+		} else {
+			user = new User(userDTO.getUserName(), encoder.encode(userDTO.getPassword()), userDTO.getName(),
+					userDTO.getLink(), userDTO.getRole().getRole());
+		}
 		return userRepo.save(user).getUserId() != null;
 	}
 
@@ -40,7 +45,7 @@ public class UserServiceImpl implements UserService {
 			boolean isSaved = true;
 			if (!user.isPresent()) {
 				// create new user
-				sellerU = new User(seller.getUsername(), CommonConstant.EMPTY, seller.getUsername(),
+				sellerU = new User(seller.getUsername(), CommonConstant.EMPTY, seller.getUsername(), seller.getLink(),
 						RoleEnum.SELLER.getRole());
 			} else {
 				sellerU = user.get();

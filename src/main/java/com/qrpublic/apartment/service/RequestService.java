@@ -14,6 +14,6 @@ public interface RequestService {
 
 	public Request saveRequest(Request request);
 
-	public Request saveRequest(long requestId);
+	public Request saveAuthenticatedRequest(long requestId);
 
 }

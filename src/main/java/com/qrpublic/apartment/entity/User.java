@@ -32,10 +32,11 @@ public class User {
 	@Column(updatable = false, insertable = false)
 	private Timestamp createdAt;
 
-	public User(String username, String pass, String name, String type) {
+	public User(String username, String pass, String name, String link, String type) {
 		this.userName = username;
 		this.tempPassword = pass;
 		this.name = name;
+		this.link = link;
 		this.type = type;
 	}
 }

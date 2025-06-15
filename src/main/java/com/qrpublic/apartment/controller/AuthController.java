@@ -3,6 +3,9 @@ package com.qrpublic.apartment.controller;
 import java.util.Map;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -22,12 +25,15 @@ import com.qrpublic.apartment.entity.Request;
 import com.qrpublic.apartment.requestmodel.AuthToken;
 import com.qrpublic.apartment.requestmodel.LoginDTO;
 import com.qrpublic.apartment.requestmodel.RegisterUserDTO;
+import com.qrpublic.apartment.requestmodel.RoleEnum;
 import com.qrpublic.apartment.service.RequestService;
 import com.qrpublic.apartment.service.SaleEnvironmentService;
 import com.qrpublic.apartment.service.UserService;
 
 import io.jsonwebtoken.Claims;
+import lombok.extern.slf4j.Slf4j;
 
+@Slf4j
 @RestController
 @RequestMapping("/auth")
 public class AuthController {
@@ -36,6 +42,8 @@ public class AuthController {
 
 	@Autowired
 	private JwtUtil jwtService;
+	@Value("${jwt.url.expired}")
+	private long ACCESS_TOKEN_VALIDITY; // 2 days as default
 
 	@Autowired
 	private UserService userService;
@@ -69,6 +77,7 @@ public class AuthController {
 		String token = headers.get("authorization");
 		if (token != null && jwtService.isTokenValid(token.substring(7))) {
 			// User is authenticated
+			token = token.substring(7);
 			Claims body = jwtService.extractClaims(token);
 			String username = jwtService.extractSubject(token);
 			AuthToken authResponse = new AuthToken();
@@ -89,15 +98,29 @@ public class AuthController {
 	 * @param registerDTO
 	 * @return
 	 */
-	@GetMapping("/sellerRegister")
+	@PostMapping("/sellerRegister")
 	public ResponseEntity<String> sellerRegister(@RequestBody RegisterUserDTO registerDTO, @RequestParam String reqId) {
-		if (userService.saveUser(registerDTO)) {
-			Request request = requestService.saveRequest(Long.valueOf(reqId));
-			if (request != null) {
-				String resLink = envService.getPublicLinkBy(request);
-				return ResponseEntity.ok(resLink);
+		try {
+			if (userService.saveUser(registerDTO)) {
+				Request request = requestService.saveAuthenticatedRequest(Long.valueOf(reqId));
+				if (request != null && request.isAuthenticated()) {
+					// generate token
+					String sellerToken = jwtService.generateTokenByValidTime(request.getSellerId().getUserName(),
+							RoleEnum.SELLER.getRole(), ACCESS_TOKEN_VALIDITY);
+					String resLink = envService.getPublicLinkBy(request);
+					HttpHeaders headers = new HttpHeaders();
+					headers.add("token", sellerToken);
+					return ResponseEntity.status(HttpStatus.OK).headers(headers).body(resLink);
+				}
 			}
+		} catch (Exception e) {
+			log.error("Exception:{}", e.getMessage());
 		}
 		return ResponseEntity.badRequest().body("Register failure");
+	}
+
+	@GetMapping("/testHeader")
+	public ResponseEntity<String> testHeader() {
+		return ResponseEntity.status(HttpStatus.OK).header("token", "abctoken").body("testHeader");
 	}
 }

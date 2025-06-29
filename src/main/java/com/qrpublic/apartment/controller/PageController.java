@@ -1,11 +1,14 @@
 package com.qrpublic.apartment.controller;
 
+import java.util.Map;
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -38,7 +41,7 @@ public class PageController {
 	}
 
 	@GetMapping("/link")
-	public ResponseEntity<?> handleSecureLink(@RequestParam String token) {
+	public ResponseEntity<?> handleSecureLink(@RequestParam String token, @RequestHeader Map<String, String> headers) {
 		try {
 			if (linkService.validateLink(token)) {
 				SaleEnvironment env = envService.getEnvironmentByPublicLink(token);
@@ -56,7 +59,7 @@ public class PageController {
 		if (linkService.validateLink(requestNewOrder.getToken())) {
 			SaleEnvironment env = envService.getEnvironmentByPublicLink(requestNewOrder.getToken());
 			if (env != null) {
-				OrderDTO orderDTO = orderService.addNewOrder(env, requestNewOrder.getBuyer());
+				OrderDTO orderDTO = orderService.addNewOrder(env, requestNewOrder);
 				if (orderDTO != null) {
 					return ResponseEntity.ok(orderDTO);
 				}

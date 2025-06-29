@@ -5,6 +5,9 @@ import com.qrpublic.apartment.requestmodel.RegisterUserDTO;
 import com.qrpublic.apartment.requestmodel.SellerDTO;
 
 public interface UserService {
+
+	public boolean saveAdminUser(RegisterUserDTO userDTO);
+
 	public boolean saveUser(RegisterUserDTO userDTO);
 
 	public User createSeller(SellerDTO seller);

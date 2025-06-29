@@ -12,6 +12,7 @@ import com.qrpublic.apartment.repository.UserRepository;
 import com.qrpublic.apartment.requestmodel.RegisterUserDTO;
 import com.qrpublic.apartment.requestmodel.RoleEnum;
 import com.qrpublic.apartment.requestmodel.SellerDTO;
+import com.qrpublic.apartment.util.Utils;
 
 @Service
 public class UserServiceImpl implements UserService {
@@ -22,16 +23,49 @@ public class UserServiceImpl implements UserService {
 	private UserRepository userRepo;
 
 	@Override
+	public boolean saveAdminUser(RegisterUserDTO userDTO) {
+		boolean isSaved = false;
+		if (userDTO.getUserId() == null) {
+			Optional<User> existedUser = userRepo.findByUserName(userDTO.getUserName());
+
+			User user;
+			if (!existedUser.isPresent()) {
+				user = new User(userDTO.getUserName(), encoder.encode(userDTO.getPassword()), userDTO.getName(),
+						userDTO.getLink(), userDTO.getRole().getRole());
+				isSaved = userRepo.save(user).getUserId() != null;
+			}
+		}
+		return isSaved;
+	}
+
+	@Override
 	public boolean saveUser(RegisterUserDTO userDTO) {
 		Optional<User> existedUser = userRepo.findById(userDTO.getUserId());
 		User user;
 		if (existedUser.isPresent()) {
 			user = existedUser.get();
+			saveUpdatedDTO(userDTO, user);
 		} else {
 			user = new User(userDTO.getUserName(), encoder.encode(userDTO.getPassword()), userDTO.getName(),
 					userDTO.getLink(), userDTO.getRole().getRole());
 		}
 		return userRepo.save(user).getUserId() != null;
+	}
+
+	private void saveUpdatedDTO(RegisterUserDTO userDTO, User user) {
+		if (Utils.isValidStr(userDTO.getUserName()) && !userDTO.getUserName().equals(user.getUserName())) {
+			user.setUserName(userDTO.getUserName());
+		}
+		if (Utils.isValidStr(userDTO.getPassword())
+				&& !encoder.matches(userDTO.getPassword(), user.getTempPassword())) {
+			user.setTempPassword(encoder.encode(userDTO.getPassword()));
+		}
+		if (Utils.isValidStr(userDTO.getName()) && !userDTO.getName().equals(user.getName())) {
+			user.setName(userDTO.getName());
+		}
+		if (Utils.isValidStr(userDTO.getLink()) && !userDTO.getLink().equals(user.getLink())) {
+			user.setLink(userDTO.getLink());
+		}
 	}
 
 	@Override

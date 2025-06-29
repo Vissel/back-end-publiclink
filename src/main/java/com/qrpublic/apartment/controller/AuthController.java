@@ -21,6 +21,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.qrpublic.apartment.config.JwtUtil;
+import com.qrpublic.apartment.constant.CommonConstant;
 import com.qrpublic.apartment.entity.Request;
 import com.qrpublic.apartment.requestmodel.AuthToken;
 import com.qrpublic.apartment.requestmodel.LoginDTO;
@@ -57,11 +58,22 @@ public class AuthController {
 		Authentication authentication = authenticationManager.authenticate(
 				new UsernamePasswordAuthenticationToken(loginDTO.getInputUsername(), loginDTO.getInputPassword()));
 		UserDetails user = (UserDetails) authentication.getPrincipal();
-		String token = jwtService.generateToken(user.getUsername(),
-				user.getAuthorities().iterator().next().getAuthority());
+		String token;
+
+		// For seller
+		if (user.getAuthorities().iterator().next().getAuthority().equals(RoleEnum.SELLER.getRole())) {
+			token = jwtService.generateTokenByValidTime(user.getUsername(), RoleEnum.SELLER.getRole(),
+					ACCESS_TOKEN_VALIDITY);
+		} else if (user.getAuthorities().iterator().next().getAuthority().equals(RoleEnum.ADMIN.getRole())) {
+			token = jwtService.generateToken(user.getUsername(),
+					user.getAuthorities().iterator().next().getAuthority());
+		} else {
+			return ResponseEntity.status(HttpStatus.FORBIDDEN).body(new AuthToken(CommonConstant.EMPTY));
+		}
+
 		AuthToken authRes = new AuthToken(token);
 		authRes.setUsername(user.getUsername());
-		authRes.setRole(jwtService.extractClaims(token).get("role").toString());
+		authRes.setRole(user.getAuthorities().iterator().next().getAuthority());
 		SecurityContextHolder.getContext().setAuthentication(authentication);
 		return ResponseEntity.ok(authRes);
 	}
@@ -74,10 +86,10 @@ public class AuthController {
 	 */
 	@GetMapping("/check-auth")
 	public ResponseEntity<?> checkAuth(@RequestHeader Map<String, String> headers) {
-		String token = headers.get("authorization");
-		if (token != null && jwtService.isTokenValid(token.substring(7))) {
+		final String bearerToken = headers.get("authorization");
+		if (bearerToken != null && jwtService.isHeaderTokenValid(headers.get("authorization"))) {
 			// User is authenticated
-			token = token.substring(7);
+			final String token = bearerToken.substring(7);
 			Claims body = jwtService.extractClaims(token);
 			String username = jwtService.extractSubject(token);
 			AuthToken authResponse = new AuthToken();

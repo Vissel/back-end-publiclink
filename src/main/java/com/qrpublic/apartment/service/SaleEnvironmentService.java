@@ -13,4 +13,5 @@ public interface SaleEnvironmentService {
 	public SaleEnvironment getEnvironmentByPublicLink(String publicLink);
 
 	public String getPublicLinkBy(Request request);
+
 }

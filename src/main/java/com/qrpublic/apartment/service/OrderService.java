@@ -5,7 +5,7 @@ import com.qrpublic.apartment.requestmodel.OrderDTO;
 
 public interface OrderService {
 
-	public OrderDTO addNewOrder(SaleEnvironment environment, String buyerName);
+	public OrderDTO addNewOrder(SaleEnvironment environment, OrderDTO requestOrderDTO);
 
 	public boolean setDelivery(long orderId, boolean isDelivered);
 

@@ -17,12 +17,14 @@ public class OrderImpl implements OrderService {
 	OrderResponsitory orderRepo;
 
 	@Override
-	public OrderDTO addNewOrder(SaleEnvironment environment, String buyerName) {
+	public OrderDTO addNewOrder(SaleEnvironment environment, OrderDTO requestOrderDTO) {
 		OrderDTO result = null;
-		if (buyerName != null && !buyerName.isBlank()) {
+		if (Utils.isValidStr(requestOrderDTO.getBuyer())) {
 			long orderedTime = System.currentTimeMillis();
 			Order newOrder = new Order();
-			newOrder.setBuyerName(buyerName);
+			newOrder.setBuyerName(requestOrderDTO.getBuyer());
+			newOrder.setAmount(requestOrderDTO.getAmount());
+			newOrder.setNote(requestOrderDTO.getNote());
 			newOrder.setSaleEnvironment(environment);
 
 			Order order = orderRepo.save(newOrder);

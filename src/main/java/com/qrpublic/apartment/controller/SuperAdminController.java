@@ -21,7 +21,7 @@ public class SuperAdminController {
 	@PostMapping("/registerUser")
 	public ResponseEntity<String> registerUser(@RequestBody RegisterUserDTO userDTO) {
 
-		if (userService.saveUser(userDTO)) {
+		if (userService.saveAdminUser(userDTO)) {
 			return ResponseEntity.ok(new String("Register user " + userDTO.getUserName() + " successfully."));
 		}
 		return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new String("Registering got failure!!!"));

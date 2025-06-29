@@ -10,6 +10,7 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
+import jakarta.persistence.OrderBy;
 import jakarta.persistence.Table;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -32,6 +33,7 @@ public class Order {
 	private SaleEnvironment saleEnvironment;
 
 	@Column(updatable = false, insertable = false)
+	@OrderBy(value = "DESC")
 	private Timestamp orderedAt;
 
 	private boolean delivered;
@@ -39,4 +41,10 @@ public class Order {
 	private boolean getMoney;
 
 	private String sellerNote;
+
+	private int amount;
+
+	private String unit;
+
+	private String note;
 }

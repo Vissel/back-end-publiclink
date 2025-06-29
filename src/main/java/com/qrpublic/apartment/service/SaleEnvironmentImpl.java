@@ -56,4 +56,5 @@ public class SaleEnvironmentImpl implements SaleEnvironmentService {
 	public String getPublicLinkBy(Request request) {
 		return repo.findByRequest(request).get().getPublicLink();
 	}
+
 }

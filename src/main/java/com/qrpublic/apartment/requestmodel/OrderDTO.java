@@ -17,5 +17,8 @@ public class OrderDTO {
 	private boolean delivered;
 	private boolean getMoney;
 	private String sellerNote;
+	private int amount;
+	private String unit;
+	private String note;
 
 }

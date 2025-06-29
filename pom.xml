@@ -12,7 +12,8 @@
 	<groupId>com.qr.public.apartment</groupId>
 	<artifactId>VietQrApplication</artifactId>
 	<version>0.0.1-SNAPSHOT</version>
-	<name>VietQrApplication</name>
+	<name>publiclink</name>
+	<packaging>war</packaging>
 	<description>Demo project for Spring Boot</description>
 	<url />
 	<licenses>
@@ -34,6 +35,11 @@
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-web</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-tomcat</artifactId>
+			<scope>provided</scope>
 		</dependency>
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
@@ -110,27 +116,49 @@
 			<groupId>io.jsonwebtoken</groupId>
 			<artifactId>jjwt-jackson</artifactId>
 			<version>0.11.5</version>
-			<scope>provided</scope>
+			<scope>compile</scope>
 		</dependency>
 	</dependencies>
 
-	<build>
-		<plugins>
-			<plugin>
-				<groupId>org.springframework.boot</groupId>
-				<artifactId>spring-boot-maven-plugin</artifactId>
-			</plugin>
-			<!--<plugin>
-				<groupId>org.liquibase</groupId>
-				<artifactId>liquibase-maven-plugin</artifactId>
 
-				<configuration>
-					<propertyFileWillOverride>true</propertyFileWillOverride>
-					<propertyFile>liquibase.properties</propertyFile>
-					<promptOnNonLocalDatabase>false</promptOnNonLocalDatabase>
-				</configuration>
-			</plugin>-->
-		</plugins>
-	</build>
+	<profiles>
+		<profile>
+			<id>dev</id>
+			<activation>
+				<activeByDefault>true</activeByDefault>
+			</activation>
+			<build>
+				<finalName>publiclink-dev</finalName>
+				<plugins>
+					<plugin>
+						<groupId>org.springframework.boot</groupId>
+						<artifactId>spring-boot-maven-plugin</artifactId>
+					</plugin>
+				</plugins>
+			</build>
+			<properties>
+            <activeProfile>dev</activeProfile>
+        </properties>
+		</profile>
+
+		<profile>
+			<id>qa</id>
+			<activation>
+				<activeByDefault>false</activeByDefault>
+			</activation>
+			<build>
+				<finalName>publiclink</finalName>
+				<plugins>
+					<plugin>
+						<groupId>org.springframework.boot</groupId>
+						<artifactId>spring-boot-maven-plugin</artifactId>
+					</plugin>
+				</plugins>
+			</build>
+			<properties>
+            <activeProfile>qa</activeProfile>
+        </properties>
+		</profile>
+	</profiles>
 
 </project>

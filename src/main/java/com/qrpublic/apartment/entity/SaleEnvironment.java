@@ -15,6 +15,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.OneToOne;
+import jakarta.persistence.OrderBy;
 import jakarta.persistence.Table;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -47,6 +48,7 @@ public class SaleEnvironment {
 	private Timestamp endedAt;
 
 	@OneToMany(mappedBy = "saleEnvironment", cascade = { CascadeType.REMOVE })
+	@OrderBy(value = "DESC")
 	private List<Order> listOrder;
 
 	public SaleEnvironment(Request req) {

@@ -45,7 +45,7 @@ public class Utils {
 		List<OrderDTO> orders = createListOrderDTO(env.getListOrder());
 
 		return new SaleEnvDTO(Utils.formatTimeStamp(env.getCreatedAt()), env.getRequest().getSellerId().getUserName(),
-				env.getRequest().getSellerId().getLink(), productName, LinkUtils.buildPublicLink(env.getPublicLink()),
+				env.getRequest().getSellerId().getLink(), productName, env.getPublicLink(),
 				env.getRequest().getCreatedBy().getName(), env.isState(), orders);
 	}
 
@@ -63,7 +63,11 @@ public class Utils {
 		formater.setTimeZone(TimeZone.getTimeZone("UTC"));
 		String orderTime = formater.format(new Date(time));
 		return new OrderDTO(order.getOrderId(), orderTime, order.getBuyerName(), publicLink, order.isDelivered(),
-				order.isGetMoney(), order.getSellerNote());
+				order.isGetMoney(), order.getSellerNote(), order.getAmount(), order.getUnit(), order.getNote());
 
+	}
+
+	public static boolean isValidStr(String string) {
+		return string != null && !string.isBlank();
 	}
 }

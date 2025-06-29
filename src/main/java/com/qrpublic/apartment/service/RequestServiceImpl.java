@@ -159,7 +159,7 @@ public class RequestServiceImpl implements RequestService {
 	public String generateSellerAuthLink(User seller, long reqId) {
 		// gen link for seller set user name password
 		String urlparam = "id=" + seller.getUserId() + "&username=" + seller.getUserName() + "&reqid=" + reqId;
-		return "/public/register?" + Base64.getUrlEncoder().encodeToString(urlparam.getBytes());
+		return "public/register?" + Base64.getUrlEncoder().encodeToString(urlparam.getBytes());
 	}
 
 	@Override

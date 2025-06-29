@@ -70,6 +70,14 @@ public class JwtUtil {
 		}
 	}
 
+	public boolean isHeaderTokenValid(String headerAuthorization) throws JwtException {
+		final String token = headerAuthorization.substring(7);
+		if (token != null && isTokenValid(token)) {
+			return !extractClaims(token).getExpiration().before(new Date());
+		}
+		return false;
+	}
+
 	protected byte[] getKey() {
 		return this.secretKey.getBytes();
 	}

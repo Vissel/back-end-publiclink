@@ -12,7 +12,7 @@ import com.google.zxing.BarcodeFormat;
 import com.google.zxing.MultiFormatWriter;
 import com.google.zxing.client.j2se.MatrixToImageWriter;
 import com.google.zxing.common.BitMatrix;
-import com.qrpublic.apartment.config.JwtUtil;
+import com.qrpublic.apartment.authentication.service.JwtService;
 import com.qrpublic.apartment.requestmodel.VietQrRequest;
 
 import io.jsonwebtoken.Jwts;
@@ -22,7 +22,7 @@ import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 @Service
-public class VietQrService extends JwtUtil implements LinkService {
+public class VietQrService extends JwtService implements LinkService {
 
 	@Value("${jwt.secret.url}")
 	private String secretKey;

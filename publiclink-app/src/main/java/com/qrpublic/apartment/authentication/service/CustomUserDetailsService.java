@@ -1,4 +1,4 @@
-package com.qrpublic.apartment.service;
+package com.qrpublic.apartment.authentication.service;
 
 import java.util.Collections;
 import java.util.List;

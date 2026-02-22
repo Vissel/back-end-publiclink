@@ -9,7 +9,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.qrpublic.apartment.config.JwtUtil;
+import com.qrpublic.apartment.authentication.service.JwtService;
 import com.qrpublic.apartment.entity.SaleEnvironment;
 import com.qrpublic.apartment.requestmodel.SaleEnvDTO;
 import com.qrpublic.apartment.requestmodel.SellerDTO;
@@ -33,7 +33,7 @@ public class GenerationController {
 	SaleEnvironmentService envService;
 
 	@Autowired
-	JwtUtil jwtUtil;
+    JwtService jwtService;
 
 	GenerationController(AdminController adminController) {
 		this.adminController = adminController;
@@ -48,7 +48,7 @@ public class GenerationController {
 	public ResponseEntity<?> generatePublicLink(@RequestBody SellerDTO sellerDTO) {
 		log.info("Gerating public link for seller {}...", sellerDTO.getUsername());
 		// check jwt expired
-		if (jwtUtil.isTokenValid(sellerDTO.getAccessToken())) {
+		if (jwtService.isTokenValid(sellerDTO.getAccessToken())) {
 			String publicToken = requestService.generatePublicLink(sellerDTO);
 			if (publicToken != null && !publicToken.isBlank()) {
 				SaleEnvironment env = envService.getEnvironmentByPublicLink(publicToken);

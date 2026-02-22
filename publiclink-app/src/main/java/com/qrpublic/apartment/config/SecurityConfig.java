@@ -27,7 +27,7 @@ import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
-import com.qrpublic.apartment.service.CustomUserDetailsService;
+import com.qrpublic.apartment.authentication.service.CustomUserDetailsService;
 
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -36,15 +36,11 @@ import jakarta.servlet.http.HttpServletResponse;
 @EnableWebSecurity
 @EnableMethodSecurity
 public class SecurityConfig {
-
-	private final CustomUserDetailsService customUserDetailsService;
+    @Autowired
+	CustomUserDetailsService customUserDetailsService;
 
 	@Autowired
 	private JwtFilter jwtFilter;
-
-	public SecurityConfig(CustomUserDetailsService userDetails) {
-		this.customUserDetailsService = userDetails;
-	}
 
 	@Bean
 	SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {

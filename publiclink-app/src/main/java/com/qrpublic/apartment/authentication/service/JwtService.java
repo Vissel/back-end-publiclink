@@ -1,4 +1,4 @@
-package com.qrpublic.apartment.config;
+package com.qrpublic.apartment.authentication.service;
 
 import java.util.Base64;
 import java.util.Date;
@@ -12,10 +12,11 @@ import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.SignatureAlgorithm;
 import io.jsonwebtoken.security.Keys;
+import org.springframework.stereotype.Service;
 
 @Primary
-@Component
-public class JwtUtil {
+@Service
+public class JwtService {
 
 	@Value("${jwt.secret}")
 	private String secretKey;
@@ -38,7 +39,7 @@ public class JwtUtil {
 	}
 
 	/**
-	 * Custom generated token withh valid time
+	 * Custom generated token with valid time
 	 * 
 	 * @param username
 	 * @param role

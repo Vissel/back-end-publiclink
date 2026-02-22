@@ -15,7 +15,7 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.qrpublic.apartment.config.JwtUtil;
+import com.qrpublic.apartment.authentication.service.JwtService;
 import com.qrpublic.apartment.entity.SaleEnvironment;
 import com.qrpublic.apartment.requestmodel.RequestDTO;
 import com.qrpublic.apartment.requestmodel.SaleEnvDTO;
@@ -34,7 +34,7 @@ public class AdminController {
 	SaleEnvironmentService envService;
 
 	@Autowired
-	JwtUtil jwtUtils;
+    JwtService jwtUtils;
 
 	/**
 	 * Display an area to admin select and input seller info

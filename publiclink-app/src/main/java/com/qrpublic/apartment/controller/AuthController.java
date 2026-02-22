@@ -1,9 +1,13 @@
 package com.qrpublic.apartment.controller;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.Map;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.io.ByteArrayResource;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -20,7 +24,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.qrpublic.apartment.config.JwtUtil;
+import com.qrpublic.apartment.authentication.service.JwtService;
 import com.qrpublic.apartment.constant.CommonConstant;
 import com.qrpublic.apartment.entity.Request;
 import com.qrpublic.apartment.requestmodel.AuthToken;
@@ -42,7 +46,7 @@ public class AuthController {
 	private AuthenticationManager authenticationManager;
 
 	@Autowired
-	private JwtUtil jwtService;
+	private JwtService jwtService;
 	@Value("${jwt.url.expired}")
 	private long ACCESS_TOKEN_VALIDITY; // 2 days as default
 
@@ -135,4 +139,14 @@ public class AuthController {
 	public ResponseEntity<String> testHeader() {
 		return ResponseEntity.status(HttpStatus.OK).header("token", "abctoken").body("testHeader");
 	}
+
+    @GetMapping("/public-key")
+    public ResponseEntity<ByteArrayResource> getPublicKey() {
+        try {
+            // Read from /Users/user/.openssl/authpub.pem
+            return ResponseEntity.ok(new ByteArrayResource(Files.readAllBytes(Paths.get("/Users/user/.openssl/authpub.pem"))));
+        }catch (IOException | OutOfMemoryError e){
+            return ResponseEntity.status(HttpStatus.NO_CONTENT).body(null);
+        }
+    }
 }

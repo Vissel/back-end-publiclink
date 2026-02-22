@@ -9,11 +9,15 @@
 		<version>3.5.0</version>
 		<relativePath /> <!-- lookup parent from repository -->
 	</parent>
-	<groupId>com.qr.public.apartment</groupId>
-	<artifactId>VietQrApplication</artifactId>
+	<groupId>com.qrpublic.apartment</groupId>
+	<artifactId>publiclink</artifactId>
 	<version>0.0.1-SNAPSHOT</version>
 	<name>publiclink</name>
-	<packaging>war</packaging>
+    <modules>
+        <module>integration</module>
+        <module>publiclink-app</module>
+    </modules>
+    <packaging>pom</packaging>
 	<description>Demo project for Spring Boot</description>
 	<url />
 	<licenses>
@@ -128,7 +132,7 @@
 				<activeByDefault>true</activeByDefault>
 			</activation>
 			<build>
-				<finalName>publiclink-dev</finalName>
+				<finalName>publiclink</finalName>
 				<plugins>
 					<plugin>
 						<groupId>org.springframework.boot</groupId>

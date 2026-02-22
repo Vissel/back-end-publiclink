@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.util.Collection;
 import java.util.stream.Collectors;
 
+import com.qrpublic.apartment.authentication.service.JwtService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.GrantedAuthority;
@@ -24,7 +25,7 @@ import jakarta.servlet.http.HttpServletResponse;
 public class JwtFilter extends OncePerRequestFilter {
 
 	@Autowired
-	private JwtUtil jwtUtil;
+	private JwtService jwtService;
 
 	@Autowired
 	private UserDetailsService userDetailsService;
@@ -37,14 +38,14 @@ public class JwtFilter extends OncePerRequestFilter {
 
 		if (authHeader != null && authHeader.startsWith("Bearer ") && !authHeader.substring(7).contains("undefined")) {
 			String token = authHeader.substring(7);
-			String username = jwtUtil.extractSubject(token);
+			String username = jwtService.extractSubject(token);
 
 			if (username != null && SecurityContextHolder.getContext().getAuthentication() == null) {
 				UserDetails userDetails = userDetailsService.loadUserByUsername(username);
 				Collection<GrantedAuthority> authorities = userDetails.getAuthorities().stream()
 						.map(role -> new SimpleGrantedAuthority("ROLE_" + role.getAuthority()))
 						.collect(Collectors.toSet());
-				if (jwtUtil.isTokenValid(token)) {
+				if (jwtService.isTokenValid(token)) {
 					UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(userDetails,
 							null, authorities);
 

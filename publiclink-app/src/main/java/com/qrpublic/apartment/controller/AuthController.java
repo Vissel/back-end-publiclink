@@ -5,6 +5,10 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.Map;
 
+import com.fasterxml.jackson.annotation.JacksonAnnotationsInside;
+import com.qrpublic.apartment.authentication.interfaces.AuthenInterface;
+import com.qrpublic.apartment.authentication.interfaces.request.NormalLoginRequest;
+import com.qrpublic.apartment.authentication.interfaces.response.NormalLoginResponse;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.ByteArrayResource;
@@ -140,13 +144,4 @@ public class AuthController {
 		return ResponseEntity.status(HttpStatus.OK).header("token", "abctoken").body("testHeader");
 	}
 
-    @GetMapping("/public-key")
-    public ResponseEntity<ByteArrayResource> getPublicKey() {
-        try {
-            // Read from /Users/user/.openssl/authpub.pem
-            return ResponseEntity.ok(new ByteArrayResource(Files.readAllBytes(Paths.get("/Users/user/.openssl/authpub.pem"))));
-        }catch (IOException | OutOfMemoryError e){
-            return ResponseEntity.status(HttpStatus.NO_CONTENT).body(null);
-        }
-    }
 }

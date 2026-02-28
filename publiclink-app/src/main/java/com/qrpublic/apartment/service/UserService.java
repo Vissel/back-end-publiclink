@@ -6,11 +6,11 @@ import com.qrpublic.apartment.requestmodel.SellerDTO;
 
 public interface UserService {
 
-	public boolean saveAdminUser(RegisterUserDTO userDTO);
+	boolean saveAdminUser(RegisterUserDTO userDTO);
 
-	public boolean saveUser(RegisterUserDTO userDTO);
+    boolean saveUser(RegisterUserDTO userDTO);
 
-	public User createSeller(SellerDTO seller);
+	User createSeller(SellerDTO seller);
 
-	public User findByUserName(String userName);
+	User findByUserName(String userName);
 }

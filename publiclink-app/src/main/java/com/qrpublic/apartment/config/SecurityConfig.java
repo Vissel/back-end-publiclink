@@ -17,6 +17,9 @@ import org.springframework.security.config.annotation.web.configuration.EnableWe
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.AuthenticationException;
+import org.springframework.security.core.userdetails.User;
+import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
@@ -51,10 +54,17 @@ public class SecurityConfig {
 				.cors(cors -> cors.configurationSource(corsConfigurationSource()))
 				// Authorize all requests (adjust as per your security requirements)
 				.authorizeHttpRequests(authorize -> authorize
-						.requestMatchers("/login", "/index", "/error", "/admin/internal/**", "/auth/**", "/public/**")
-						.permitAll()
+						.requestMatchers("/login", "/index", "/error", "/admin/internal/**", "/auth/**", "/public/**",
+                                "/api/v1/server-auth/**","/api/v1/user/**")
+                        .permitAll()
+						.requestMatchers("/admin/generator/**", "/api/generator/**").authenticated()
+                        .anyRequest().authenticated()
 
-						.requestMatchers("/admin/generator/**", "/api/generator/**").authenticated())
+                )
+                // x509 compliance
+                .x509(x509 -> x509
+                        .subjectPrincipalRegex("(.*)") // Extracts the name from the Cert, (.*?)(?:,|$)
+                )
 				.sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
 				.addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class)
 				// .formLogin(form -> form.loginProcessingUrl("/login")
@@ -109,7 +119,6 @@ public class SecurityConfig {
 		source.registerCorsConfiguration("/**", configuration);
 		return source;
 	}
-
 	// Custom success handler to return JSON instead of redirecting
 	@Bean
 	AuthenticationSuccessHandler authenticationSuccessHandler() {

@@ -1,4 +1,4 @@
-package com.qrpublic.apartment.requestmodel;
+package com.qrpublic.apartment.authorisation.model;
 
 import lombok.Getter;
 

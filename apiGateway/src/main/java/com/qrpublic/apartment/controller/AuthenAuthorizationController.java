@@ -3,17 +3,12 @@ package com.qrpublic.apartment.controller;
 import com.qrpublic.apartment.authentication.interfaces.AuthenInterface;
 import com.qrpublic.apartment.authentication.interfaces.request.NormalLoginRequest;
 import com.qrpublic.apartment.authentication.interfaces.response.NormalLoginResponse;
-import com.qrpublic.apartment.response.ResponseEntityConvertor;
 import com.qrpublic.apartment.template.model.Result;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Paths;
 
 @RestController
 @RequestMapping("/api/v1/server-auth")
@@ -34,6 +29,12 @@ public class AuthenAuthorizationController {
 
     @PostMapping("/normal")
     public ResponseEntity<Result<NormalLoginResponse>> normalLogin(@RequestBody NormalLoginRequest request) {
-        return ResponseEntityConvertor.convert(authenInterface.normalLogin(request));
+        return convert(authenInterface.normalLogin(request));
+    }
+    private <T> ResponseEntity<Result<T>> convert(Result<T> result){
+        if(result.isSuccess()){
+            return ResponseEntity.ok(result);
+        }
+        return ResponseEntity.status(result.getErrorCode()).body(result);
     }
 }

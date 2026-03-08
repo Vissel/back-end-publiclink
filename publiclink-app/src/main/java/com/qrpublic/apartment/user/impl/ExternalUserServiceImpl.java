@@ -1,10 +1,8 @@
 package com.qrpublic.apartment.user.impl;
 
 import com.qrpublic.apartment.authentication.service.RsaService;
-import com.qrpublic.apartment.entity.User;
+import com.qrpublic.apartment.authorisation.model.RoleEnum;
 import com.qrpublic.apartment.requestmodel.RegisterUserDTO;
-import com.qrpublic.apartment.requestmodel.RoleEnum;
-import com.qrpublic.apartment.requestmodel.SellerDTO;
 import com.qrpublic.apartment.service.UserService;
 import com.qrpublic.apartment.template.model.Result;
 import com.qrpublic.apartment.template.service.ProcessCallback;
@@ -14,8 +12,6 @@ import com.qrpublic.apartment.user.interfaces.response.UserCreateResponse;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.util.Assert;
-
-import java.util.Optional;
 
 @Service
 public class ExternalUserServiceImpl {

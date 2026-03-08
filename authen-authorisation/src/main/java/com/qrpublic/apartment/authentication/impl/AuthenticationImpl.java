@@ -5,7 +5,7 @@ import com.qrpublic.apartment.authentication.interfaces.request.NormalLoginReque
 import com.qrpublic.apartment.authentication.interfaces.response.NormalLoginResponse;
 import com.qrpublic.apartment.authentication.service.JwtService;
 import com.qrpublic.apartment.authentication.service.RsaService;
-import com.qrpublic.apartment.requestmodel.RoleEnum;
+import com.qrpublic.apartment.authorisation.model.RoleEnum;
 import com.qrpublic.apartment.template.model.Result;
 import com.qrpublic.apartment.template.service.ProcessCallback;
 import com.qrpublic.apartment.template.service.ServiceTemplate;
@@ -21,8 +21,6 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Paths;
 import java.time.Duration;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;

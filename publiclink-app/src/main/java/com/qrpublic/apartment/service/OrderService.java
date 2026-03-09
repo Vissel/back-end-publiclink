@@ -5,11 +5,11 @@ import com.qrpublic.apartment.requestmodel.OrderDTO;
 
 public interface OrderService {
 
-	public OrderDTO addNewOrder(SaleEnvironment environment, OrderDTO requestOrderDTO);
+    OrderDTO addNewOrder(SaleEnvironment environment, OrderDTO requestOrderDTO);
 
-	public boolean setDelivery(long orderId, boolean isDelivered);
+    boolean setDelivery(long orderId, boolean isDelivered);
 
-	public boolean setGetMoney(long orderId, boolean isGetMoney);
+    boolean setGetMoney(long orderId, boolean isGetMoney);
 
-	public boolean setSellerNote(OrderDTO order);
+    boolean setSellerNote(OrderDTO order);
 }

@@ -1,6 +1,6 @@
 package com.qrpublic.apartment.service.msgbroker;
 
-import com.qrpublic.apartment.msgbroker.model.MessageEvent;
+import com.qrpublic.apartment.adapter.msgbroker.model.MessageEvent;
 import org.springframework.amqp.rabbit.connection.CorrelationData;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.stereotype.Service;

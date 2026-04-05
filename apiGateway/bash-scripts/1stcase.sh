@@ -1,0 +1,1 @@
+curl -s -D - http://localhost:8080/api/v1/abc/public-key 2>&1 | head -20

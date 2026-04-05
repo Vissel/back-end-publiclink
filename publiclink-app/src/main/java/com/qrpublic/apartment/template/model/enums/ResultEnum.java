@@ -8,7 +8,8 @@ public enum ResultEnum {
 
     private int code;
     private String description;
-    ResultEnum(int code, String description){
+
+    ResultEnum(int code, String description) {
         this.code = code;
         this.description = description;
     }

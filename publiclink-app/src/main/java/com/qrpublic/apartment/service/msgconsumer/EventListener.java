@@ -1,6 +1,6 @@
 package com.qrpublic.apartment.service.msgconsumer;
 
-import com.qrpublic.apartment.msgbroker.model.MessageEvent;
+import com.qrpublic.apartment.adapter.msgbroker.model.MessageEvent;
 import com.qrpublic.apartment.service.IdempotencyService;
 import com.rabbitmq.client.Channel;
 import lombok.extern.slf4j.Slf4j;

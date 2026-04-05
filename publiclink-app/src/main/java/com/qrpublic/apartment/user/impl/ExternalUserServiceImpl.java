@@ -1,7 +1,7 @@
 package com.qrpublic.apartment.user.impl;
 
-import com.qrpublic.apartment.authentication.service.RsaService;
-import com.qrpublic.apartment.authorisation.model.RoleEnum;
+import com.qrpublic.apartment.authenAuthorisation.authentication.service.RsaService;
+import com.qrpublic.apartment.authenAuthorisation.authorisation.model.RoleEnum;
 import com.qrpublic.apartment.requestmodel.RegisterUserDTO;
 import com.qrpublic.apartment.service.UserService;
 import com.qrpublic.apartment.template.model.Result;

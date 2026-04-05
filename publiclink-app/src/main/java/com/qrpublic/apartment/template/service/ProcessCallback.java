@@ -6,5 +6,5 @@ public interface ProcessCallback<R, T> {
 
     void preProcess(R request);
 
-    T process() ;
+    T process();
 }

@@ -1,0 +1,35 @@
+rate-limit:
+  enabled: true
+  redis-key-prefix: "rl:"
+  fallback-strategy: ALLOW
+
+  default-policy:
+    capacity: 100
+    refill-tokens: 100
+    refill-period: 60
+
+  policies:
+    - path-pattern: "/api/v1/server-auth/**"
+      capacity: 50
+      refill-tokens: 50
+      refill-period: 60
+      order: 1
+
+  excluded-paths:
+    - "/api/v1/auth/**"
+    - "/api/v1/public/**"
+    - "/api/v1/health/**"
+    - "/api/v1/metrics/**"
+    - "/api/v1/docs/**"
+    - "/api/v1/status/**"
+    - "/api/v1/info/**"
+    - "/api/v1/healthcheck/**"
+
+  trusted-proxy-cidrs:
+    - "127.0.0.1/32"
+
+management:
+  endpoints:
+    web:
+    exposure:
+      include: health,info,metrics,ratelimiter

@@ -1,6 +1,6 @@
 package com.qrpublic.apartment.service;
 
-import com.qrpublic.apartment.authorisation.model.RoleEnum;
+import com.qrpublic.apartment.authenAuthorisation.authorisation.model.RoleEnum;
 import com.qrpublic.apartment.constant.CommonConstant;
 import com.qrpublic.apartment.entity.*;
 import com.qrpublic.apartment.repository.RequestRepository;

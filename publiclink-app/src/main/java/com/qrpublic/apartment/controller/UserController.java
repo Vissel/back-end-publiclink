@@ -1,15 +1,12 @@
 package com.qrpublic.apartment.controller;
 
-import com.qrpublic.apartment.requestmodel.RegisterUserDTO;
 import com.qrpublic.apartment.response.ResponseEntityConvertor;
-import com.qrpublic.apartment.service.UserService;
 import com.qrpublic.apartment.template.model.Result;
 import com.qrpublic.apartment.user.impl.ExternalUserServiceImpl;
 import com.qrpublic.apartment.user.interfaces.request.UserCreateRequest;
 import com.qrpublic.apartment.user.interfaces.response.UserCreateResponse;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;

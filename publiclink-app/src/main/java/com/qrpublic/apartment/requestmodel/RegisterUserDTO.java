@@ -1,6 +1,6 @@
 package com.qrpublic.apartment.requestmodel;
 
-import com.qrpublic.apartment.authorisation.model.RoleEnum;
+import com.qrpublic.apartment.authenAuthorisation.authorisation.model.RoleEnum;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;

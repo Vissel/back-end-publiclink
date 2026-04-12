@@ -1,6 +1,5 @@
 package com.qrpublic.apartment.service;
 
-import com.qrpublic.apartment.authenAuthorisation.authorisation.model.RoleEnum;
 import com.qrpublic.apartment.constant.CommonConstant;
 import com.qrpublic.apartment.entity.*;
 import com.qrpublic.apartment.repository.RequestRepository;
@@ -9,6 +8,7 @@ import com.qrpublic.apartment.requestmodel.PictureDTO;
 import com.qrpublic.apartment.requestmodel.ProductDTO;
 import com.qrpublic.apartment.requestmodel.RequestDTO;
 import com.qrpublic.apartment.requestmodel.SellerDTO;
+import com.qrpublic.apartment.service.generating.model.RoleEnum;
 import com.qrpublic.apartment.util.UserUtils;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -49,7 +49,7 @@ public class RequestServiceImpl implements RequestService {
         // created_at get from DB as
         UserDetails u = UserUtils.getCurrentUser();
         if (u != null
-                && u.getAuthorities().stream().anyMatch(auth -> auth.getAuthority().equals(RoleEnum.ADMIN.getRole()))) {
+                && u.getAuthorities().stream().anyMatch(auth -> auth.getAuthority().equals(RoleEnum.ADMIN))) {
             User admin = userRepo.findByUserName(u.getUsername()).orElseThrow(
                     () -> new UsernameNotFoundException("User not found with username: " + u.getUsername()));
 

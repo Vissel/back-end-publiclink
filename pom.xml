@@ -18,6 +18,7 @@
         <module>authen-authorisation</module>
         <module>apiGateway</module>
         <module>adapter</module>
+        <module>user</module>
     </modules>
     <packaging>pom</packaging>
     <description>Demo project for Spring Boot</description>

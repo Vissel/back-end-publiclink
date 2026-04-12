@@ -8,9 +8,11 @@ import io.jsonwebtoken.security.Keys;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
+import reactor.core.publisher.Mono;
 
-import java.util.Base64;
-import java.util.Date;
+import java.security.Key;
+import java.util.*;
+import java.util.function.Function;
 
 @Slf4j
 @Component
@@ -19,20 +21,43 @@ public class JwtTokenProducer {
     @Value("${jwt.secret}")
     private String secretKey;
 
-    private static final long ACCESS_TOKEN_VALIDITY = 15 * 60 * 1000; // 15 minutes
+    @Value("${jwt.expiration}")
+    private long accessExpiration;
+
+    @Value("${jwt.refresh-expiration}")
+    private long refreshExpiration;
+
+    private Key getSigningKey() {
+        return Keys.hmacShaKeyFor(Base64.getDecoder().decode(secretKey.getBytes()));
+    }
 
     /**
      * Standard generated token
      *
      * @param username
-     * @param role
+     * @param roles
      * @return
      */
-    public String generateToken(String username, String role) {
-        return Jwts.builder().setSubject(username).claim("role", role).setIssuedAt(new Date())
-                .setExpiration(new Date(System.currentTimeMillis() + ACCESS_TOKEN_VALIDITY))
-                .signWith(Keys.hmacShaKeyFor(Base64.getDecoder().decode(secretKey.getBytes())),
-                        SignatureAlgorithm.HS256)
+    public String generateToken(String username, List<String> roles) {
+        Map<String, Object> claims = new HashMap<>();
+        claims.put("roles", roles);
+        claims.put("type", "access");
+        return Jwts.builder()
+                .setSubject(username)
+                .setClaims(claims)
+                .setIssuedAt(new Date())
+                .setExpiration(new Date(System.currentTimeMillis() + accessExpiration))
+                .signWith(getSigningKey(), SignatureAlgorithm.HS256)
+                .compact();
+    }
+
+    public String generateRefreshToken(String username) {
+        return Jwts.builder()
+                .setSubject(username)
+                .claim("type", "refresh")
+                .setIssuedAt(new Date())
+                .setExpiration(new Date(System.currentTimeMillis() + refreshExpiration))
+                .signWith(getSigningKey())
                 .compact();
     }
 
@@ -79,5 +104,49 @@ public class JwtTokenProducer {
 
     protected byte[] getKey() {
         return this.secretKey.getBytes();
+    }
+
+    public Mono<String> getUsernameFromToken(String token) {
+        return Mono.fromCallable(() -> extractClaim(token, Claims::getSubject));
+    }
+
+    public Mono<List<String>> getRolesFromToken(String token) {
+        return Mono.fromCallable(() -> {
+            Claims claims = extractAllClaims(token);
+            return claims.get("roles", List.class);
+        });
+    }
+
+    /**
+     * Validate token by checking type and expiration
+     *
+     * @param token
+     * @return
+     */
+    public Mono<Boolean> validateToken(String token) {
+        return Mono.fromCallable(() -> {
+            try {
+                Claims claims = extractAllClaims(token);
+                boolean isAccessToken = "access".equals(claims.get("type"));
+                boolean isExpired = claims.getExpiration().before(new Date());
+                return isAccessToken && !isExpired;
+            } catch (Exception e) {
+                log.error("Token validation failed: {}", e.getMessage());
+                return false;
+            }
+        });
+    }
+
+    private <T> T extractClaim(String token, Function<Claims, T> claimsResolver) {
+        final Claims claims = extractAllClaims(token);
+        return claimsResolver.apply(claims);
+    }
+
+    private Claims extractAllClaims(String token) {
+        return Jwts.parserBuilder()
+                .setSigningKey(getSigningKey())
+                .build()
+                .parseClaimsJws(token)
+                .getBody();
     }
 }

@@ -1,11 +1,11 @@
 package com.qrpublic.apartment.service;
 
-import com.qrpublic.apartment.authenAuthorisation.authorisation.model.RoleEnum;
 import com.qrpublic.apartment.constant.CommonConstant;
 import com.qrpublic.apartment.entity.User;
 import com.qrpublic.apartment.repository.UserRepository;
 import com.qrpublic.apartment.requestmodel.RegisterUserDTO;
 import com.qrpublic.apartment.requestmodel.SellerDTO;
+import com.qrpublic.apartment.service.generating.model.RoleEnum;
 import com.qrpublic.apartment.util.Utils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.crypto.password.PasswordEncoder;

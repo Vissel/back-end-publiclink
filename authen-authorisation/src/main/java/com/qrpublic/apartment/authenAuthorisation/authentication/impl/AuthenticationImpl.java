@@ -10,6 +10,7 @@ import com.qrpublic.apartment.authenAuthorisation.template.model.Result;
 import com.qrpublic.apartment.authenAuthorisation.template.service.ProcessCallback;
 import com.qrpublic.apartment.authenAuthorisation.template.service.ServiceTemplate;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -28,6 +29,7 @@ import java.util.Date;
 @Service
 public class AuthenticationImpl implements AuthenInterface {
 
+    @Qualifier("authServiceTemplate")
     @Autowired
     ServiceTemplate template;
 

@@ -10,20 +10,20 @@ rate-limit:
     order: 0
 
   policies:
-    - path-pattern: "/api/v1/server-auth/**"
-      capacity: 50
-      refill-token: 50
+    - path-pattern: "/api/v1/auth/**"
+      capacity: 10
+      refill-token: 10
       refill-period-seconds: 60
       order: 1
 
+    - path-pattern: "/api/v1/publish/**"
+      capacity: 50
+      refill-token: 50
+      refill-period-seconds: 60
+      order: 10
+
   exclude-paths:
-    - "/api/v1/auth/**"
-    - "/api/v1/public/**"
     - "/api/v1/health/**"
-    - "/api/v1/metrics/**"
-    - "/api/v1/docs/**"
-    - "/api/v1/status/**"
-    - "/api/v1/info/**"
     - "/api/v1/healthcheck/**"
 
 management:

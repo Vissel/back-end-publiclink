@@ -1,11 +1,11 @@
 package com.qrpublic.apartment.controller;
 
-import com.qrpublic.apartment.authenAuthorisation.authentication.service.JwtService;
 import com.qrpublic.apartment.entity.SaleEnvironment;
 import com.qrpublic.apartment.requestmodel.SaleEnvDTO;
 import com.qrpublic.apartment.requestmodel.SellerDTO;
 import com.qrpublic.apartment.service.RequestService;
 import com.qrpublic.apartment.service.SaleEnvironmentService;
+import com.qrpublic.apartment.service.generating.JwtService;
 import com.qrpublic.apartment.util.Utils;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;

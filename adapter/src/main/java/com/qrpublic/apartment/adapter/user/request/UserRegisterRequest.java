@@ -1,11 +1,11 @@
-package com.qrpublic.apartment.user.interfaces.request;
+package com.qrpublic.apartment.adapter.user.request;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 
 @Data
-public class UserCreateRequest {
+public class UserRegisterRequest {
     @NotBlank
     @NotNull
     private String userName;

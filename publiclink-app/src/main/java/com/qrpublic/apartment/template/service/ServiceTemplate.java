@@ -6,7 +6,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 @Slf4j
-@Service
+@Service("publicLinkServiceTemplate")
 public class ServiceTemplate {
     public <R, T> Result<T> execute(ProcessCallback<R, T> callback) {
         Result<T> result = new Result<>();

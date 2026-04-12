@@ -1,0 +1,17 @@
+[Warn while starting apigateway]
+
+The use of configuration keys that have been renamed was found in the environment:
+
+Property source 'Config resource 'class path resource [application.properties]' via location 'optional:classpath:/'':
+	Key: spring.cloud.gateway.globalcors.cors-configurations[/**].allowedorigins
+		Line: 38
+		Replacement: spring.cloud.gateway.server.webflux.globalcors.cors-configurations[/**].allowedorigins
+	Key: spring.cloud.gateway.globalcors.cors-configurations[/**].allowedmethods
+		Line: 39
+		Replacement: spring.cloud.gateway.server.webflux.globalcors.cors-configurations[/**].allowedmethods
+	Key: spring.cloud.gateway.globalcors.cors-configurations[/**].allowedheaders
+		Line: 40
+		Replacement: spring.cloud.gateway.server.webflux.globalcors.cors-configurations[/**].allowedheaders
+
+
+Each configuration key has been temporarily mapped to its replacement for your convenience. To silence this warning, please update your configuration to use the new keys.

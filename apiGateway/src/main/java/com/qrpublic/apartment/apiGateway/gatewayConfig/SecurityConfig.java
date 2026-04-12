@@ -1,5 +1,22 @@
 package com.qrpublic.apartment.apiGateway.gatewayConfig;
 
+import com.qrpublic.apartment.apiGateway.filter.JwtAuthenticationWebFilter;
+import com.qrpublic.apartment.apiGateway.filter.RateLimitingWebFilter;
+import com.qrpublic.apartment.apiGateway.service.ApiUserService;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.autoconfigure.http.HttpMessageConverters;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.http.converter.StringHttpMessageConverter;
+import org.springframework.security.authentication.ReactiveAuthenticationManager;
+import org.springframework.security.authentication.UserDetailsRepositoryReactiveAuthenticationManager;
+import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.config.web.server.SecurityWebFiltersOrder;
+import org.springframework.security.config.web.server.ServerHttpSecurity;
+import org.springframework.security.core.userdetails.ReactiveUserDetailsService;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.web.server.SecurityWebFilterChain;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.reactive.CorsWebFilter;
 import org.springframework.web.cors.reactive.UrlBasedCorsConfigurationSource;
@@ -7,39 +24,54 @@ import org.springframework.web.cors.reactive.UrlBasedCorsConfigurationSource;
 import java.util.Arrays;
 import java.util.List;
 
-//@Configuration
+@Configuration
+@EnableWebSecurity
 public class SecurityConfig {
-    // Gateway-specific security configuration with JWT support (Reactive)
-//    @Autowired(required = false)
-//    private JwtFilter jwtFilter;
 
-    //    @Bean
-//    SecurityWebFilterChain securityWebFilterChain(ServerHttpSecurity http) {
-//        http
+    @Autowired
+    RateLimitingWebFilter rateLimitingWebFilter;
+
+    @Autowired
+    JwtAuthenticationWebFilter jwtAuthenticationWebFilter;
+
+    @Autowired
+    ApiUserService apiUserService;
+
+    @Bean
+    PasswordEncoder passwordEncoder() {
+        return new BCryptPasswordEncoder();
+    }
+
+    @Bean
+    ReactiveAuthenticationManager reactiveAuthenticationManager(ReactiveUserDetailsService userDetailsService,
+                                                                PasswordEncoder passwordEncoder) {
+        UserDetailsRepositoryReactiveAuthenticationManager authenticationManager
+                = new UserDetailsRepositoryReactiveAuthenticationManager(userDetailsService);
+        authenticationManager.setPasswordEncoder(passwordEncoder);
+        return authenticationManager;
+    }
+
+    @Bean
+    SecurityWebFilterChain securityWebFilterChain(ServerHttpSecurity http) {
+        http
 //                // Disable CSRF for simpler development (be cautious in production)
-//                .csrf(ServerHttpSecurity.CsrfSpec::disable)
+                .csrf(ServerHttpSecurity.CsrfSpec::disable)
 //                // Configure CORS
-//                .cors(cors -> cors.configurationSource(corsReactiveConfigurationSource()))
-//                // Authorize all requests
-//                .authorizeExchange(exchanges -> exchanges
-//                        .pathMatchers("/login", "/index", "/error", "/admin/internal/**", "/auth/**", "/public/**",
-//                                "/csrf-simulation/**",
-//                                "/api/v1/server-auth/**", "/api/v1/user/**")
-//                        .permitAll()
-//                        .pathMatchers("/admin/generator/**", "/api/generator/**").authenticated()
-//                        .anyExchange().authenticated()
-//                );
-//
-//        // Note: JwtFilter is servlet-based, not reactive. For reactive stack, implement a WebFilter instead
-//        // if (jwtFilter != null) {
-//        //     http.addFilterAt((exchange, chain) -> jwtFilter.filter(exchange, chain),
-//        //             org.springframework.security.web.server.authentication.AuthenticationWebFilter.class);
-//        // }
-//
-//        return http.build();
-//    }
+                .cors(ServerHttpSecurity.CorsSpec::disable)
+                .authorizeExchange(exchanges -> exchanges
+                        .pathMatchers(
+                                "/api/v1/auth/**", "/actuator")
+                        .permitAll()
+                        .anyExchange().authenticated()
+                )
+                .addFilterAt(rateLimitingWebFilter, SecurityWebFiltersOrder.FIRST)
+                .addFilterAt(jwtAuthenticationWebFilter, SecurityWebFiltersOrder.AUTHENTICATION)
+                .httpBasic(ServerHttpSecurity.HttpBasicSpec::disable)
+                .formLogin(ServerHttpSecurity.FormLoginSpec::disable);
+        return http.build();
+    }
 
-    //    @Bean
+    @Bean
     CorsWebFilter corsWebFilter() {
         CorsConfiguration configuration = new CorsConfiguration();
         configuration.setAllowedOriginPatterns(List.of("*"));
@@ -53,17 +85,8 @@ public class SecurityConfig {
         return new CorsWebFilter(source);
     }
 
-    private UrlBasedCorsConfigurationSource corsReactiveConfigurationSource() {
-        CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOriginPatterns(List.of("*"));
-        configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS"));
-        configuration.setAllowedHeaders(List.of("*"));
-        configuration.setAllowCredentials(true);
-        configuration.setExposedHeaders(List.of("token"));
-
-        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
-        source.registerCorsConfiguration("/**", configuration);
-        return source;
+    @Bean
+    public HttpMessageConverters feignHttpMessageConverters() {
+        return new HttpMessageConverters(new StringHttpMessageConverter()); // Example
     }
-
 }

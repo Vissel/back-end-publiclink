@@ -11,8 +11,6 @@ public class GatewayRoutesConfig {
     @Bean
     public RouteLocator customRouteLocator(RouteLocatorBuilder builder) {
         return builder.routes()
-                .route("AuthenticationAuthorisationApplication", r -> r.path("/authen-authorisation/**")
-                        .uri("http://localhost:8081/authen-authorisation"))
                 .route("PublicLinkApplicatione", r -> r.path("/publiclink/**")
                         .uri("http://localhost:9080/publiclink"))
 //            .route("booking_service", r -> r.path("/booking/**")

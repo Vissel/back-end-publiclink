@@ -9,7 +9,6 @@ import com.qrpublic.apartment.service.SaleEnvironmentService;
 import com.qrpublic.apartment.util.Utils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -49,7 +48,7 @@ public class AdminController {
      * used
      */
     @PostMapping("/generationPage")
-    @PreAuthorize(value = "hasRole('Admin')")
+//    @PreAuthorize(value = "hasRole('Admin')")
     public ResponseEntity<RequestDTO> getGenerationPage(@RequestBody SellerDTO sellerDTO) {
         // create request
         RequestDTO requestDTO = requestService.createTempRequestDTO(sellerDTO);

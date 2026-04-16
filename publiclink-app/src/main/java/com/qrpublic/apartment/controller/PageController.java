@@ -11,6 +11,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import reactor.core.publisher.Mono;
 
 import java.util.Map;
 
@@ -27,9 +28,9 @@ public class PageController {
     @Autowired
     private OrderService orderService;
 
-    @GetMapping("/index")
-    public ResponseEntity<String> index() {
-        return ResponseEntity.ok("Home response");
+    @GetMapping("/testGet")
+    public Mono<ResponseEntity<String>> index() {
+        return Mono.just(ResponseEntity.ok("Home response"));
     }
 
     @GetMapping("/link")

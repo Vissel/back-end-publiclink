@@ -13,4 +13,5 @@ public class PasswordMasker {
         return "*".repeat(maskLength) + password.substring(maskLength);
     }
 
+
 }

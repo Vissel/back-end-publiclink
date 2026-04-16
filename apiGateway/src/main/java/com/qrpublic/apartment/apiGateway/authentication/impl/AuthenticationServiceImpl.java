@@ -38,7 +38,9 @@ public class AuthenticationServiceImpl implements AuthenticationService {
 
     @Override
     public Mono<BasicLoginResponse> basicLogin(BasicLoginRequest request) {
-        return authenticationManager.authenticate(new UsernamePasswordAuthenticationToken(request.getUsername(), rsaService.decrypt(request.getEncryptedPassword()))).flatMap(this::generateTokenAndResponse).onErrorMap(this::handleAuthenticationFailure);
+        return authenticationManager.authenticate(
+                        new UsernamePasswordAuthenticationToken(request.getUsername(), rsaService.decrypt(request.getEncryptedPassword())))
+                .flatMap(this::generateTokenAndResponse).onErrorMap(this::handleAuthenticationFailure);
     }
 
     private Mono<BasicLoginResponse> generateTokenAndResponse(Authentication authentication) {

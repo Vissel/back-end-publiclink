@@ -40,6 +40,7 @@
         <spring-cloud.version>2025.0.2</spring-cloud.version>
         <lombok.version>1.18.40</lombok.version>
         <maven-compiler-plugin.version>3.14.1</maven-compiler-plugin.version>
+        <jwt.version>0.11.5</jwt.version>
     </properties>
     <dependencyManagement>
         <dependencies>

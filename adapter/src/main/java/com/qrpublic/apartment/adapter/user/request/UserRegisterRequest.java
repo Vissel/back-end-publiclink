@@ -13,4 +13,5 @@ public class UserRegisterRequest {
     private String fullName;
     private String link;
     private String role;
+    private String userType;
 }

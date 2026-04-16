@@ -16,12 +16,17 @@ rate-limit:
       refill-period-seconds: 60
       order: 1
 
-    - path-pattern: "/api/v1/publish/**"
+    - path-pattern: "/publiclink/api/v1/publish/**"
       capacity: 50
       refill-token: 50
       refill-period-seconds: 60
       order: 10
 
+    - path-pattern: "/api/v1/user/**"
+      capacity: 10
+      refill-token: 10
+      refill-period-seconds: 60
+      order: 20
   exclude-paths:
     - "/api/v1/health/**"
     - "/api/v1/healthcheck/**"

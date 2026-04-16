@@ -1,5 +1,6 @@
 package com.qrpublic.apartment.apiGateway.authentication;
 
+import com.qrpublic.apartment.apiGateway.constant.FilterConstant;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.Jwts;
@@ -40,11 +41,11 @@ public class JwtTokenProducer {
      */
     public String generateToken(String username, List<String> roles) {
         Map<String, Object> claims = new HashMap<>();
-        claims.put("roles", roles);
-        claims.put("type", "access");
+        claims.put(FilterConstant.ROLES_CLAIM, roles);
+        claims.put(FilterConstant.TOKEN_TYPE_CLAIM, FilterConstant.ACCESS_TOKEN_TYPE);
         return Jwts.builder()
-                .setSubject(username)
                 .setClaims(claims)
+                .setSubject(username)
                 .setIssuedAt(new Date())
                 .setExpiration(new Date(System.currentTimeMillis() + accessExpiration))
                 .signWith(getSigningKey(), SignatureAlgorithm.HS256)
@@ -53,8 +54,8 @@ public class JwtTokenProducer {
 
     public String generateRefreshToken(String username) {
         return Jwts.builder()
+                .claim(FilterConstant.TOKEN_TYPE_CLAIM, FilterConstant.REFRESH_TOKEN_TYPE)
                 .setSubject(username)
-                .claim("type", "refresh")
                 .setIssuedAt(new Date())
                 .setExpiration(new Date(System.currentTimeMillis() + refreshExpiration))
                 .signWith(getSigningKey())
@@ -78,7 +79,7 @@ public class JwtTokenProducer {
     }
 
     public Claims extractClaims(String token) {
-        return Jwts.parserBuilder().setSigningKey(Keys.hmacShaKeyFor(Base64.getDecoder().decode(getKey()))).build()
+        return Jwts.parserBuilder().setSigningKey(getSigningKey()).build()
                 .parseClaimsJws(token).getBody();
     }
 
@@ -95,25 +96,39 @@ public class JwtTokenProducer {
     }
 
     public boolean isHeaderTokenValid(String headerAuthorization) throws JwtException {
-        final String token = headerAuthorization.substring(7);
+        final String token = headerAuthorization.substring(FilterConstant.BEARER_PREFIX.length());
         if (token != null && isTokenValid(token)) {
             return !extractClaims(token).getExpiration().before(new Date());
         }
         return false;
     }
 
-    protected byte[] getKey() {
-        return this.secretKey.getBytes();
-    }
-
+    /**
+     * Extract username from token with production-grade error handling
+     *
+     * @param token
+     * @return
+     */
     public Mono<String> getUsernameFromToken(String token) {
-        return Mono.fromCallable(() -> extractClaim(token, Claims::getSubject));
+        return Mono.fromCallable(() -> {
+            try {
+                String username = extractClaim(token, Claims::getSubject);
+                if (username == null) {
+                    log.warn("Username claim is null in token");
+                    throw new JwtException("Username claim not found in token");
+                }
+                return username;
+            } catch (Exception e) {
+                log.error("Failed to extract username from token: {}", e.getMessage());
+                throw new JwtException("Failed to extract username: " + e.getMessage(), e);
+            }
+        });
     }
 
     public Mono<List<String>> getRolesFromToken(String token) {
         return Mono.fromCallable(() -> {
             Claims claims = extractAllClaims(token);
-            return claims.get("roles", List.class);
+            return claims.get(FilterConstant.ROLES_CLAIM, List.class);
         });
     }
 
@@ -127,7 +142,7 @@ public class JwtTokenProducer {
         return Mono.fromCallable(() -> {
             try {
                 Claims claims = extractAllClaims(token);
-                boolean isAccessToken = "access".equals(claims.get("type"));
+                boolean isAccessToken = FilterConstant.ACCESS_TOKEN_TYPE.equals(claims.get(FilterConstant.TOKEN_TYPE_CLAIM));
                 boolean isExpired = claims.getExpiration().before(new Date());
                 return isAccessToken && !isExpired;
             } catch (Exception e) {

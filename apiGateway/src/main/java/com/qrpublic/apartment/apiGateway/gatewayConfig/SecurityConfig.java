@@ -60,7 +60,8 @@ public class SecurityConfig {
                 .cors(ServerHttpSecurity.CorsSpec::disable)
                 .authorizeExchange(exchanges -> exchanges
                         .pathMatchers(
-                                "/api/v1/auth/**", "/actuator")
+                                "/api/v1/auth/**", "/actuator/**",
+                                "/api/v1/user/**")// temporary allow user creation without auth for testing
                         .permitAll()
                         .anyExchange().authenticated()
                 )

@@ -11,10 +11,11 @@ public class GatewayRoutesConfig {
     @Bean
     public RouteLocator customRouteLocator(RouteLocatorBuilder builder) {
         return builder.routes()
-                .route("PublicLinkApplicatione", r -> r.path("/publiclink/**")
-                        .uri("http://localhost:9080/publiclink"))
-//            .route("booking_service", r -> r.path("/booking/**")
-//                .uri("lb://BOOKING-SERVICE"))
+                .route("PublicLinkApplication", r -> r.path("/api/v1/publish/**")
+                        .uri("http://localhost:9080"))
+                .route("UserApplication", r -> r.path("/api/v1/user/**")
+//                        .filters(f -> f.rewritePath("/api/v1/user(?<segment>/?.*)", "/api/v1/user${segment}"))
+                        .uri("http://localhost:8082"))
                 .build();
     }
 }

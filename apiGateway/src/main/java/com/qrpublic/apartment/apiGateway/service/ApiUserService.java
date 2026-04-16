@@ -151,7 +151,7 @@ public class ApiUserService implements ReactiveUserDetailsService {
 
         UserDetails userDetails = org.springframework.security.core.userdetails.User
                 .withUsername(username)
-                .password("")
+                .password(userResponse.getEncodedPassword())
                 .authorities(authorities)
                 .build();
 

@@ -8,15 +8,10 @@ import com.qrpublic.apartment.requestmodel.PictureDTO;
 import com.qrpublic.apartment.requestmodel.ProductDTO;
 import com.qrpublic.apartment.requestmodel.RequestDTO;
 import com.qrpublic.apartment.requestmodel.SellerDTO;
-import com.qrpublic.apartment.service.generating.model.RoleEnum;
-import com.qrpublic.apartment.util.UserUtils;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.security.core.userdetails.UserDetails;
-import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
 
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Base64;
 import java.util.List;
@@ -47,16 +42,16 @@ public class RequestServiceImpl implements RequestService {
 //			requestSeller = createNewSeller(seller);
 //		}
         // created_at get from DB as
-        UserDetails u = UserUtils.getCurrentUser();
-        if (u != null
-                && u.getAuthorities().stream().anyMatch(auth -> auth.getAuthority().equals(RoleEnum.ADMIN))) {
-            User admin = userRepo.findByUserName(u.getUsername()).orElseThrow(
-                    () -> new UsernameNotFoundException("User not found with username: " + u.getUsername()));
-
-            // response DTO
-            requestDTO = new RequestDTO(seller, CommonConstant.EMPTY, admin, false, new ArrayList<>());
-            log.info("Creating seller successfull by {}", u.getUsername());
-        }
+//        UserDetails u = UserUtils.getCurrentUser();
+//        if (u != null
+//                && u.getAuthorities().stream().anyMatch(auth -> auth.getAuthority().equals(RoleEnum.ADMIN))) {
+//            User admin = userRepo.findByUserName(u.getUsername()).orElseThrow(
+//                    () -> new UsernameNotFoundException("User not found with username: " + u.getUsername()));
+//
+//            // response DTO
+//            requestDTO = new RequestDTO(seller, CommonConstant.EMPTY, admin, false, new ArrayList<>());
+//            log.info("Creating seller successfull by {}", u.getUsername());
+//        }
         log.info("Creating seller:{}{}", seller.getUsername(), CommonConstant.END);
         return requestDTO;
     }
@@ -72,7 +67,8 @@ public class RequestServiceImpl implements RequestService {
             // save request, product, img to db
             Request request = new Request();
             request.setSellerId(seller);
-            String adminUserName = UserUtils.getCurrentUser().getUsername();
+            String adminUserName = null;
+//                    UserUtils.getCurrentUser().getUsername();
             User createdBy = userService.findByUserName(adminUserName);
             request.setCreatedBy(createdBy);
 

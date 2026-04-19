@@ -2,7 +2,6 @@ package com.qrpublic.apartment.apiGateway.authentication;
 
 import com.qrpublic.apartment.apiGateway.authentication.request.BasicLoginRequest;
 import com.qrpublic.apartment.apiGateway.authentication.response.BasicLoginResponse;
-import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.http.HttpStatus;
@@ -27,7 +26,7 @@ public class AuthenticationController {
     }
 
     @PostMapping("/basic")
-    public Mono<ResponseEntity<BasicLoginResponse>> basicLogin(@Valid @RequestBody BasicLoginRequest request) {
+    public Mono<ResponseEntity<BasicLoginResponse>> basicLogin(@RequestBody BasicLoginRequest request) {
         return authenticationService.basicLogin(request)
                 .map(ResponseEntity::ok)
                 .defaultIfEmpty(ResponseEntity.status(HttpStatus.UNAUTHORIZED).build());

@@ -155,7 +155,8 @@ public class ApiUserService implements ReactiveUserDetailsService {
                 .authorities(authorities)
                 .build();
 
-        log.info("Successfully built UserDetails for: {} | Email: {}", username, userResponse.getEmail());
+        log.info("Successfully built UserDetails for: {} | Email: {} | Role: {}",
+                username, userResponse.getEmail(), userResponse.getRole());
         return userDetails;
     }
 
@@ -217,7 +218,7 @@ public class ApiUserService implements ReactiveUserDetailsService {
         try {
             // TODO: In production, query a role service based on username/email
             // For now, assign default USER role
-            return List.of(new SimpleGrantedAuthority("ROLE_USER"));
+            return List.of(new SimpleGrantedAuthority(userResponse.getRole()));
         } catch (Exception e) {
             log.debug("Failed to extract roles from user response: {}", e.getMessage());
             return List.of(new SimpleGrantedAuthority("ROLE_USER"));

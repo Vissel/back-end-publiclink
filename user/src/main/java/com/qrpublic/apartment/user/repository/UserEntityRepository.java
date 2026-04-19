@@ -7,13 +7,10 @@ import java.util.Optional;
 
 public interface UserEntityRepository extends JpaRepository<UserEntity, String> {
     /**
-     * name and link are unique constraint
+     * Find user by username
      *
-     * @param name
-     * @param link
+     * @param username
      * @return
      */
-    Optional<UserEntity> findByNameAndLink(String name, String link);
-
-    Optional<UserEntity> findByUserName(String username);
+    Optional<UserEntity> findByUsername(String username);
 }

@@ -11,7 +11,7 @@ public class GatewayRoutesConfig {
     @Bean
     public RouteLocator customRouteLocator(RouteLocatorBuilder builder) {
         return builder.routes()
-                .route("PublicLinkApplication", r -> r.path("/api/v1/publish/**")
+                .route("PublicLinkApplication", r -> r.path("/publiclink/**")
                         .uri("http://localhost:9080"))
                 .route("UserApplication", r -> r.path("/api/v1/user/**")
 //                        .filters(f -> f.rewritePath("/api/v1/user(?<segment>/?.*)", "/api/v1/user${segment}"))

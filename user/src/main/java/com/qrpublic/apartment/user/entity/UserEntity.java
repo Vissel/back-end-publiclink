@@ -6,9 +6,10 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 import java.sql.Timestamp;
+import java.util.List;
 
 @Entity
-@Table(name = "user")
+@Table(name = "user_tbl")
 @Getter
 @Setter
 @NoArgsConstructor
@@ -17,20 +18,16 @@ public class UserEntity {
     @GeneratedValue(strategy = GenerationType.UUID)
     private String userId;
 
-    private String userName;
-    private String tempPassword;
-    private String name;
-    private String link;
-    private String type;
+    private String username;
+    private String password;
+    private String fullName;
+
+    @OneToMany(cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    private List<ProfileEntity> profiles;
+    private String role;
+    private Boolean isActive;
 
     @Column(updatable = false, insertable = false)
     private Timestamp createdAt;
 
-    public UserEntity(String username, String pass, String name, String link, String type) {
-        this.userName = username;
-        this.tempPassword = pass;
-        this.name = name;
-        this.link = link;
-        this.type = type;
-    }
 }

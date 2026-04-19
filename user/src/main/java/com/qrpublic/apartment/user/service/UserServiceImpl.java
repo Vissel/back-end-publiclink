@@ -2,10 +2,9 @@ package com.qrpublic.apartment.user.service;
 
 import com.qrpublic.apartment.adapter.template.Result;
 import com.qrpublic.apartment.adapter.user.request.UserRegisterRequest;
+import com.qrpublic.apartment.user.entity.ProfileEntity;
 import com.qrpublic.apartment.user.entity.UserEntity;
 import com.qrpublic.apartment.user.model.User;
-import com.qrpublic.apartment.user.model.UserRole;
-import com.qrpublic.apartment.user.model.UserType;
 import com.qrpublic.apartment.user.repository.UserEntityRepository;
 import com.qrpublic.apartment.user.service.response.FoundUserResponse;
 import com.qrpublic.apartment.user.service.response.UserCreateResponse;
@@ -14,6 +13,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
+import java.util.List;
 import java.util.Objects;
 import java.util.stream.Stream;
 
@@ -33,7 +33,7 @@ public class UserServiceImpl implements UserService {
 
     @Override
     public Result<FoundUserResponse> findByUserName(String userName) {
-        return userEntityRepository.findByUserName(userName)
+        return userEntityRepository.findByUsername(userName)
                 .map(userEntity -> Result.success(mapToFoundUserResponse(userEntity)))
                 .orElseGet(() -> Result.error(404, "User not found"));
     }
@@ -41,10 +41,10 @@ public class UserServiceImpl implements UserService {
     @Override
     public Result<UserCreateResponse> createUser(UserRegisterRequest userCreateRequest) {
         return Stream.of(userCreateRequest)
-                .filter(request -> Objects.nonNull(request))
-                .map(request -> convertToUserModel(request))
+                .filter(Objects::nonNull)
+                .map(this::convertToUserModel)
                 .map(user -> new java.util.AbstractMap.SimpleEntry<>(user,
-                        userEntityRepository.findByUserName(user.getUserName())
+                        userEntityRepository.findByUsername(user.getUsername())
                                 .map(existingUser -> setNewValueForExistUser(existingUser, user))
                                 .orElseGet(() -> createNewUser(user))))
                 .map(entry -> {
@@ -61,29 +61,30 @@ public class UserServiceImpl implements UserService {
      */
     private UserCreateResponse buildUserCreateResponse(User user) {
         UserCreateResponse response = new UserCreateResponse();
-        response.setUserName(user.getUserName());
+        response.setUserName(user.getUsername());
         if (StringUtils.isNotBlank(user.getPlainTextPassword())) {
-            response.setPassword(passwordMasker.maskPassword(user.getPlainTextPassword())); // Masked password for security
+            response.setPassword(PasswordMasker.maskPassword(user.getPlainTextPassword())); // Masked password for security
         }
         response.setFullName(user.getFullName());
-        response.setLink(user.getProfileLink());
-        if (Objects.nonNull(user.getUserRole())) {
-            response.setRole(user.getUserRole().name());
+        if (user.getProfileLinks() != null && !user.getProfileLinks().isEmpty()) {
+            response.setLink(user.getProfileLinks().get(0)); // Get first profile link
         }
-        if (Objects.nonNull(user.getUserType())) {
-            response.setType(user.getUserType().name());
+        if (Objects.nonNull(user.getRole())) {
+            response.setRole(user.getRole());
         }
         return response;
     }
 
     private User convertToUserModel(UserRegisterRequest request) {
         User user = new User();
-        user.setUserName(request.getUserName());
+        user.setUsername(request.getUserName());
         user.setPlainTextPassword(rsaClient.decrypt(request.getEncryptedPassword()));
         user.setFullName(request.getFullName());
-        user.setProfileLink(request.getLink());
-        user.setUserRole(UserRole.toUserRole(request.getRole()));
-        user.setUserType(UserType.toUserType(request.getUserType()));
+        if (request.getProfileLink() != null) {
+            user.setProfileLinks(List.of(request.getProfileLink().getLink()));
+        }
+        user.setRole(request.getRole());
+        user.setIsActive(true);
         return user;
     }
 
@@ -92,34 +93,38 @@ public class UserServiceImpl implements UserService {
      */
     private FoundUserResponse mapToFoundUserResponse(UserEntity userEntity) {
         FoundUserResponse response = new FoundUserResponse();
-        response.setUserName(userEntity.getUserName());
-        response.setEncodedPassword(userEntity.getTempPassword());
-        response.setName(userEntity.getName());
+        response.setUserName(userEntity.getUsername());
+        response.setEncodedPassword(userEntity.getPassword());
+        response.setName(userEntity.getFullName());
+        response.setRole(userEntity.getRole());
         return response;
-    }
-
-    /**
-     * Validates user request with stream processing
-     */
-    private boolean isValidRequest(UserRegisterRequest request) {
-        return Stream.of(
-                request.getUserName(),
-                request.getEncryptedPassword(),
-                request.getFullName()
-        ).allMatch(Objects::nonNull);
     }
 
     /**
      * Creates a new user entity from the registration request
      */
     private UserEntity createNewUser(User user) {
-        UserEntity newUser = new UserEntity(
-                user.getUserName(),
-                passwordEncoder.encode(user.getPlainTextPassword()),
-                user.getFullName(),
-                user.getProfileLink(),
-                user.getUserType().name()
-        );
+        UserEntity newUser = new UserEntity();
+        newUser.setUsername(user.getUsername());
+        newUser.setPassword(passwordEncoder.encode(user.getPlainTextPassword()));
+        newUser.setFullName(user.getFullName());
+        newUser.setRole(user.getRole());
+        newUser.setIsActive(user.getIsActive());
+
+        // Handle profile links if present
+        if (user.getProfileLinks() != null && !user.getProfileLinks().isEmpty()) {
+            List<ProfileEntity> profiles = user.getProfileLinks().stream()
+                    .map(link -> {
+                        ProfileEntity profile = new ProfileEntity();
+                        profile.setProfileLink(link);
+                        profile.setProfileType("default");
+                        profile.setUser(newUser);
+                        return profile;
+                    })
+                    .toList();
+            newUser.setProfiles(profiles);
+        }
+
         return userEntityRepository.save(newUser);
     }
 
@@ -128,10 +133,12 @@ public class UserServiceImpl implements UserService {
      */
     private UserEntity setNewValueForExistUser(UserEntity existingUser, User user) {
         Stream.of(
-                        updateUserName(existingUser, user.getUserName()),
+                        updateUserName(existingUser, user.getUsername()),
                         updatePassword(existingUser, user.getPlainTextPassword()),
                         updateFullName(existingUser, user.getFullName()),
-                        updateLink(existingUser, user.getProfileLink())
+                        updateRole(existingUser, user.getRole()),
+                        updateIsActive(existingUser, user.getIsActive()),
+                        updateProfileLinks(existingUser, user.getProfileLinks())
                 ).filter(Objects::nonNull)
                 .forEach(updater -> updater.accept(existingUser));
 
@@ -142,26 +149,53 @@ public class UserServiceImpl implements UserService {
      * Stream-based field update utilities
      */
     private java.util.function.Consumer<UserEntity> updateUserName(UserEntity user, String newUserName) {
-        return StringUtils.isNotBlank(newUserName) && !newUserName.equals(user.getUserName())
-                ? u -> u.setUserName(newUserName)
+        return StringUtils.isNotBlank(newUserName) && !newUserName.equals(user.getUsername())
+                ? u -> u.setUsername(newUserName)
                 : null;
     }
 
     private java.util.function.Consumer<UserEntity> updatePassword(UserEntity user, String newRawPassword) {
-        return StringUtils.isNotBlank(newRawPassword) && !passwordEncoder.matches(newRawPassword, user.getTempPassword())
-                ? u -> u.setTempPassword(passwordEncoder.encode(newRawPassword))
+        return StringUtils.isNotBlank(newRawPassword) && !passwordEncoder.matches(newRawPassword, user.getPassword())
+                ? u -> u.setPassword(passwordEncoder.encode(newRawPassword))
                 : null;
     }
 
     private java.util.function.Consumer<UserEntity> updateFullName(UserEntity user, String newName) {
-        return StringUtils.isNotBlank(newName) && !newName.equals(user.getName())
-                ? u -> u.setName(newName)
+        return StringUtils.isNotBlank(newName) && !newName.equals(user.getFullName())
+                ? u -> u.setFullName(newName)
                 : null;
     }
 
-    private java.util.function.Consumer<UserEntity> updateLink(UserEntity user, String newLink) {
-        return StringUtils.isNotBlank(newLink) && !newLink.equals(user.getLink())
-                ? u -> u.setLink(newLink)
+    private java.util.function.Consumer<UserEntity> updateRole(UserEntity user, String newRole) {
+        return StringUtils.isNotBlank(newRole) && !newRole.equals(user.getRole())
+                ? u -> u.setRole(newRole)
                 : null;
     }
+
+    private java.util.function.Consumer<UserEntity> updateIsActive(UserEntity user, Boolean newIsActive) {
+        return newIsActive != null && !newIsActive.equals(user.getIsActive())
+                ? u -> u.setIsActive(newIsActive)
+                : null;
+    }
+
+    private java.util.function.Consumer<UserEntity> updateProfileLinks(UserEntity user, List<String> newProfileLinks) {
+        if (newProfileLinks != null && !newProfileLinks.isEmpty()) {
+            // Update or set new profile links
+            List<ProfileEntity> updatedProfiles = newProfileLinks.stream()
+                    .map(link -> {
+                        ProfileEntity profile = new ProfileEntity();
+                        profile.setProfileLink(link);
+                        profile.setProfileType("default");
+                        profile.setUser(user);
+                        return profile;
+                    })
+                    .toList();
+            user.setProfiles(updatedProfiles);
+            return u -> {
+            }; // No-op since we already updated
+        }
+        return null;
+    }
+
+
 }

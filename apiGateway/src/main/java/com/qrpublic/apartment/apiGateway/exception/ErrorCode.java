@@ -13,8 +13,9 @@ public enum ErrorCode {
     LOGOUT_FAILED("AUTH_004", "Logout failed", HttpStatus.INTERNAL_SERVER_ERROR),
     REFRESH_TOKEN_FAILED("AUTH_005", "Token refresh failed", HttpStatus.INTERNAL_SERVER_ERROR),
     ACCESS_DENIED("AUTH_006", "Access denied", HttpStatus.FORBIDDEN),
-    RATE_LIMIT_EXCEEDED("RATE_001", "Too many requests", HttpStatus.TOO_MANY_REQUESTS);
+    RATE_LIMIT_EXCEEDED("RATE_001", "Too many requests", HttpStatus.TOO_MANY_REQUESTS),
 
+    INVALID_ARGUMENTS("410", "Invalid arguments provided", HttpStatus.BAD_REQUEST);
     private final String code;
     private final String message;
     private final HttpStatus httpStatus;

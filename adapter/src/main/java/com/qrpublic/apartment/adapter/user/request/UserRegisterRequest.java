@@ -11,7 +11,6 @@ public class UserRegisterRequest {
     private String userName;
     private String encryptedPassword;
     private String fullName;
-    private String link;
+    private ProfileLink profileLink;
     private String role;
-    private String userType;
 }

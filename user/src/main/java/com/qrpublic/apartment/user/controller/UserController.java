@@ -41,6 +41,7 @@ public class UserController {
             userRegisterResponse.setLink(userCreateResponse.getLink());
             userRegisterResponse.setRole(userCreateResponse.getRole());
             userRegisterResponse.setPassword(userCreateResponse.getPassword());
+            userRegisterResponse.setRole(userCreateResponse.getRole());
             userRegisterResponse.setMessage("User created successfully");
             return ResponseEntity.ok(Result.success(userRegisterResponse));
         }
@@ -57,6 +58,7 @@ public class UserController {
             findUserResponse.setEncodedPassword(data.getEncodedPassword());
             findUserResponse.setName(data.getName());
             findUserResponse.setEmail(data.getEmail());
+            findUserResponse.setRole(data.getRole());
             return ResponseEntity.ok(findUserResponse);
         }
         // error message is hide here

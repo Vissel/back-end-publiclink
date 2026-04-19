@@ -16,7 +16,7 @@ rate-limit:
       refill-period-seconds: 60
       order: 1
 
-    - path-pattern: "/publiclink/api/v1/publish/**"
+    - path-pattern: "/publiclink/**"
       capacity: 50
       refill-token: 50
       refill-period-seconds: 60

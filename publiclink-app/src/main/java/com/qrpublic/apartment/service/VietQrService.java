@@ -28,7 +28,7 @@ public class VietQrService extends JwtService implements LinkService {
     @Value("${jwt.url.expired}")
     private long ACCESS_TOKEN_VALIDITY; // 2 days as default
 
-    @Value("${server.servlet.context-path}")
+    @Value("${spring.webflux.base-path}")
     private String contextPath;
 
     @Override

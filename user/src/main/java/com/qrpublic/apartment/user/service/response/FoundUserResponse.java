@@ -8,4 +8,5 @@ public class FoundUserResponse {
     private String encodedPassword;
     private String name;
     private String email;
+    private String role;
 }

@@ -1,19 +1,22 @@
 package com.qrpublic.apartment.controller;
 
-import com.qrpublic.apartment.entity.SaleEnvironment;
+import com.qrpublic.apartment.requestmodel.Pagination;
 import com.qrpublic.apartment.requestmodel.RequestDTO;
 import com.qrpublic.apartment.requestmodel.SaleEnvDTO;
 import com.qrpublic.apartment.requestmodel.SellerDTO;
+import com.qrpublic.apartment.saleenv.SaleEnvironmentService;
+import com.qrpublic.apartment.saleenv.request.ListEnvironmentRequest;
 import com.qrpublic.apartment.service.RequestService;
-import com.qrpublic.apartment.service.SaleEnvironmentService;
-import com.qrpublic.apartment.util.Utils;
+import com.qrpublic.apartment.user.PubUserService;
+import com.qrpublic.apartment.user.request.ListUserRequest;
+import com.qrpublic.apartment.user.response.ListUserResponse;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import reactor.core.publisher.Mono;
 
 import java.util.List;
-import java.util.Map;
-import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/admin/generator")
@@ -24,28 +27,22 @@ public class AdminController {
     @Autowired
     SaleEnvironmentService envService;
 
+    @Autowired
+    PubUserService pubUserService;
+
     /**
-     * Display an area to admin select and input seller info
+     * Display environment list for administrator to manage, including the link generation
+     * TODO
      *
      * @return
      */
-    @GetMapping("/home")
-    public ResponseEntity<List<SaleEnvDTO>> home(@RequestHeader Map<String, String> headers) {
-        String token = headers.get("authorization");
-//		if (jwtUtils.isTokenValid(token.substring(7))) {
-        List<SaleEnvironment> saleEnv = envService.getAllEnvironment();
-        List<SaleEnvDTO> envDTOs = saleEnv.stream().map(env -> Utils.createEnvDTO(env))
-                .collect(Collectors.toList());
-
-        return ResponseEntity.ok(envDTOs);
-//		}
-//		return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+    @GetMapping("/getAllEnvironment")
+    public ResponseEntity<List<SaleEnvDTO>> getAllEnvironment(@RequestBody Pagination<ListEnvironmentRequest> request) {
+        return ResponseEntity.ok(envService.getAllEnvironment());
     }
 
     /**
-     *
-     * Administrator create request, product and response access generation page Not
-     * used
+     * Administrator create request, product and response access generation page Not used
      */
     @PostMapping("/generationPage")
 //    @PreAuthorize(value = "hasRole('Admin')")
@@ -57,4 +54,11 @@ public class AdminController {
         return ResponseEntity.ok(requestDTO);
     }
 
+    @PostMapping("/listUser")
+    public Mono<ResponseEntity<ListUserResponse>> getListUser(@RequestBody Pagination<ListUserRequest> request) {
+
+        return pubUserService.listUser(request)
+                .map(ResponseEntity::ok)
+                .defaultIfEmpty(ResponseEntity.status(HttpStatus.NO_CONTENT).build());
+    }
 }

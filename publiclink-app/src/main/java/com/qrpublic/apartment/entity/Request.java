@@ -1,22 +1,12 @@
 package com.qrpublic.apartment.entity;
 
-import java.sql.Timestamp;
-import java.util.List;
-
-import jakarta.persistence.CascadeType;
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.FetchType;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
-import jakarta.persistence.JoinColumn;
-import jakarta.persistence.OneToMany;
-import jakarta.persistence.OneToOne;
-import jakarta.persistence.Table;
+import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+
+import java.sql.Timestamp;
+import java.util.List;
 
 @Entity
 @Table(name = "request")
@@ -24,25 +14,30 @@ import lombok.Setter;
 @Setter
 @NoArgsConstructor
 public class Request {
-	@Id
-	@GeneratedValue(strategy = GenerationType.IDENTITY)
-	private Long reqId;
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long reqId;
 
-	@OneToOne(fetch = FetchType.LAZY, cascade = CascadeType.DETACH)
-	@JoinColumn(name = "seller_id")
-	private User sellerId;
+    @OneToOne(fetch = FetchType.LAZY, cascade = CascadeType.DETACH)
+    @JoinColumn(name = "seller_id")
+    private User sellerId;
 
-	private String description;
+    private String description;
 
-	@Column(updatable = false, insertable = false)
-	private Timestamp createdAt;
+    @Column(updatable = false, insertable = false)
+    private Timestamp createdAt;
 
-	@OneToOne(fetch = FetchType.LAZY, cascade = CascadeType.DETACH)
-	@JoinColumn(name = "created_by")
-	private User createdBy;
+    @OneToOne(fetch = FetchType.LAZY, cascade = CascadeType.DETACH)
+    @JoinColumn(name = "created_by")
+    private User createdBy;
 
-	private boolean authenticated;
+    private boolean authenticated;
 
-	@OneToMany(mappedBy = "request", cascade = { CascadeType.PERSIST, CascadeType.MERGE, CascadeType.REMOVE })
-	private List<Product> products;
+    @OneToMany(mappedBy = "request", cascade = {CascadeType.PERSIST, CascadeType.MERGE, CascadeType.REMOVE})
+    private List<Product> products;
+
+    @Column(name = "req_uuid", unique = true, nullable = false)
+    private String reqUUID;
+
+    private String reqAuthLink;
 }

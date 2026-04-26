@@ -18,3 +18,7 @@ Each configuration key has been temporarily mapped to its replacement for your c
 
 Generate jwt token error:
 Unable to load class named [io.jsonwebtoken.impl.DefaultJwtBuilder] from the thread context, current, or system/application ClassLoaders.  All heuristics have been exhausted.  Class could not be found.  Have you remembered to include the jjwt-impl.jar in your runtime classpath?
+
+20260420: user-service got error while connecting to database:
+[error] org.hibernate.exception.JDBCConnectionException: unable to obtain isolated JDBC connection [Public Key Retrieval is not allowed] [n/a]
+[solution] add in jdbc: allowPublicKeyRetrieval=true&useSSL=false

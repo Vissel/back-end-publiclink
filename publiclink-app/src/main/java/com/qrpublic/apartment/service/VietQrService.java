@@ -4,6 +4,7 @@ import com.google.zxing.BarcodeFormat;
 import com.google.zxing.MultiFormatWriter;
 import com.google.zxing.client.j2se.MatrixToImageWriter;
 import com.google.zxing.common.BitMatrix;
+import com.qrpublic.apartment.core.model.LinkModel;
 import com.qrpublic.apartment.requestmodel.VietQrRequest;
 import com.qrpublic.apartment.service.generating.JwtService;
 import io.jsonwebtoken.Jwts;
@@ -17,6 +18,7 @@ import java.io.ByteArrayOutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import java.util.Date;
+import java.util.Map;
 
 @Slf4j
 @Service
@@ -27,6 +29,9 @@ public class VietQrService extends JwtService implements LinkService {
 
     @Value("${jwt.url.expired}")
     private long ACCESS_TOKEN_VALIDITY; // 2 days as default
+
+    @Value("${link.auth.expired}")
+    private long LINK_AUTH_EXPIRED; // 10 minutes
 
     @Value("${spring.webflux.base-path}")
     private String contextPath;
@@ -39,16 +44,10 @@ public class VietQrService extends JwtService implements LinkService {
     /**
      * Generating url by jwt
      *
-     * @param idString
-     * @param reqId
      * @return
      */
     @Override
-    public String generateSecureUrl(String idString, long reqId) {
-        String jwt = Jwts.builder().setSubject(idString).claim("reqId", reqId).setIssuedAt(new Date())
-                .signWith(Keys.hmacShaKeyFor(Base64.getDecoder().decode(secretKey.getBytes())),
-                        SignatureAlgorithm.HS256)
-                .setExpiration(new Date(System.currentTimeMillis() + ACCESS_TOKEN_VALIDITY)).compact();
+    public LinkModel generateSecureUrl(String subject, Map<String, String> claims) {
         /*
          * String hostBuild = CommonConstant.EMPTY; try { InetAddress inet =
          * InetAddress.getLocalHost(); hostBuild += "http://" +
@@ -57,7 +56,29 @@ public class VietQrService extends JwtService implements LinkService {
          * "/public/link?token=" + jwt; } catch (UnknownHostException e) {
          * log.error("Unknowhost:{}", e.getMessage()); }
          */
-        return jwt;
+        Date issueAt = new Date();
+        Date validDate = new Date(System.currentTimeMillis() + ACCESS_TOKEN_VALIDITY);
+        String link = Jwts.builder()
+                .setClaims(claims)
+                .setSubject(subject)
+                .setIssuedAt(issueAt)
+                .signWith(Keys.hmacShaKeyFor(Base64.getDecoder().decode(secretKey.getBytes())),
+                        SignatureAlgorithm.HS256)
+                .setExpiration(validDate).compact();
+        return new LinkModel(link, issueAt, validDate);
+    }
+
+    @Override
+    public LinkModel generateAuthLink(String subject, Map<String, String> claims) {
+        Date issueAt = new Date();
+        Date validDate = new Date(System.currentTimeMillis() + LINK_AUTH_EXPIRED);
+        String link = Jwts.builder()
+                .setClaims(claims)
+                .setSubject(subject)
+                .setIssuedAt(issueAt)
+                .signWith(Keys.hmacShaKeyFor(secretKey.getBytes()), SignatureAlgorithm.HS256)
+                .setExpiration(validDate).compact();
+        return new LinkModel(link, issueAt, validDate);
     }
 
     public byte[] generateQrImage(VietQrRequest request) {
@@ -129,4 +150,6 @@ public class VietQrService extends JwtService implements LinkService {
         }
         return valid;
     }
+
+
 }

@@ -1,6 +1,7 @@
 package com.qrpublic.apartment.service;
 
 import com.qrpublic.apartment.constant.CommonConstant;
+import com.qrpublic.apartment.core.service.CoreUserService;
 import com.qrpublic.apartment.entity.User;
 import com.qrpublic.apartment.repository.UserRepository;
 import com.qrpublic.apartment.requestmodel.RegisterUserDTO;
@@ -12,6 +13,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import java.util.Optional;
+import java.util.stream.Stream;
 
 @Service
 public class UserServiceImpl implements UserService {
@@ -21,6 +23,9 @@ public class UserServiceImpl implements UserService {
     @Autowired
     private UserRepository userRepo;
 
+    @Autowired
+    CoreUserService coreUserService;
+    
     @Override
     public boolean saveAdminUser(RegisterUserDTO userDTO) {
         boolean isSaved = false;
@@ -69,30 +74,12 @@ public class UserServiceImpl implements UserService {
 
     @Override
     public User createSeller(SellerDTO seller) {
-        // Find with username and link
-        Optional<User> user = userRepo.findByNameAndLink(seller.getUsername(), seller.getLink());
-        if (!user.isPresent()) {
-            // find with username
-            user = userRepo.findByUserName(seller.getUsername());
-            User sellerU;
-            boolean isSaved = true;
-            if (!user.isPresent()) {
-                // create new user
-                sellerU = new User(seller.getUsername(), CommonConstant.EMPTY, seller.getUsername(), seller.getLink(),
+        return Optional.ofNullable(coreUserService.findSeller(seller))
+            .orElseGet(() -> {
+                User newUser = new User(seller.getUsername(), CommonConstant.EMPTY, seller.getUsername(), seller.getLink(),
                         RoleEnum.SELLER.getRole());
-            } else {
-                sellerU = user.get();
-                if (seller.getLink() != null && !seller.getLink().isBlank()) {
-                    sellerU.setLink(seller.getLink());
-                } else {
-                    isSaved = false;
-                }
-            }
-            if (isSaved) {
-                return userRepo.save(sellerU);
-            }
-        }
-        return user.get();
+                return userRepo.save(newUser);
+            });
     }
 
     @Override

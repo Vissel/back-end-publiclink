@@ -1,16 +1,18 @@
 package com.qrpublic.apartment.service;
 
 import com.qrpublic.apartment.constant.CommonConstant;
+import com.qrpublic.apartment.core.model.RequestModel;
+import com.qrpublic.apartment.core.service.CoreRequestService;
 import com.qrpublic.apartment.entity.*;
 import com.qrpublic.apartment.repository.RequestRepository;
-import com.qrpublic.apartment.repository.UserRepository;
-import com.qrpublic.apartment.requestmodel.PictureDTO;
-import com.qrpublic.apartment.requestmodel.ProductDTO;
-import com.qrpublic.apartment.requestmodel.RequestDTO;
-import com.qrpublic.apartment.requestmodel.SellerDTO;
+import com.qrpublic.apartment.requestmodel.*;
+import com.qrpublic.apartment.saleenv.SaleEnvironmentService;
+import com.qrpublic.apartment.saleenv.request.CreatedRequestIdRequest;
+import com.qrpublic.apartment.saleenv.response.CreateRequestIdResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import reactor.core.publisher.Mono;
 
 import java.util.Arrays;
 import java.util.Base64;
@@ -23,11 +25,13 @@ public class RequestServiceImpl implements RequestService {
     @Autowired
     private RequestRepository requestRepo;
     @Autowired
-    private UserRepository userRepo;
-    @Autowired
     private UserService userService;
     @Autowired
     private SaleEnvironmentService envService;
+
+    @Autowired
+    CoreRequestService coreRequestService;
+
 
     @Override
     public RequestDTO createTempRequestDTO(SellerDTO seller) {
@@ -160,4 +164,27 @@ public class RequestServiceImpl implements RequestService {
         }
         return null;
     }
+
+    @Override
+    public Mono<CreateRequestIdResponse> generateRequestId(CreatedRequestIdRequest request) {
+        return Mono.fromCallable(() -> {
+            PubUserRequest sellerReq = request.getSellerRequest();
+            SellerDTO sellerDTO = new SellerDTO();
+            sellerDTO.setUsername(sellerReq.getUsername());
+            sellerDTO.setLink(sellerReq.getLink());
+
+            return convertModelToCreateRequestIdResponse(coreRequestService.generateRequestForSeller(sellerDTO));
+        });
+    }
+
+    private CreateRequestIdResponse convertModelToCreateRequestIdResponse(RequestModel requestModel) {
+        CreateRequestIdResponse response = new CreateRequestIdResponse();
+        response.setRequestUuid(requestModel.getRequestUuid());
+        response.setCreatedAt(requestModel.getCreatedAt());
+        if (requestModel.getSeller() != null) {
+            response.setSellerName(requestModel.getSeller().getUsername());
+        }
+        return response;
+    }
+
 }

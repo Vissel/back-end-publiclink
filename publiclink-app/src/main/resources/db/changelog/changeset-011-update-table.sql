@@ -1,0 +1,2 @@
+-- 1. add new column req_uuid, req_auth_link in table request, refer Request entity.
+-- 2. remove foreign key of seller_id out of table request.

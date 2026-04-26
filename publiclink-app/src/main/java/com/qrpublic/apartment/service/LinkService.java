@@ -1,9 +1,15 @@
 package com.qrpublic.apartment.service;
 
+import com.qrpublic.apartment.core.model.LinkModel;
+
+import java.util.Map;
+
 public interface LinkService {
 
-	public String generateSecureUrl(String idString, long reqId);
+    LinkModel generateSecureUrl(String subject, Map<String, String> claims);
 
-	public boolean validateLink(String link);
+    boolean validateLink(String link);
+
+    LinkModel generateAuthLink(String subject, Map<String, String> claims);
 
 }

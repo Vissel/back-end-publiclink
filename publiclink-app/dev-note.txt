@@ -1,0 +1,8 @@
+api flows:
+1/ Login
+2/ Admin home page: /getAllEnvironment, /listUser
+3/ Admin select > create new environment: /generateRequestId => /createSaleEnvironment
+4/ Seller receive public link, access: /link
+    - seller authenticate if not.
+    - seller can see the environment details.
+5/ Buyer.

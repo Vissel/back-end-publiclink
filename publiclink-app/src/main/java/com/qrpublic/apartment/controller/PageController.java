@@ -1,19 +1,26 @@
 package com.qrpublic.apartment.controller;
 
+import com.qrpublic.apartment.core.service.CoreRequestService;
+import com.qrpublic.apartment.entity.Request;
 import com.qrpublic.apartment.entity.SaleEnvironment;
 import com.qrpublic.apartment.requestmodel.OrderDTO;
+import com.qrpublic.apartment.saleenv.SaleEnvironmentService;
 import com.qrpublic.apartment.service.LinkService;
 import com.qrpublic.apartment.service.OrderService;
-import com.qrpublic.apartment.service.SaleEnvironmentService;
-import com.qrpublic.apartment.util.Utils;
+import com.qrpublic.apartment.service.generating.JwtService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.server.reactive.ServerHttpResponse;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
+import reactor.core.scheduler.Schedulers;
 
+import java.net.URI;
 import java.util.Map;
+import java.util.Optional;
 
 @Slf4j
 @RestController
@@ -24,27 +31,59 @@ public class PageController {
     private LinkService linkService;
     @Autowired
     private SaleEnvironmentService envService;
-
     @Autowired
     private OrderService orderService;
+    @Autowired
+    private CoreRequestService coreRequestService;
+    @Autowired
+    private JwtService jwtService;
 
     @GetMapping("/testGet")
     public Mono<ResponseEntity<String>> index() {
         return Mono.just(ResponseEntity.ok("Home response"));
     }
 
+    /**
+     * Determine the direction of seller. Redirect to:
+     * - /api/v1/publish/saleUrl if the link is valid and not expired, username is existed in database and seller has valid JWT token.
+     * + If the seller has invalid JWT token (expired), redirect to /login.
+     * - /api/v1/publish/register, if the link is valid and not expired, username is not exist in database.
+     *
+     * @param token
+     * @param headers
+     * @return
+     */
     @GetMapping("/link")
-    public ResponseEntity<?> handleSecureLink(@RequestParam String token, @RequestHeader Map<String, String> headers) {
-        try {
-            if (linkService.validateLink(token)) {
-                SaleEnvironment env = envService.getEnvironmentByPublicLink(token);
-                return ResponseEntity.ok(Utils.createEnvDTO(env));
+    public Mono<Void> handleSecureLink(@RequestParam String reqId, @RequestParam String token,
+                                       @RequestHeader Map<String, String> headers,
+                                       ServerWebExchange exchange) {
+        return Mono.fromCallable(() -> {
+            if (!linkService.validateLink(token)) {
+                return null;
             }
-            return ResponseEntity.badRequest().body("Link invalid");
-
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Link cannot be access.");
-        }
+            Optional<Request> requestOpt = coreRequestService.getRequestByUuid(reqId);
+            if (requestOpt.isEmpty()) {
+                return null;
+            }
+            Request request = requestOpt.get();
+            if (request.getSellerId() != null) {
+                String authorization = headers.get("authorization");
+                if (authorization != null && jwtService.isHeaderTokenValid(authorization)) {
+                    return "/api/v1/publish/saleUrl";
+                }
+                return "/login";
+            }
+            return "/api/v1/publish/register";
+        }).subscribeOn(Schedulers.boundedElastic()).flatMap(destination -> {
+            ServerHttpResponse response = exchange.getResponse();
+            if (destination == null) {
+                response.setStatusCode(HttpStatus.BAD_REQUEST);
+                return response.setComplete();
+            }
+            response.setStatusCode(HttpStatus.FOUND);
+            response.getHeaders().setLocation(URI.create(destination));
+            return response.setComplete();
+        });
     }
 
     @PostMapping("/order")

@@ -1,13 +1,15 @@
-package com.qrpublic.apartment.authenAuthorisation.template.service;
+package com.qrpublic.apartment.template.service;
 
-import com.qrpublic.apartment.authenAuthorisation.template.model.Result;
-import com.qrpublic.apartment.authenAuthorisation.template.model.enums.ResultEnum;
+import com.qrpublic.apartment.exception.ApplicationException;
+import com.qrpublic.apartment.template.model.Result;
+import com.qrpublic.apartment.template.model.enums.ResultEnum;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 
 @Slf4j
-@Service("authServiceTemplate")
-public class ServiceTemplate {
+@Service
+public class PublicLinkServiceTemplate {
     public <R, T> Result<T> execute(ProcessCallback<R, T> callback) {
         Result<T> result = new Result<>();
         String errorMess = null;
@@ -17,6 +19,14 @@ public class ServiceTemplate {
             T data = callback.process();
             result.setData(data);
             result.setSuccess(true);
+        } catch (IllegalArgumentException e) {
+            log.error("[IllegalArgumentException] message:", e.getMessage());
+            result.setErrorCode(HttpStatus.BAD_REQUEST.value());
+            errorMess = e.getMessage();
+        } catch (ApplicationException e) {
+            log.error("[ApplicationException] message:", e.getMessage());
+            result.setErrorCode(e.getErrorCode());
+            errorMess = e.getMessage();
         } catch (Throwable e) {
             log.error("[Throwable] message:", e.getMessage());
             result.setErrorCode(Integer.valueOf(ResultEnum.INTERNAL_SERVER_ERROR.getCode()));

@@ -3,9 +3,9 @@ package com.qrpublic.apartment.service;
 import com.qrpublic.apartment.constant.CommonConstant;
 import com.qrpublic.apartment.core.service.CoreUserService;
 import com.qrpublic.apartment.entity.User;
+import com.qrpublic.apartment.model.SellerDTO;
 import com.qrpublic.apartment.repository.UserRepository;
 import com.qrpublic.apartment.requestmodel.RegisterUserDTO;
-import com.qrpublic.apartment.requestmodel.SellerDTO;
 import com.qrpublic.apartment.service.generating.model.RoleEnum;
 import com.qrpublic.apartment.util.Utils;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -13,7 +13,6 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import java.util.Optional;
-import java.util.stream.Stream;
 
 @Service
 public class UserServiceImpl implements UserService {
@@ -25,7 +24,7 @@ public class UserServiceImpl implements UserService {
 
     @Autowired
     CoreUserService coreUserService;
-    
+
     @Override
     public boolean saveAdminUser(RegisterUserDTO userDTO) {
         boolean isSaved = false;
@@ -75,16 +74,16 @@ public class UserServiceImpl implements UserService {
     @Override
     public User createSeller(SellerDTO seller) {
         return Optional.ofNullable(coreUserService.findSeller(seller))
-            .orElseGet(() -> {
-                User newUser = new User(seller.getUsername(), CommonConstant.EMPTY, seller.getUsername(), seller.getLink(),
-                        RoleEnum.SELLER.getRole());
-                return userRepo.save(newUser);
-            });
+                .orElseGet(() -> {
+                    User newUser = new User(seller.getUsername(), CommonConstant.EMPTY, seller.getUsername(), seller.getLink(),
+                            RoleEnum.SELLER.getRole());
+                    return userRepo.save(newUser);
+                });
     }
 
     @Override
     public User findByUserName(String userName) {
-        return userRepo.findByUserName(userName).orElseThrow();
+        return userRepo.findByUserName(userName).orElse(null);
     }
 
 }

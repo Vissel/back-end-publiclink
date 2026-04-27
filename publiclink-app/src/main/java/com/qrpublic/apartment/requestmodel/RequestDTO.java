@@ -2,6 +2,7 @@ package com.qrpublic.apartment.requestmodel;
 
 import com.qrpublic.apartment.entity.Request;
 import com.qrpublic.apartment.entity.User;
+import com.qrpublic.apartment.model.SellerDTO;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;

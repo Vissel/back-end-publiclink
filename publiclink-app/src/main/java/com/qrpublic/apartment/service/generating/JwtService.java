@@ -21,6 +21,8 @@ public class JwtService {
 
     private static final long ACCESS_TOKEN_VALIDITY = 15 * 60 * 1000; // 15 minutes
 
+    private static final int INDEX_AFTER_BEARER = 7;
+
     /**
      * Standard generated token
      *
@@ -52,9 +54,26 @@ public class JwtService {
                 .compact();
     }
 
+    /**
+     * Extract claims from token
+     *
+     * @param token
+     * @return
+     */
     public Claims extractClaims(String token) {
         return Jwts.parserBuilder().setSigningKey(Keys.hmacShaKeyFor(Base64.getDecoder().decode(getKey()))).build()
                 .parseClaimsJws(token).getBody();
+    }
+
+    /**
+     * Extract claim by key
+     *
+     * @param token
+     * @param key
+     * @return
+     */
+    public Object extractClaimByKey(String token, String key) {
+        return extractClaims(token).get(key);
     }
 
     public String extractSubject(String token) {
@@ -70,7 +89,7 @@ public class JwtService {
     }
 
     public boolean isHeaderTokenValid(String headerAuthorization) throws JwtException {
-        final String token = headerAuthorization.substring(7);
+        final String token = headerAuthorization.substring(INDEX_AFTER_BEARER);
         if (token != null && isTokenValid(token)) {
             return !extractClaims(token).getExpiration().before(new Date());
         }

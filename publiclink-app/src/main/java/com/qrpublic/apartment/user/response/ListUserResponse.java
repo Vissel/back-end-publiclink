@@ -7,5 +7,5 @@ import java.util.List;
 @Data
 public class ListUserResponse {
     private int total;
-    private List<UserResponse> listUser;
+    private List<GetUserResponse> listUser;
 }

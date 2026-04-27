@@ -1,13 +1,13 @@
 package com.qrpublic.apartment.controller;
 
+import com.qrpublic.apartment.model.SellerDTO;
 import com.qrpublic.apartment.requestmodel.Pagination;
 import com.qrpublic.apartment.requestmodel.RequestDTO;
 import com.qrpublic.apartment.requestmodel.SaleEnvDTO;
-import com.qrpublic.apartment.requestmodel.SellerDTO;
 import com.qrpublic.apartment.saleenv.SaleEnvironmentService;
 import com.qrpublic.apartment.saleenv.request.ListEnvironmentRequest;
+import com.qrpublic.apartment.service.AdminService;
 import com.qrpublic.apartment.service.RequestService;
-import com.qrpublic.apartment.user.PubUserService;
 import com.qrpublic.apartment.user.request.ListUserRequest;
 import com.qrpublic.apartment.user.response.ListUserResponse;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -28,7 +28,7 @@ public class AdminController {
     SaleEnvironmentService envService;
 
     @Autowired
-    PubUserService pubUserService;
+    AdminService adminService;
 
     /**
      * Display environment list for administrator to manage, including the link generation
@@ -56,8 +56,7 @@ public class AdminController {
 
     @PostMapping("/listUser")
     public Mono<ResponseEntity<ListUserResponse>> getListUser(@RequestBody Pagination<ListUserRequest> request) {
-
-        return pubUserService.listUser(request)
+        return adminService.listInnerUsers(request)
                 .map(ResponseEntity::ok)
                 .defaultIfEmpty(ResponseEntity.status(HttpStatus.NO_CONTENT).build());
     }

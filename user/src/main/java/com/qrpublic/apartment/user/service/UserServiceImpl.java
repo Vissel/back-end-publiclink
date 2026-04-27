@@ -1,17 +1,26 @@
 package com.qrpublic.apartment.user.service;
 
 import com.qrpublic.apartment.adapter.template.Result;
-import com.qrpublic.apartment.adapter.user.request.UserRegisterRequest;
+import com.qrpublic.apartment.adapter.template.service.ProcessCallback;
+import com.qrpublic.apartment.adapter.template.service.ServiceTemplate;
 import com.qrpublic.apartment.user.entity.ProfileEntity;
 import com.qrpublic.apartment.user.entity.UserEntity;
+import com.qrpublic.apartment.user.exception.UserDeleteException;
+import com.qrpublic.apartment.user.exception.UserErrorEnum;
+import com.qrpublic.apartment.user.exception.UserNotFoundException;
 import com.qrpublic.apartment.user.model.User;
 import com.qrpublic.apartment.user.repository.UserEntityRepository;
+import com.qrpublic.apartment.user.service.request.UserCreateRequest;
+import com.qrpublic.apartment.user.service.request.UserDeleteRequest;
 import com.qrpublic.apartment.user.service.response.FoundUserResponse;
 import com.qrpublic.apartment.user.service.response.UserCreateResponse;
+import com.qrpublic.apartment.user.service.response.UserDeleteResponse;
+import jakarta.transaction.Transactional;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.util.Assert;
 
 import java.util.List;
 import java.util.Objects;
@@ -31,6 +40,9 @@ public class UserServiceImpl implements UserService {
     @Autowired
     private PasswordMasker passwordMasker;
 
+    @Autowired
+    ServiceTemplate serviceTemplate;
+
     @Override
     public Result<FoundUserResponse> findByUserName(String userName) {
         return userEntityRepository.findByUsername(userName)
@@ -38,13 +50,14 @@ public class UserServiceImpl implements UserService {
                 .orElseGet(() -> Result.error(404, "User not found"));
     }
 
+    @Transactional
     @Override
-    public Result<UserCreateResponse> createUser(UserRegisterRequest userCreateRequest) {
+    public Result<UserCreateResponse> createUser(UserCreateRequest userCreateRequest) {
         return Stream.of(userCreateRequest)
                 .filter(Objects::nonNull)
-                .map(this::convertToUserModel)
+                .map(this::convertUserRegisterToUserModel)
                 .map(user -> new java.util.AbstractMap.SimpleEntry<>(user,
-                        userEntityRepository.findByUsername(user.getUsername())
+                        userEntityRepository.findByUsernameForUpdate(user.getUsername())
                                 .map(existingUser -> setNewValueForExistUser(existingUser, user))
                                 .orElseGet(() -> createNewUser(user))))
                 .map(entry -> {
@@ -55,6 +68,57 @@ public class UserServiceImpl implements UserService {
                 .findFirst()
                 .orElseGet(() -> Result.error(400, "Invalid user request"));
     }
+
+    @Transactional
+    @Override
+    public Result<UserDeleteResponse> deleteUserByUsername(UserDeleteRequest userDeleteRequest) {
+        return serviceTemplate.execute(new ProcessCallback<UserDeleteRequest, UserDeleteResponse>() {
+            @Override
+            public UserDeleteRequest getRequest() {
+                return userDeleteRequest;
+            }
+
+            @Override
+            public void preProcess(UserDeleteRequest request) {
+                Assert.notNull(request, "User delete request cannot be null");
+                Assert.isTrue(StringUtils.isNotBlank(request.getUserId()), "User id cannot be blank");
+            }
+
+            @Override
+            public UserDeleteResponse process() {
+                return Stream.of(getRequest())
+                        .map(this::convertUserDeleteToUserModel)
+                        .map(user -> {
+                            return userEntityRepository.findByUsernameForUpdate(user.getUsername())
+                                    .map(existingUser -> {
+                                        userEntityRepository.delete(existingUser);
+                                        user.setUsername(existingUser.getUsername());
+                                        user.setFullName(existingUser.getFullName());
+                                        return buildUserDeleteResponse(user);
+                                    })
+                                    .orElseThrow(() -> new UserNotFoundException(user.getUserId()));
+
+                        }).findFirst()
+                        .orElseThrow(() -> new UserDeleteException(UserErrorEnum.USER_DELETE_ERROR, getRequest().getUserId()));
+            }
+
+            private User convertUserDeleteToUserModel(UserDeleteRequest userDeleteRequest) {
+                User user = new User();
+                user.setUserId(userDeleteRequest.getUserId());
+                user.setUsername(userDeleteRequest.getUserName());
+                return user;
+            }
+        });
+    }
+
+    private UserDeleteResponse buildUserDeleteResponse(User user) {
+        UserDeleteResponse response = new UserDeleteResponse();
+        response.setUserId(user.getUserId());
+        response.setDeleted(Boolean.TRUE);
+        response.setMessage("User deleted successfully");
+        return response;
+    }
+
 
     /**
      * Builds UserCreateResponse from User model
@@ -75,14 +139,12 @@ public class UserServiceImpl implements UserService {
         return response;
     }
 
-    private User convertToUserModel(UserRegisterRequest request) {
+    private User convertUserRegisterToUserModel(UserCreateRequest request) {
         User user = new User();
         user.setUsername(request.getUserName());
         user.setPlainTextPassword(rsaClient.decrypt(request.getEncryptedPassword()));
         user.setFullName(request.getFullName());
-        if (request.getProfileLink() != null) {
-            user.setProfileLinks(List.of(request.getProfileLink().getLink()));
-        }
+        user.setProfileLinks(List.of(request.getLink()));
         user.setRole(request.getRole());
         user.setIsActive(true);
         return user;

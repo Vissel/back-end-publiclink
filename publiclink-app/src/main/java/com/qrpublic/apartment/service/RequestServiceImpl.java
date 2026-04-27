@@ -4,10 +4,14 @@ import com.qrpublic.apartment.constant.CommonConstant;
 import com.qrpublic.apartment.core.model.RequestModel;
 import com.qrpublic.apartment.core.service.CoreRequestService;
 import com.qrpublic.apartment.entity.*;
+import com.qrpublic.apartment.model.SellerDTO;
 import com.qrpublic.apartment.repository.RequestRepository;
-import com.qrpublic.apartment.requestmodel.*;
+import com.qrpublic.apartment.requestmodel.PictureDTO;
+import com.qrpublic.apartment.requestmodel.ProductDTO;
+import com.qrpublic.apartment.requestmodel.PubUserRequest;
+import com.qrpublic.apartment.requestmodel.RequestDTO;
 import com.qrpublic.apartment.saleenv.SaleEnvironmentService;
-import com.qrpublic.apartment.saleenv.request.CreatedRequestIdRequest;
+import com.qrpublic.apartment.saleenv.request.CreateRequestIdRequest;
 import com.qrpublic.apartment.saleenv.response.CreateRequestIdResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -166,7 +170,7 @@ public class RequestServiceImpl implements RequestService {
     }
 
     @Override
-    public Mono<CreateRequestIdResponse> generateRequestId(CreatedRequestIdRequest request) {
+    public Mono<CreateRequestIdResponse> generateRequestId(CreateRequestIdRequest request) {
         return Mono.fromCallable(() -> {
             PubUserRequest sellerReq = request.getSellerRequest();
             SellerDTO sellerDTO = new SellerDTO();

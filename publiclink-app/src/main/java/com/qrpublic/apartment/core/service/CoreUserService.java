@@ -1,12 +1,14 @@
 package com.qrpublic.apartment.core.service;
 
+import com.qrpublic.apartment.core.model.UserModel;
 import com.qrpublic.apartment.entity.User;
+import com.qrpublic.apartment.model.SellerDTO;
 import com.qrpublic.apartment.repository.UserRepository;
-import com.qrpublic.apartment.requestmodel.SellerDTO;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
 import java.util.Optional;
 
 @Service
@@ -29,5 +31,27 @@ public class CoreUserService {
             user = userRepo.findByUserName(sellerDTO.getUsername());
         }
         return user.orElse(null);
+    }
+
+    @Transactional
+    public List<User> getAllUser() {
+        return userRepo.findAllWithLock();
+    }
+
+    @Transactional
+    public UserModel createNewUser(SellerDTO sellerDTO) {
+        User user = new User();
+        user.setUserName(sellerDTO.getUsername());
+        user.setLink(sellerDTO.getLink());
+        user.setName(sellerDTO.getName());
+        user.setType(sellerDTO.getUserType().name());
+        userRepo.save(user);
+
+        return UserModel.builder()
+                .username(user.getUserName())
+                .link(user.getLink())
+                .name(user.getName())
+                .type(user.getType())
+                .build();
     }
 }

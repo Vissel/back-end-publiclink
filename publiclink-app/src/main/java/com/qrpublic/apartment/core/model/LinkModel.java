@@ -9,10 +9,6 @@ import java.util.Date;
 @AllArgsConstructor
 public class LinkModel {
     private String link;
-    private String requestUuid;
-    private String authLink;
     private Date issueAt;
     private Date expire;
-
-
 }

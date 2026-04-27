@@ -4,10 +4,15 @@ import com.qrpublic.apartment.adapter.authentication.request.FindUserRequest;
 import com.qrpublic.apartment.adapter.authentication.response.FindUserResponse;
 import com.qrpublic.apartment.adapter.template.Result;
 import com.qrpublic.apartment.adapter.user.request.UserRegisterRequest;
+import com.qrpublic.apartment.adapter.user.request.UserRemoveRequest;
 import com.qrpublic.apartment.adapter.user.response.UserRegisterResponse;
+import com.qrpublic.apartment.adapter.user.response.UserRemoveResponse;
 import com.qrpublic.apartment.user.service.UserService;
+import com.qrpublic.apartment.user.service.request.UserCreateRequest;
+import com.qrpublic.apartment.user.service.request.UserDeleteRequest;
 import com.qrpublic.apartment.user.service.response.FoundUserResponse;
 import com.qrpublic.apartment.user.service.response.UserCreateResponse;
+import com.qrpublic.apartment.user.service.response.UserDeleteResponse;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
@@ -24,13 +29,50 @@ public class UserController {
 
     @PostMapping("/createUser")
     public ResponseEntity<Result<UserRegisterResponse>> createUser(@Valid @RequestBody UserRegisterRequest request) {
-        Result<UserCreateResponse> result = userService.createUser(request);
+        UserCreateRequest userCreateRequest = toUserCreateRequest(request);
+        Result<UserCreateResponse> result = userService.createUser(userCreateRequest);
         return convertToUserRegisterResponse(result);
     }
 
     @PostMapping("/findByUsername")
     public ResponseEntity<FindUserResponse> findUserByUsername(@RequestBody FindUserRequest request) {
         return convertToFindUserResponse(userService.findByUserName(request.getUserName()));
+    }
+
+    @PostMapping("/deleteUser")
+    public ResponseEntity<Result<UserRemoveResponse>> deleteUser(@RequestBody UserRemoveRequest request) {
+        UserDeleteRequest userDeleteRequest = toUserDeleteRequest(request);
+        return convertToUserDeleteResponse(userService.deleteUserByUsername(userDeleteRequest));
+    }
+
+    private ResponseEntity<Result<UserRemoveResponse>> convertToUserDeleteResponse(Result<UserDeleteResponse> userDeleteResponseResult) {
+        UserRemoveResponse userRemoveResponse = new UserRemoveResponse();
+        if (userDeleteResponseResult.isSuccess()) {
+            UserDeleteResponse userDeleteResponse = userDeleteResponseResult.getData();
+            userRemoveResponse.setUserId(userDeleteResponse.getUserId());
+            userRemoveResponse.setDeleted(userDeleteResponse.getDeleted());
+            userRemoveResponse.setMessage("User deleted successfully");
+            return ResponseEntity.ok(Result.success(userRemoveResponse));
+        }
+        // error message is hide here
+        userRemoveResponse.setMessage("User deletion failed");
+        return ResponseEntity.status(userDeleteResponseResult.getErrorCode()).body(Result.error(userDeleteResponseResult.getErrorCode(), null));
+    }
+
+    private UserCreateRequest toUserCreateRequest(@Valid UserRegisterRequest request) {
+        UserCreateRequest userCreateRequest = new UserCreateRequest();
+        userCreateRequest.setUserName(request.getUserName());
+        userCreateRequest.setEncryptedPassword(request.getEncryptedPassword());
+        userCreateRequest.setFullName(request.getFullName());
+        userCreateRequest.setLink(request.getProfileLink() != null ? request.getProfileLink().toString() : null);
+        userCreateRequest.setRole(request.getRole());
+        return userCreateRequest;
+    }
+
+    private UserDeleteRequest toUserDeleteRequest(UserRemoveRequest request) {
+        UserDeleteRequest userDeleteRequest = new UserDeleteRequest();
+        userDeleteRequest.setUserId(request.getUserId());
+        return userDeleteRequest;
     }
 
     private ResponseEntity<Result<UserRegisterResponse>> convertToUserRegisterResponse(Result<UserCreateResponse> result) {

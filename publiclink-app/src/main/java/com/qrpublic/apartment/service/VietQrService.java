@@ -69,17 +69,17 @@ public class VietQrService extends JwtService implements LinkService {
     }
 
     @Override
-    public LinkModel generateAuthLink(String subject, Map<String, String> claims) {
+    public LinkModel generateAuthLink(Map<String, String> claims) {
         Date issueAt = new Date();
         Date validDate = new Date(System.currentTimeMillis() + LINK_AUTH_EXPIRED);
         String link = Jwts.builder()
                 .setClaims(claims)
-                .setSubject(subject)
                 .setIssuedAt(issueAt)
                 .signWith(Keys.hmacShaKeyFor(secretKey.getBytes()), SignatureAlgorithm.HS256)
                 .setExpiration(validDate).compact();
         return new LinkModel(link, issueAt, validDate);
     }
+
 
     public byte[] generateQrImage(VietQrRequest request) {
         String payload = generateVietQrPayload(request);
@@ -144,11 +144,7 @@ public class VietQrService extends JwtService implements LinkService {
 
     @Override
     public boolean validateLink(String publicToken) {
-        boolean valid = isTokenValid(publicToken);
-        if (valid) {
-            log.info("link of:" + extractSubject(publicToken));
-        }
-        return valid;
+        return isTokenValid(publicToken);
     }
 
 

@@ -4,6 +4,6 @@ import com.qrpublic.apartment.requestmodel.PubUserRequest;
 import lombok.Data;
 
 @Data
-public class CreatedRequestIdRequest {
+public class CreateRequestIdRequest {
     private PubUserRequest sellerRequest;
 }

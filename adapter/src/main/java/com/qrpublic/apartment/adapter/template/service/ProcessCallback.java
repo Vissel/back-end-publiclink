@@ -1,4 +1,4 @@
-package com.qrpublic.apartment.authenAuthorisation.template.service;
+package com.qrpublic.apartment.adapter.template.service;
 
 public interface ProcessCallback<R, T> {
 
@@ -7,4 +7,5 @@ public interface ProcessCallback<R, T> {
     void preProcess(R request);
 
     T process();
+
 }

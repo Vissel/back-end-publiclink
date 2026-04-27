@@ -1,7 +1,7 @@
 package com.qrpublic.apartment.controller;
 
 import com.qrpublic.apartment.saleenv.request.CreateEnvironmentRequest;
-import com.qrpublic.apartment.saleenv.request.CreatedRequestIdRequest;
+import com.qrpublic.apartment.saleenv.request.CreateRequestIdRequest;
 import com.qrpublic.apartment.saleenv.response.CreateEnvironmentResponse;
 import com.qrpublic.apartment.saleenv.response.CreateRequestIdResponse;
 import com.qrpublic.apartment.service.AdminService;
@@ -49,7 +49,7 @@ public class GenerationController {
      * Exceptions are handled by GlobalExceptionHandler
      */
     @PostMapping("/generateRequestId")
-    public Mono<ResponseEntity<Result<CreateRequestIdResponse>>> generateRequestId(@RequestBody CreatedRequestIdRequest request) {
+    public Mono<ResponseEntity<Result<CreateRequestIdResponse>>> generateRequestId(@RequestBody CreateRequestIdRequest request) {
         log.info("Received request to generate request ID");
 
         return requestService.generateRequestId(request)

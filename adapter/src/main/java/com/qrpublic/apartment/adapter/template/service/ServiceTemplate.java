@@ -1,12 +1,10 @@
-package com.qrpublic.apartment.template.service;
+package com.qrpublic.apartment.adapter.template.service;
 
-import com.qrpublic.apartment.template.model.Result;
-import com.qrpublic.apartment.template.model.enums.ResultEnum;
+import com.qrpublic.apartment.adapter.exception.BusinessException;
+import com.qrpublic.apartment.adapter.template.Result;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Service;
 
 @Slf4j
-@Service("publicLinkServiceTemplate")
 public class ServiceTemplate {
     public <R, T> Result<T> execute(ProcessCallback<R, T> callback) {
         Result<T> result = new Result<>();
@@ -17,9 +15,13 @@ public class ServiceTemplate {
             T data = callback.process();
             result.setData(data);
             result.setSuccess(true);
+        } catch (BusinessException e) {
+            log.error("[BusinessException] message:", e.getMessage());
+            result.setErrorCode(e.getErrorCode());
+            errorMess = e.getMessage();
         } catch (Throwable e) {
             log.error("[Throwable] message:", e.getMessage());
-            result.setErrorCode(Integer.valueOf(ResultEnum.INTERNAL_SERVER_ERROR.getCode()));
+            result.setErrorCode(500);
             errorMess = "Server error.";
         } finally {
             result.setErrorMessage(errorMess);

@@ -6,13 +6,13 @@ import org.springframework.http.HttpStatus;
  * Exception thrown when sale environment creation fails
  */
 public class EnvironmentCreationException extends ApplicationException {
-    
+
     public EnvironmentCreationException(String message) {
-        super(message, HttpStatus.INTERNAL_SERVER_ERROR.value());
+        super(message, HttpStatus.CONFLICT.value());
     }
 
     public EnvironmentCreationException(String message, Throwable cause) {
-        super(message, cause, HttpStatus.INTERNAL_SERVER_ERROR.value());
+        super(message, cause, HttpStatus.CONFLICT.value());
     }
 
     public EnvironmentCreationException(String message, int errorCode) {

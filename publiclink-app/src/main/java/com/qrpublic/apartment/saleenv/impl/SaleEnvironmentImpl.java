@@ -101,7 +101,7 @@ public class SaleEnvironmentImpl implements SaleEnvironmentService {
     }
 
     private LinkModel generateReqAuthLink(RequestDTO requestDTO) {
-        return linkService.generateAuthLink(requestDTO.getReqUUID(), Map.of(LinkConstant.PARAM_USERNAME, requestDTO.getUsername()));
+        return linkService.generateAuthLink(Map.of(LinkConstant.PARAM_USERNAME, requestDTO.getUsername()));
     }
 
     @Override

@@ -1,5 +1,7 @@
 package com.qrpublic.apartment.authenAuthorisation.authentication.impl;
 
+import com.qrpublic.apartment.adapter.template.service.ProcessCallback;
+import com.qrpublic.apartment.adapter.template.service.ServiceTemplate;
 import com.qrpublic.apartment.authenAuthorisation.authentication.interfaces.AuthenInterface;
 import com.qrpublic.apartment.authenAuthorisation.authentication.interfaces.request.NormalLoginRequest;
 import com.qrpublic.apartment.authenAuthorisation.authentication.interfaces.response.NormalLoginResponse;
@@ -7,8 +9,6 @@ import com.qrpublic.apartment.authenAuthorisation.authentication.service.JwtServ
 import com.qrpublic.apartment.authenAuthorisation.authentication.service.RsaService;
 import com.qrpublic.apartment.authenAuthorisation.authorisation.model.RoleEnum;
 import com.qrpublic.apartment.authenAuthorisation.template.model.Result;
-import com.qrpublic.apartment.authenAuthorisation.template.service.ProcessCallback;
-import com.qrpublic.apartment.authenAuthorisation.template.service.ServiceTemplate;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.core.io.ByteArrayResource;

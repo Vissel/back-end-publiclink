@@ -5,8 +5,8 @@ import com.qrpublic.apartment.core.model.RequestModel;
 import com.qrpublic.apartment.core.model.UserModel;
 import com.qrpublic.apartment.entity.Request;
 import com.qrpublic.apartment.entity.User;
+import com.qrpublic.apartment.model.SellerDTO;
 import com.qrpublic.apartment.repository.RequestRepository;
-import com.qrpublic.apartment.requestmodel.SellerDTO;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -61,6 +61,7 @@ public class CoreRequestService {
             sellerModel.setUsername(request.getSellerId().getUserName());
             sellerModel.setLink(request.getSellerId().getLink());
         }
+        model.setSeller(sellerModel);
         model.setCreatedAt(request.getCreatedAt().toString());
         model.setAuthentication(request.isAuthenticated() ? AuthenticationEnum.BASIC : AuthenticationEnum.UNAUTHENTICATED);
         return model;

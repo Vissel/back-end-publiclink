@@ -2,9 +2,9 @@ package com.qrpublic.apartment.service;
 
 import com.qrpublic.apartment.entity.Request;
 import com.qrpublic.apartment.entity.User;
+import com.qrpublic.apartment.model.SellerDTO;
 import com.qrpublic.apartment.requestmodel.RequestDTO;
-import com.qrpublic.apartment.requestmodel.SellerDTO;
-import com.qrpublic.apartment.saleenv.request.CreatedRequestIdRequest;
+import com.qrpublic.apartment.saleenv.request.CreateRequestIdRequest;
 import com.qrpublic.apartment.saleenv.response.CreateRequestIdResponse;
 import reactor.core.publisher.Mono;
 
@@ -19,6 +19,6 @@ public interface RequestService {
 
     public Request saveAuthenticatedRequest(long requestId);
 
-    Mono<CreateRequestIdResponse> generateRequestId(CreatedRequestIdRequest request);
+    Mono<CreateRequestIdResponse> generateRequestId(CreateRequestIdRequest request);
 
 }

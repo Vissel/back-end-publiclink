@@ -13,8 +13,8 @@ import org.springframework.web.reactive.config.WebFluxConfigurer;
 public class SecurityConfig implements WebFluxConfigurer {
     @Override
     public void addResourceHandlers(ResourceHandlerRegistry registry) {
-        registry.addResourceHandler("/static/**")
-                .addResourceLocations("classpath:/static/");
+//        registry.addResourceHandler("/static/**")
+//                .addResourceLocations("classpath:/static/");
     }
 
     //    @Bean

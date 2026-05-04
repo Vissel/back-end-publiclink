@@ -20,90 +20,91 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import reactor.core.publisher.Mono;
 
 @RestController
 @RequestMapping("/api/v1/user")
 public class UserController {
+
     @Autowired
     UserService userService;
 
     @PostMapping("/createUser")
-    public ResponseEntity<Result<UserRegisterResponse>> createUser(@Valid @RequestBody UserRegisterRequest request) {
-        UserCreateRequest userCreateRequest = toUserCreateRequest(request);
-        Result<UserCreateResponse> result = userService.createUser(userCreateRequest);
-        return convertToUserRegisterResponse(result);
+    public Mono<ResponseEntity<Result<UserRegisterResponse>>> createUser(@Valid @RequestBody UserRegisterRequest request) {
+        return userService.createUser(toUserCreateRequest(request))
+                .map(result -> {
+                    if (result.isSuccess()) {
+                        UserRegisterResponse resp = toUserRegisterResponse(result.getData());
+                        resp.setMessage("User created successfully");
+                        return ResponseEntity.ok(Result.success(resp));
+                    }
+                    return ResponseEntity.status(result.getErrorCode()).<Result<UserRegisterResponse>>body(Result.error(result.getErrorCode(), null));
+                });
     }
 
     @PostMapping("/findByUsername")
-    public ResponseEntity<FindUserResponse> findUserByUsername(@RequestBody FindUserRequest request) {
-        return convertToFindUserResponse(userService.findByUserName(request.getUserName()));
+    public Mono<ResponseEntity<FindUserResponse>> findUserByUsername(@RequestBody FindUserRequest request) {
+        return userService.findByUserName(request.getUserName())
+                .map(result -> {
+                    if (result.isSuccess()) {
+                        return ResponseEntity.ok(toFindUserResponse(result.getData()));
+                    }
+                    return ResponseEntity.status(result.getErrorCode()).<FindUserResponse>body(null);
+                });
     }
 
     @PostMapping("/deleteUser")
-    public ResponseEntity<Result<UserRemoveResponse>> deleteUser(@RequestBody UserRemoveRequest request) {
-        UserDeleteRequest userDeleteRequest = toUserDeleteRequest(request);
-        return convertToUserDeleteResponse(userService.deleteUserByUsername(userDeleteRequest));
+    public Mono<ResponseEntity<Result<UserRemoveResponse>>> deleteUser(@RequestBody UserRemoveRequest request) {
+        return userService.deleteUserByUsername(toUserDeleteRequest(request))
+                .map(result -> {
+                    if (result.isSuccess()) {
+                        UserRemoveResponse resp = toUserRemoveResponse(result.getData());
+                        return ResponseEntity.ok(Result.success(resp));
+                    }
+                    return ResponseEntity.status(result.getErrorCode()).<Result<UserRemoveResponse>>body(Result.error(result.getErrorCode(), null));
+                });
     }
 
-    private ResponseEntity<Result<UserRemoveResponse>> convertToUserDeleteResponse(Result<UserDeleteResponse> userDeleteResponseResult) {
-        UserRemoveResponse userRemoveResponse = new UserRemoveResponse();
-        if (userDeleteResponseResult.isSuccess()) {
-            UserDeleteResponse userDeleteResponse = userDeleteResponseResult.getData();
-            userRemoveResponse.setUserId(userDeleteResponse.getUserId());
-            userRemoveResponse.setDeleted(userDeleteResponse.getDeleted());
-            userRemoveResponse.setMessage("User deleted successfully");
-            return ResponseEntity.ok(Result.success(userRemoveResponse));
-        }
-        // error message is hide here
-        userRemoveResponse.setMessage("User deletion failed");
-        return ResponseEntity.status(userDeleteResponseResult.getErrorCode()).body(Result.error(userDeleteResponseResult.getErrorCode(), null));
-    }
-
-    private UserCreateRequest toUserCreateRequest(@Valid UserRegisterRequest request) {
-        UserCreateRequest userCreateRequest = new UserCreateRequest();
-        userCreateRequest.setUserName(request.getUserName());
-        userCreateRequest.setEncryptedPassword(request.getEncryptedPassword());
-        userCreateRequest.setFullName(request.getFullName());
-        userCreateRequest.setLink(request.getProfileLink() != null ? request.getProfileLink().toString() : null);
-        userCreateRequest.setRole(request.getRole());
-        return userCreateRequest;
+    private UserCreateRequest toUserCreateRequest(UserRegisterRequest request) {
+        UserCreateRequest r = new UserCreateRequest();
+        r.setUserName(request.getUserName());
+        r.setEncryptedPassword(request.getEncryptedPassword());
+        r.setFullName(request.getFullName());
+        r.setLink(request.getProfileLink() != null ? request.getProfileLink().toString() : null);
+        r.setRole(request.getRole());
+        return r;
     }
 
     private UserDeleteRequest toUserDeleteRequest(UserRemoveRequest request) {
-        UserDeleteRequest userDeleteRequest = new UserDeleteRequest();
-        userDeleteRequest.setUserId(request.getUserId());
-        return userDeleteRequest;
+        UserDeleteRequest r = new UserDeleteRequest();
+        r.setUserId(request.getUserId());
+        return r;
     }
 
-    private ResponseEntity<Result<UserRegisterResponse>> convertToUserRegisterResponse(Result<UserCreateResponse> result) {
-        UserRegisterResponse userRegisterResponse = new UserRegisterResponse();
-        if (result.isSuccess()) {
-            UserCreateResponse userCreateResponse = result.getData();
-            userRegisterResponse.setUserName(userCreateResponse.getUserName());
-            userRegisterResponse.setLink(userCreateResponse.getLink());
-            userRegisterResponse.setRole(userCreateResponse.getRole());
-            userRegisterResponse.setPassword(userCreateResponse.getPassword());
-            userRegisterResponse.setRole(userCreateResponse.getRole());
-            userRegisterResponse.setMessage("User created successfully");
-            return ResponseEntity.ok(Result.success(userRegisterResponse));
-        }
-        // error message is hide here
-        userRegisterResponse.setMessage("User created failed");
-        return ResponseEntity.status(result.getErrorCode()).body(Result.error(result.getErrorCode(), null));
+    private UserRegisterResponse toUserRegisterResponse(UserCreateResponse data) {
+        UserRegisterResponse r = new UserRegisterResponse();
+        r.setUserName(data.getUserName());
+        r.setLink(data.getLink());
+        r.setRole(data.getRole());
+        r.setPassword(data.getPassword());
+        return r;
     }
 
-    private ResponseEntity<FindUserResponse> convertToFindUserResponse(Result<FoundUserResponse> response) {
-        if (response.isSuccess()) {
-            FoundUserResponse data = response.getData();
-            FindUserResponse findUserResponse = new FindUserResponse();
-            findUserResponse.setUserName(data.getUserName());
-            findUserResponse.setEncodedPassword(data.getEncodedPassword());
-            findUserResponse.setName(data.getName());
-            findUserResponse.setEmail(data.getEmail());
-            findUserResponse.setRole(data.getRole());
-            return ResponseEntity.ok(findUserResponse);
-        }
-        // error message is hide here
-        return ResponseEntity.status(response.getErrorCode()).body(null);
+    private UserRemoveResponse toUserRemoveResponse(UserDeleteResponse data) {
+        UserRemoveResponse r = new UserRemoveResponse();
+        r.setUserId(data.getUserId());
+        r.setDeleted(data.getDeleted());
+        r.setMessage("User deleted successfully");
+        return r;
+    }
+
+    private FindUserResponse toFindUserResponse(FoundUserResponse data) {
+        FindUserResponse r = new FindUserResponse();
+        r.setUserName(data.getUserName());
+        r.setEncodedPassword(data.getEncodedPassword());
+        r.setName(data.getName());
+        r.setEmail(data.getEmail());
+        r.setRole(data.getRole());
+        return r;
     }
 }

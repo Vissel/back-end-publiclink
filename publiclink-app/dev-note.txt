@@ -6,3 +6,16 @@ api flows:
     - seller authenticate if not.
     - seller can see the environment details.
 5/ Buyer.
+
+
+SELECT 
+    COLUMN_NAME, 
+    CONSTRAINT_NAME, 
+    REFERENCED_TABLE_NAME, 
+    REFERENCED_COLUMN_NAME
+FROM 
+    INFORMATION_SCHEMA.KEY_COLUMN_USAGE
+WHERE 
+    TABLE_SCHEMA = 'publiclink-db' 
+    AND TABLE_NAME = 'request' 
+    AND REFERENCED_COLUMN_NAME IS NOT NULL;

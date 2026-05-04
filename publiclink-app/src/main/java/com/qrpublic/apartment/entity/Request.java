@@ -18,9 +18,7 @@ public class Request {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long reqId;
 
-    @OneToOne(fetch = FetchType.LAZY, cascade = CascadeType.DETACH)
-    @JoinColumn(name = "seller_id")
-    private User sellerId;
+    private String sellerName;
 
     private String description;
 

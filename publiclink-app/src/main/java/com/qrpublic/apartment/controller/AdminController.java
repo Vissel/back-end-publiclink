@@ -19,7 +19,7 @@ import reactor.core.publisher.Mono;
 import java.util.List;
 
 @RestController
-@RequestMapping("/admin/generator")
+@RequestMapping("/admin/v1")
 public class AdminController {
     @Autowired
     RequestService requestService;

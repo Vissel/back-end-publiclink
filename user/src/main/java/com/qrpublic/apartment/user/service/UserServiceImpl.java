@@ -1,8 +1,7 @@
 package com.qrpublic.apartment.user.service;
 
 import com.qrpublic.apartment.adapter.template.Result;
-import com.qrpublic.apartment.adapter.template.service.ProcessCallback;
-import com.qrpublic.apartment.adapter.template.service.ServiceTemplate;
+import com.qrpublic.apartment.user.core.UserServiceCore;
 import com.qrpublic.apartment.user.entity.ProfileEntity;
 import com.qrpublic.apartment.user.entity.UserEntity;
 import com.qrpublic.apartment.user.exception.UserDeleteException;
@@ -15,21 +14,29 @@ import com.qrpublic.apartment.user.service.request.UserDeleteRequest;
 import com.qrpublic.apartment.user.service.response.FoundUserResponse;
 import com.qrpublic.apartment.user.service.response.UserCreateResponse;
 import com.qrpublic.apartment.user.service.response.UserDeleteResponse;
-import jakarta.transaction.Transactional;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
-import org.springframework.util.Assert;
+import org.springframework.transaction.annotation.Transactional;
+import reactor.core.publisher.Mono;
+import reactor.core.scheduler.Schedulers;
 
 import java.util.List;
 import java.util.Objects;
+import java.util.function.Consumer;
 import java.util.stream.Stream;
+
+import static com.qrpublic.apartment.adapter.template.Result.success;
 
 @Service
 public class UserServiceImpl implements UserService {
+
     @Autowired
     private UserEntityRepository userEntityRepository;
+
+    @Autowired
+    UserServiceCore userServiceCore;
 
     @Autowired
     private PasswordEncoder passwordEncoder;
@@ -37,78 +44,54 @@ public class UserServiceImpl implements UserService {
     @Autowired
     private RsaClient rsaClient;
 
-    @Autowired
-    private PasswordMasker passwordMasker;
-
-    @Autowired
-    ServiceTemplate serviceTemplate;
+    @Override
+    public Mono<Result<FoundUserResponse>> findByUserName(String userName) {
+        return Mono.fromCallable(() -> {
+            User userModel = userServiceCore.doFindUserByUsername(userName);
+            if (userModel != null) {
+                return Result.<FoundUserResponse>success(mapToFoundUserResponse(userModel));
+            }
+            return Result.<FoundUserResponse>error(404, "User not found");
+        }).subscribeOn(Schedulers.boundedElastic());
+    }
 
     @Override
-    public Result<FoundUserResponse> findByUserName(String userName) {
-        return userEntityRepository.findByUsername(userName)
-                .map(userEntity -> Result.success(mapToFoundUserResponse(userEntity)))
-                .orElseGet(() -> Result.error(404, "User not found"));
+    public Mono<Result<UserCreateResponse>> createUser(UserCreateRequest userCreateRequest) {
+        return Mono.fromCallable(() -> doCreateUser(userCreateRequest))
+                .subscribeOn(Schedulers.boundedElastic());
+    }
+
+    @Override
+    public Mono<Result<UserDeleteResponse>> deleteUserByUsername(UserDeleteRequest userDeleteRequest) {
+        return Mono.fromCallable(() -> doDeleteUser(userDeleteRequest))
+                .subscribeOn(Schedulers.boundedElastic());
     }
 
     @Transactional
-    @Override
-    public Result<UserCreateResponse> createUser(UserCreateRequest userCreateRequest) {
-        return Stream.of(userCreateRequest)
-                .filter(Objects::nonNull)
-                .map(this::convertUserRegisterToUserModel)
-                .map(user -> new java.util.AbstractMap.SimpleEntry<>(user,
-                        userEntityRepository.findByUsernameForUpdate(user.getUsername())
-                                .map(existingUser -> setNewValueForExistUser(existingUser, user))
-                                .orElseGet(() -> createNewUser(user))))
-                .map(entry -> {
-                    User user = entry.getKey();
-                    UserCreateResponse response = buildUserCreateResponse(user);
-                    return Result.success(response);
+    protected Result<UserCreateResponse> doCreateUser(UserCreateRequest request) {
+        if (request == null) return Result.error(400, "Invalid user request");
+        User user = convertUserRegisterToUserModel(request);
+        userEntityRepository.findByUsername(user.getUsername())
+                .map(existing -> setNewValueForExistUser(existing, user))
+                .orElseGet(() -> createNewUser(user));
+        return success(buildUserCreateResponse(user));
+    }
+
+    @Transactional
+    protected Result<UserDeleteResponse> doDeleteUser(UserDeleteRequest request) {
+        if (request == null || StringUtils.isBlank(request.getUserId()))
+            throw new UserDeleteException(UserErrorEnum.USER_DELETE_ERROR, "invalid");
+        User user = new User();
+        user.setUserId(request.getUserId());
+        user.setUsername(request.getUserName());
+        return userEntityRepository.findByUsername(user.getUsername())
+                .map(existing -> {
+                    userEntityRepository.delete(existing);
+                    user.setUsername(existing.getUsername());
+                    user.setFullName(existing.getFullName());
+                    return success(buildUserDeleteResponse(user));
                 })
-                .findFirst()
-                .orElseGet(() -> Result.error(400, "Invalid user request"));
-    }
-
-    @Transactional
-    @Override
-    public Result<UserDeleteResponse> deleteUserByUsername(UserDeleteRequest userDeleteRequest) {
-        return serviceTemplate.execute(new ProcessCallback<UserDeleteRequest, UserDeleteResponse>() {
-            @Override
-            public UserDeleteRequest getRequest() {
-                return userDeleteRequest;
-            }
-
-            @Override
-            public void preProcess(UserDeleteRequest request) {
-                Assert.notNull(request, "User delete request cannot be null");
-                Assert.isTrue(StringUtils.isNotBlank(request.getUserId()), "User id cannot be blank");
-            }
-
-            @Override
-            public UserDeleteResponse process() {
-                return Stream.of(getRequest())
-                        .map(this::convertUserDeleteToUserModel)
-                        .map(user -> {
-                            return userEntityRepository.findByUsernameForUpdate(user.getUsername())
-                                    .map(existingUser -> {
-                                        userEntityRepository.delete(existingUser);
-                                        user.setUsername(existingUser.getUsername());
-                                        user.setFullName(existingUser.getFullName());
-                                        return buildUserDeleteResponse(user);
-                                    })
-                                    .orElseThrow(() -> new UserNotFoundException(user.getUserId()));
-
-                        }).findFirst()
-                        .orElseThrow(() -> new UserDeleteException(UserErrorEnum.USER_DELETE_ERROR, getRequest().getUserId()));
-            }
-
-            private User convertUserDeleteToUserModel(UserDeleteRequest userDeleteRequest) {
-                User user = new User();
-                user.setUserId(userDeleteRequest.getUserId());
-                user.setUsername(userDeleteRequest.getUserName());
-                return user;
-            }
-        });
+                .orElseThrow(() -> new UserNotFoundException(user.getUserId()));
     }
 
     private UserDeleteResponse buildUserDeleteResponse(User user) {
@@ -119,19 +102,15 @@ public class UserServiceImpl implements UserService {
         return response;
     }
 
-
-    /**
-     * Builds UserCreateResponse from User model
-     */
     private UserCreateResponse buildUserCreateResponse(User user) {
         UserCreateResponse response = new UserCreateResponse();
         response.setUserName(user.getUsername());
         if (StringUtils.isNotBlank(user.getPlainTextPassword())) {
-            response.setPassword(PasswordMasker.maskPassword(user.getPlainTextPassword())); // Masked password for security
+            response.setPassword(PasswordMasker.maskPassword(user.getPlainTextPassword()));
         }
         response.setFullName(user.getFullName());
         if (user.getProfileLinks() != null && !user.getProfileLinks().isEmpty()) {
-            response.setLink(user.getProfileLinks().get(0)); // Get first profile link
+            response.setLink(user.getProfileLinks().get(0));
         }
         if (Objects.nonNull(user.getRole())) {
             response.setRole(user.getRole());
@@ -150,21 +129,15 @@ public class UserServiceImpl implements UserService {
         return user;
     }
 
-    /**
-     * Maps UserEntity to FoundUserResponse
-     */
-    private FoundUserResponse mapToFoundUserResponse(UserEntity userEntity) {
+    private FoundUserResponse mapToFoundUserResponse(User userModel) {
         FoundUserResponse response = new FoundUserResponse();
-        response.setUserName(userEntity.getUsername());
-        response.setEncodedPassword(userEntity.getPassword());
-        response.setName(userEntity.getFullName());
-        response.setRole(userEntity.getRole());
+        response.setUserName(userModel.getUsername());
+        response.setEncodedPassword(userModel.getPassword());
+        response.setName(userModel.getFullName());
+        response.setRole(userModel.getRole());
         return response;
     }
 
-    /**
-     * Creates a new user entity from the registration request
-     */
     private UserEntity createNewUser(User user) {
         UserEntity newUser = new UserEntity();
         newUser.setUsername(user.getUsername());
@@ -172,8 +145,6 @@ public class UserServiceImpl implements UserService {
         newUser.setFullName(user.getFullName());
         newUser.setRole(user.getRole());
         newUser.setIsActive(user.getIsActive());
-
-        // Handle profile links if present
         if (user.getProfileLinks() != null && !user.getProfileLinks().isEmpty()) {
             List<ProfileEntity> profiles = user.getProfileLinks().stream()
                     .map(link -> {
@@ -182,82 +153,57 @@ public class UserServiceImpl implements UserService {
                         profile.setProfileType("default");
                         profile.setUser(newUser);
                         return profile;
-                    })
-                    .toList();
+                    }).toList();
             newUser.setProfiles(profiles);
         }
-
         return userEntityRepository.save(newUser);
     }
 
-    /**
-     * Updates existing user with new data using stream processing
-     */
-    private UserEntity setNewValueForExistUser(UserEntity existingUser, User user) {
+    private UserEntity setNewValueForExistUser(UserEntity existing, User user) {
         Stream.of(
-                        updateUserName(existingUser, user.getUsername()),
-                        updatePassword(existingUser, user.getPlainTextPassword()),
-                        updateFullName(existingUser, user.getFullName()),
-                        updateRole(existingUser, user.getRole()),
-                        updateIsActive(existingUser, user.getIsActive()),
-                        updateProfileLinks(existingUser, user.getProfileLinks())
-                ).filter(Objects::nonNull)
-                .forEach(updater -> updater.accept(existingUser));
-
-        return userEntityRepository.save(existingUser);
+                updateUserName(existing, user.getUsername()),
+                updatePassword(existing, user.getPlainTextPassword()),
+                updateFullName(existing, user.getFullName()),
+                updateRole(existing, user.getRole()),
+                updateIsActive(existing, user.getIsActive()),
+                updateProfileLinks(existing, user.getProfileLinks())
+        ).filter(Objects::nonNull).forEach(updater -> updater.accept(existing));
+        return userEntityRepository.save(existing);
     }
 
-    /**
-     * Stream-based field update utilities
-     */
-    private java.util.function.Consumer<UserEntity> updateUserName(UserEntity user, String newUserName) {
-        return StringUtils.isNotBlank(newUserName) && !newUserName.equals(user.getUsername())
-                ? u -> u.setUsername(newUserName)
-                : null;
+    private Consumer<UserEntity> updateUserName(UserEntity u, String v) {
+        return StringUtils.isNotBlank(v) && !v.equals(u.getUsername()) ? e -> e.setUsername(v) : null;
     }
 
-    private java.util.function.Consumer<UserEntity> updatePassword(UserEntity user, String newRawPassword) {
-        return StringUtils.isNotBlank(newRawPassword) && !passwordEncoder.matches(newRawPassword, user.getPassword())
-                ? u -> u.setPassword(passwordEncoder.encode(newRawPassword))
-                : null;
+    private Consumer<UserEntity> updatePassword(UserEntity u, String v) {
+        return StringUtils.isNotBlank(v) && !passwordEncoder.matches(v, u.getPassword()) ? e -> e.setPassword(passwordEncoder.encode(v)) : null;
     }
 
-    private java.util.function.Consumer<UserEntity> updateFullName(UserEntity user, String newName) {
-        return StringUtils.isNotBlank(newName) && !newName.equals(user.getFullName())
-                ? u -> u.setFullName(newName)
-                : null;
+    private Consumer<UserEntity> updateFullName(UserEntity u, String v) {
+        return StringUtils.isNotBlank(v) && !v.equals(u.getFullName()) ? e -> e.setFullName(v) : null;
     }
 
-    private java.util.function.Consumer<UserEntity> updateRole(UserEntity user, String newRole) {
-        return StringUtils.isNotBlank(newRole) && !newRole.equals(user.getRole())
-                ? u -> u.setRole(newRole)
-                : null;
+    private Consumer<UserEntity> updateRole(UserEntity u, String v) {
+        return StringUtils.isNotBlank(v) && !v.equals(u.getRole()) ? e -> e.setRole(v) : null;
     }
 
-    private java.util.function.Consumer<UserEntity> updateIsActive(UserEntity user, Boolean newIsActive) {
-        return newIsActive != null && !newIsActive.equals(user.getIsActive())
-                ? u -> u.setIsActive(newIsActive)
-                : null;
+    private Consumer<UserEntity> updateIsActive(UserEntity u, Boolean v) {
+        return v != null && !v.equals(u.getIsActive()) ? e -> e.setIsActive(v) : null;
     }
 
-    private java.util.function.Consumer<UserEntity> updateProfileLinks(UserEntity user, List<String> newProfileLinks) {
-        if (newProfileLinks != null && !newProfileLinks.isEmpty()) {
-            // Update or set new profile links
-            List<ProfileEntity> updatedProfiles = newProfileLinks.stream()
-                    .map(link -> {
-                        ProfileEntity profile = new ProfileEntity();
-                        profile.setProfileLink(link);
-                        profile.setProfileType("default");
-                        profile.setUser(user);
-                        return profile;
-                    })
-                    .toList();
-            user.setProfiles(updatedProfiles);
-            return u -> {
-            }; // No-op since we already updated
+    private Consumer<UserEntity> updateProfileLinks(UserEntity u, List<String> links) {
+        if (links != null && !links.isEmpty()) {
+            List<ProfileEntity> profiles = links.stream().map(link -> {
+                ProfileEntity p = new ProfileEntity();
+                p.setProfileLink(link);
+                p.setProfileType("default");
+                p.setUser(u);
+                return p;
+            }).toList();
+            u.setProfiles(profiles);
+            return e -> {
+            };
         }
         return null;
     }
-
-
 }

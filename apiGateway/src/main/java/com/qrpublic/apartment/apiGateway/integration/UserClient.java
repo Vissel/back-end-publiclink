@@ -2,14 +2,25 @@ package com.qrpublic.apartment.apiGateway.integration;
 
 import com.qrpublic.apartment.adapter.authentication.request.FindUserRequest;
 import com.qrpublic.apartment.adapter.authentication.response.FindUserResponse;
-import org.springframework.cloud.openfeign.FeignClient;
-import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Component;
+import org.springframework.web.reactive.function.client.WebClient;
+import reactor.core.publisher.Mono;
 
-@FeignClient(name = "UserApplication", url = "http://localhost:8082/api/v1/user")
-public interface UserClient {
-    @PostMapping("/findByUsername")
-    ResponseEntity<FindUserResponse> findUserByUsername(@RequestBody FindUserRequest request);
+@Component
+public class UserClient {
 
+    private final WebClient webClient;
+
+    public UserClient(@Value("${user.service.url:http://localhost:8082}") String userServiceUrl) {
+        this.webClient = WebClient.builder().baseUrl(userServiceUrl).build();
+    }
+
+    public Mono<FindUserResponse> findUserByUsername(FindUserRequest request) {
+        return webClient.post()
+                .uri("/api/v1/user/findByUsername")
+                .bodyValue(request)
+                .retrieve()
+                .bodyToMono(FindUserResponse.class);
+    }
 }

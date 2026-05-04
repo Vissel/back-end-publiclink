@@ -37,16 +37,20 @@ public class CoreRequestService {
 
     @Transactional
     public Optional<Request> getRequestByUuid(String requestUuid) {
-        return requestRepository.findByUUID(requestUuid);
+        return requestRepository.findByReqUUID(requestUuid);
     }
 
     @Transactional
     public RequestModel generateRequestForSeller(SellerDTO sellerDTO) {
         User seller = coreUserService.findSeller(sellerDTO);
+        String sellerName = null;
 
+        if (seller != null) {
+            sellerName = seller.getUserName();
+        }
         Request req = new Request();
         req.setReqUUID(UUID.randomUUID().toString());
-        req.setSellerId(seller); // can be null if not found
+        req.setSellerName(sellerName); // can be null if not found
         req.setAuthenticated(false);
 
         // Save to database
@@ -56,10 +60,9 @@ public class CoreRequestService {
     private RequestModel convertToModel(Request request) {
         RequestModel model = new RequestModel();
         model.setRequestUuid(request.getReqUUID());
-        UserModel sellerModel = new UserModel();
-        if (request.getSellerId() != null) {
-            sellerModel.setUsername(request.getSellerId().getUserName());
-            sellerModel.setLink(request.getSellerId().getLink());
+        UserModel sellerModel = UserModel.builder().build();
+        if (request.getSellerName() != null) {
+            sellerModel.setUsername(request.getSellerName());
         }
         model.setSeller(sellerModel);
         model.setCreatedAt(request.getCreatedAt().toString());

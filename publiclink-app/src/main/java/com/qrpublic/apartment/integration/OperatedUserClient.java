@@ -7,20 +7,42 @@ import com.qrpublic.apartment.adapter.user.request.UserRegisterRequest;
 import com.qrpublic.apartment.adapter.user.request.UserRemoveRequest;
 import com.qrpublic.apartment.adapter.user.response.UserRegisterResponse;
 import com.qrpublic.apartment.adapter.user.response.UserRemoveResponse;
-import jakarta.validation.Valid;
-import org.springframework.cloud.openfeign.FeignClient;
-import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.ParameterizedTypeReference;
+import org.springframework.stereotype.Component;
+import org.springframework.web.reactive.function.client.WebClient;
+import reactor.core.publisher.Mono;
 
-@FeignClient(name = "UserApplication", url = "http://localhost:8082/api/v1/user")
-public interface OperatedUserClient {
-    @PostMapping("/findByUsername")
-    ResponseEntity<FindUserResponse> findUserByUsername(@RequestBody FindUserRequest request);
+@Component
+public class OperatedUserClient {
 
-    @PostMapping("/createUser")
-    ResponseEntity<Result<UserRegisterResponse>> createUser(@Valid @RequestBody UserRegisterRequest request);
+    private final WebClient webClient;
 
-    @PostMapping("/deleteUser")
-    ResponseEntity<Result<UserRemoveResponse>> deleteUser(@RequestBody UserRemoveRequest request);
+    public OperatedUserClient(@Value("${user.service.url:http://localhost:8082}") String userServiceUrl) {
+        this.webClient = WebClient.builder().baseUrl(userServiceUrl).build();
+    }
+
+    public Mono<FindUserResponse> findUserByUsername(FindUserRequest request) {
+        return webClient.post()
+                .uri("/api/v1/user/findByUsername")
+                .bodyValue(request)
+                .retrieve()
+                .bodyToMono(FindUserResponse.class);
+    }
+
+    public Mono<Result<UserRegisterResponse>> createUser(UserRegisterRequest request) {
+        return webClient.post()
+                .uri("/api/v1/user/createUser")
+                .bodyValue(request)
+                .retrieve()
+                .bodyToMono(new ParameterizedTypeReference<Result<UserRegisterResponse>>() {});
+    }
+
+    public Mono<Result<UserRemoveResponse>> deleteUser(UserRemoveRequest request) {
+        return webClient.post()
+                .uri("/api/v1/user/deleteUser")
+                .bodyValue(request)
+                .retrieve()
+                .bodyToMono(new ParameterizedTypeReference<Result<UserRemoveResponse>>() {});
+    }
 }

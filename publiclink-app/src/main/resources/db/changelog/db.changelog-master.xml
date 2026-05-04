@@ -27,4 +27,7 @@
 <changeSet id="010" author="thach" >
 	<sqlFile path="db/changelog/changeset-010-update-order.sql"/>
 </changeSet> 
+<changeSet id="011" author="thach" >
+	<sqlFile path="db/changelog/changeset-011-update-table.sql"/>
+</changeSet> 
 </databaseChangeLog>

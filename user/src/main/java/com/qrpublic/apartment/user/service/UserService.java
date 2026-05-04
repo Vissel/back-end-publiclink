@@ -6,12 +6,13 @@ import com.qrpublic.apartment.user.service.request.UserDeleteRequest;
 import com.qrpublic.apartment.user.service.response.FoundUserResponse;
 import com.qrpublic.apartment.user.service.response.UserCreateResponse;
 import com.qrpublic.apartment.user.service.response.UserDeleteResponse;
+import reactor.core.publisher.Mono;
 
 public interface UserService {
 
-    Result<FoundUserResponse> findByUserName(String userName);
+    Mono<Result<FoundUserResponse>> findByUserName(String userName);
 
-    Result<UserCreateResponse> createUser(UserCreateRequest userCreateRequest);
+    Mono<Result<UserCreateResponse>> createUser(UserCreateRequest userCreateRequest);
 
-    Result<UserDeleteResponse> deleteUserByUsername(UserDeleteRequest userRemoveRequest);
+    Mono<Result<UserDeleteResponse>> deleteUserByUsername(UserDeleteRequest userRemoveRequest);
 }

@@ -46,11 +46,11 @@ public class PubUserServiceImpl implements PubUserService {
     OperatedUserClient operatedUserClient;
 
     @Autowired
-    PublicLinkServiceTemplate serviceTemplate;
+    PublicLinkServiceTemplate publicLinkServiceTemplate;
 
     @Override
     public Result<ListUserResponse> listUser(Pagination<ListUserRequest> request) {
-        return serviceTemplate.execute(new ProcessCallback<Pagination<ListUserRequest>, ListUserResponse>() {
+        return publicLinkServiceTemplate.execute(new ProcessCallback<Pagination<ListUserRequest>, ListUserResponse>() {
             @Override
             public Pagination<ListUserRequest> getRequest() {
                 return request;
@@ -93,11 +93,16 @@ public class PubUserServiceImpl implements PubUserService {
         sellerDTO.setName(request.getName());
         final String requestUuid = request.getReqUuid();
         Assert.isTrue(StringUtils.isNotBlank(requestUuid), String.format("Request uuid is required. Request uuid: %s", requestUuid));
-        return Mono.fromCallable(() -> operatedUserClient.findUserByUsername(new FindUserRequest(sellerDTO.getUsername())))
-                .map(ResponseEntity::getBody)
+        return operatedUserClient.findUserByUsername(new FindUserRequest(sellerDTO.getUsername()))
                 .flatMap(findUserResponse -> {
+                    // user exists in user-service → reject
+                    SellerRegisterResponse conflict = new SellerRegisterResponse();
+                    conflict.setMessage("User already exists");
+                    conflict.setReqUuid(requestUuid);
+                    return Mono.just(ResponseEntity.status(HttpStatus.CONFLICT).<SellerRegisterResponse>body(conflict));
+                })
+                .switchIfEmpty(Mono.defer(() -> {
                     try {
-                        Assert.isNull(findUserResponse, "User already exists");
                         User seller = coreUserService.findSeller(sellerDTO);
                         Assert.isNull(seller, "User already exists in internal Database");
                         return createNewSellerUser(sellerDTO, requestUuid);
@@ -105,16 +110,15 @@ public class PubUserServiceImpl implements PubUserService {
                         SellerRegisterResponse response = new SellerRegisterResponse();
                         response.setMessage(e.getMessage());
                         response.setReqUuid(requestUuid);
-                        return Mono.just(ResponseEntity.status(HttpStatus.CONFLICT)
-                                .body(response));
+                        return Mono.just(ResponseEntity.status(HttpStatus.CONFLICT).body(response));
                     }
-                });
+                }));
     }
 
     @Override
     public Result<GetUserResponse> getUserInfo(GetSellerRequest getSellerRequest) {
         return
-                serviceTemplate.execute(new ProcessCallback<GetSellerRequest, GetUserResponse>() {
+                publicLinkServiceTemplate.execute(new ProcessCallback<GetSellerRequest, GetUserResponse>() {
                     @Override
                     public GetSellerRequest getRequest() {
                         return getSellerRequest;
@@ -157,12 +161,10 @@ public class PubUserServiceImpl implements PubUserService {
     public Mono<? extends ResponseEntity<SellerRegisterResponse>> createNewSellerUser(SellerDTO sellerDTO, String requestUuid) {
         UserRegisterRequest registerRequest = toUserRegisterRequest(sellerDTO);
 
-        return Mono.fromCallable(() -> operatedUserClient.createUser(registerRequest))
-                .subscribeOn(Schedulers.boundedElastic())
-                .flatMap(responseEntity -> {
-                    com.qrpublic.apartment.adapter.template.Result<UserRegisterResponse> result = responseEntity.getBody();
-                    if (result == null || !result.isSuccess()) {
-                        String errMsg = result != null ? result.getErrorMessage() : "Unknown error from user service";
+        return operatedUserClient.createUser(registerRequest)
+                .flatMap(result -> {
+                    if (!result.isSuccess()) {
+                        String errMsg = result.getErrorMessage() != null ? result.getErrorMessage() : "Unknown error from user service";
                         log.error("User service rejected create for [{}]: {}", sellerDTO.getUsername(), errMsg);
                         SellerRegisterResponse response = new SellerRegisterResponse();
                         response.setReqUuid(requestUuid);
@@ -179,12 +181,9 @@ public class PubUserServiceImpl implements PubUserService {
                             .onErrorResume(ex -> {
                                 log.error("Local DB create failed for [{}], compensating remote creation: {}",
                                         sellerDTO.getUsername(), ex.getMessage());
-                                return Mono.fromCallable(() -> {
-                                            UserRemoveRequest deleteRequest = new UserRemoveRequest();
-                                            deleteRequest.setUserId(result.getData().getUserName());
-                                            return operatedUserClient.deleteUser(deleteRequest);
-                                        })
-                                        .subscribeOn(Schedulers.boundedElastic())
+                                UserRemoveRequest deleteRequest = new UserRemoveRequest();
+                                deleteRequest.setUserId(result.getData().getUserName());
+                                return operatedUserClient.deleteUser(deleteRequest)
                                         .doOnSuccess(r -> log.info("Compensation succeeded for [{}]", sellerDTO.getUsername()))
                                         .doOnError(compEx -> log.error("Compensation failed for [{}]: {}", sellerDTO.getUsername(), compEx.getMessage()))
                                         .then(Mono.<ResponseEntity<SellerRegisterResponse>>error(ex));

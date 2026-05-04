@@ -71,10 +71,10 @@ public class RequestServiceImpl implements RequestService {
 
         // create seller account, check if exist
         User seller = userService.createSeller(sellerDTO);
-        if (seller.getUserId() != null) {
+        if (seller != null) {
             // save request, product, img to db
             Request request = new Request();
-            request.setSellerId(seller);
+            request.setSellerName(seller.getUserName());
             String adminUserName = null;
 //                    UserUtils.getCurrentUser().getUsername();
             User createdBy = userService.findByUserName(adminUserName);
@@ -103,10 +103,10 @@ public class RequestServiceImpl implements RequestService {
 
         // create seller account, check if exist
         User seller = userService.createSeller(requestDTO.getSeller());
-        if (seller.getUserId() != null) {
+        if (seller != null) {
             // save request, product, img to db
             Request request = new Request();
-            request.setSellerId(seller);
+            request.setSellerName(seller.getUserName());
             request.setDescription(requestDTO.getDescription());
             request.setCreatedBy(requestDTO.getCreatedBy()); // debug check admin
             request.setAuthenticated(requestDTO.isAuthenticated());

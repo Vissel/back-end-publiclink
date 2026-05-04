@@ -7,6 +7,7 @@ import com.qrpublic.apartment.core.service.CoreRequestService;
 import com.qrpublic.apartment.entity.Request;
 import com.qrpublic.apartment.entity.SaleEnvironment;
 import com.qrpublic.apartment.exception.ResourceNotFoundException;
+import com.qrpublic.apartment.model.convertor.OrderConvertor;
 import com.qrpublic.apartment.repository.SaleEnvironmentRepository;
 import com.qrpublic.apartment.requestmodel.OrderDTO;
 import com.qrpublic.apartment.requestmodel.RequestDTO;
@@ -22,13 +23,14 @@ import org.springframework.data.domain.Sort.Order;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 
-import java.text.SimpleDateFormat;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
 
 @Slf4j
 @Service
 @PreAuthorize("hasRole('Admin')")
-public class SaleEnvironmentImpl implements SaleEnvironmentService {
+public class SaleEnvironmentServiceImpl implements SaleEnvironmentService {
 
     @Autowired
     private SaleEnvironmentRepository repo;
@@ -129,8 +131,7 @@ public class SaleEnvironmentImpl implements SaleEnvironmentService {
 
         return SaleEnvDTO.builder()
                 .createdAt(Utils.formatTimeStamp(env.getCreatedAt()))
-                .sellerName(env.getRequest().getSellerId().getUserName())
-                .sellerLink(env.getRequest().getSellerId().getLink())
+                .sellerName(env.getRequest().getSellerName())
                 .productName(productName)
                 .publicLink(env.getPublicLink())
                 .createdBy(env.getRequest().getCreatedBy().getName())
@@ -153,18 +154,10 @@ public class SaleEnvironmentImpl implements SaleEnvironmentService {
         List<OrderDTO> orderDTOs = new ArrayList<>();
         if (listOrder != null && !listOrder.isEmpty()) {
             String publicLink = listOrder.get(0).getSaleEnvironment().getPublicLink();
-            listOrder.stream().forEach(o -> orderDTOs.add(createOrderDTO(o, o.getOrderedAt().getTime(), publicLink)));
+            listOrder.stream().forEach(o -> orderDTOs.add(OrderConvertor.createOrderDTO(o, o.getOrderedAt().getTime(), publicLink)));
         }
         return orderDTOs;
     }
 
-    private static OrderDTO createOrderDTO(com.qrpublic.apartment.entity.Order order, long time, String publicLink) {
-        SimpleDateFormat formater = new SimpleDateFormat(CommonConstant.DATETIME_PATTERN);
-        formater.setTimeZone(TimeZone.getTimeZone("UTC"));
-        String orderTime = formater.format(new Date(time));
-        return new OrderDTO(order.getOrderId(), orderTime, order.getBuyerName(), publicLink, order.isDelivered(),
-                order.isGetMoney(), order.getSellerNote(), order.getAmount(), order.getUnit(), order.getNote());
-
-    }
 
 }

@@ -33,7 +33,7 @@ import java.util.stream.Stream;
 public class SaleSpaceServiceImpl implements SaleSpaceService {
 
     @Autowired
-    PublicLinkServiceTemplate serviceTemplate;
+    PublicLinkServiceTemplate publicLinkServiceTemplate;
 
     @Autowired
     LinkService linkService;
@@ -52,7 +52,7 @@ public class SaleSpaceServiceImpl implements SaleSpaceService {
 
     @Override
     public Result<GetSaleSpaceResponse> getSaleSpace(GetSaleSpaceRequest getSaleSpaceRequest) {
-        return serviceTemplate.execute(new ProcessCallback<GetSaleSpaceRequest, GetSaleSpaceResponse>() {
+        return publicLinkServiceTemplate.execute(new ProcessCallback<GetSaleSpaceRequest, GetSaleSpaceResponse>() {
 
             @Override
             public GetSaleSpaceRequest getRequest() {
@@ -88,8 +88,7 @@ public class SaleSpaceServiceImpl implements SaleSpaceService {
                                 .orElse(null);
 
                 // 3. Call check-token to validate token
-                Boolean result = securityCheckClient.checkToken(token).getBody();
-                Boolean tokenValid = Boolean.TRUE.equals(result);
+                Boolean tokenValid = Boolean.TRUE.equals(securityCheckClient.checkToken(token).block());
 
                 // 4. Get SaleEnvironment from Request, fetch list order and list product
                 SaleEnvironment saleEnvironment = requestOpt.flatMap(saleEnvironmentRepository::findByRequest)

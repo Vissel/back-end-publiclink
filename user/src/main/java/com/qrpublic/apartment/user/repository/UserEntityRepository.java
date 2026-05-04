@@ -15,8 +15,6 @@ public interface UserEntityRepository extends JpaRepository<UserEntity, String> 
      * @return
      */
     @Lock(LockModeType.PESSIMISTIC_WRITE)
-    Optional<UserEntity> findByUsernameForUpdate(String username);
-
     Optional<UserEntity> findByUsername(String username);
 
 }

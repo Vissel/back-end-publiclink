@@ -15,7 +15,7 @@
     <name>publiclink</name>
     <modules>
         <module>publiclink-app</module>
-        <module>authen-authorisation</module>
+        <!--        <module>authen-authorisation</module>-->
         <module>apiGateway</module>
         <module>adapter</module>
         <module>user</module>

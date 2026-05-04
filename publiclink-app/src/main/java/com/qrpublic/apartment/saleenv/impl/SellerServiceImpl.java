@@ -38,49 +38,49 @@ public class SellerServiceImpl implements SellerService {
     private SaleEnvironmentRepository saleEnvironmentRepository;
 
     @Autowired
-    private PublicLinkServiceTemplate serviceTemplate;
+    private PublicLinkServiceTemplate publicLinkServiceTemplate;
 
     @Override
     public Result<ListSellerRequestResponse> listRequestEnvironment(Pagination<ListSellerRequestsRequest> listRequestEnvironmentRequest) {
         return
-                serviceTemplate.execute(new ProcessCallback<Pagination<ListSellerRequestsRequest>, ListSellerRequestResponse>() {
-                                            @Override
-                                            public Pagination<ListSellerRequestsRequest> getRequest() {
-                                                return listRequestEnvironmentRequest;
-                                            }
+                publicLinkServiceTemplate.execute(new ProcessCallback<Pagination<ListSellerRequestsRequest>, ListSellerRequestResponse>() {
+                                                      @Override
+                                                      public Pagination<ListSellerRequestsRequest> getRequest() {
+                                                          return listRequestEnvironmentRequest;
+                                                      }
 
-                                            @Override
-                                            public void preProcess(Pagination<ListSellerRequestsRequest> request) {
-                                                Assert.notNull(request, "Request cannot be null");
-                                                Assert.notEmpty(request.getListData(), "Request data is required");
-                                                Assert.hasText(request.getListData().get(0).getSellerName(), "Seller name is required");
-                                                Assert.isTrue(request.getSize() > 0, "Page size must be greater than 0");
-                                            }
+                                                      @Override
+                                                      public void preProcess(Pagination<ListSellerRequestsRequest> request) {
+                                                          Assert.notNull(request, "Request cannot be null");
+                                                          Assert.notEmpty(request.getListData(), "Request data is required");
+                                                          Assert.hasText(request.getListData().get(0).getSellerName(), "Seller name is required");
+                                                          Assert.isTrue(request.getSize() > 0, "Page size must be greater than 0");
+                                                      }
 
-                                            @Override
-                                            public ListSellerRequestResponse process() {
-                                                ListSellerRequestsRequest filter = getRequest().getListData().get(0);
-                                                String sellerName = filter.getSellerName();
+                                                      @Override
+                                                      public ListSellerRequestResponse process() {
+                                                          ListSellerRequestsRequest filter = getRequest().getListData().get(0);
+                                                          String sellerName = filter.getSellerName();
 
-                                                Pageable pageable = PageRequest.of(
-                                                        getRequest().getPage(),
-                                                        getRequest().getSize(),
-                                                        Sort.by(Sort.Order.desc("createdAt"))
-                                                );
+                                                          Pageable pageable = PageRequest.of(
+                                                                  getRequest().getPage(),
+                                                                  getRequest().getSize(),
+                                                                  Sort.by(Sort.Order.desc("createdAt"))
+                                                          );
 
-                                                Page<SaleEnvironment> resultPage = saleEnvironmentRepository
-                                                        .findBySellerName(sellerName, pageable);
+                                                          Page<SaleEnvironment> resultPage = saleEnvironmentRepository
+                                                                  .findBySellerName(sellerName, pageable);
 
-                                                List<SaleEnvDTO> envDTOs = resultPage.getContent().stream()
-                                                        .map(SellerServiceImpl::buildEnvDTO)
-                                                        .toList();
+                                                          List<SaleEnvDTO> envDTOs = resultPage.getContent().stream()
+                                                                  .map(SellerServiceImpl::buildEnvDTO)
+                                                                  .toList();
 
-                                                ListSellerRequestResponse response = new ListSellerRequestResponse();
-                                                response.setTotal((int) resultPage.getTotalElements());
-                                                response.setListSaleEnv(envDTOs);
-                                                return response;
-                                            }
-                                        }
+                                                          ListSellerRequestResponse response = new ListSellerRequestResponse();
+                                                          response.setTotal((int) resultPage.getTotalElements());
+                                                          response.setListSaleEnv(envDTOs);
+                                                          return response;
+                                                      }
+                                                  }
                 );
     }
 
@@ -92,8 +92,7 @@ public class SellerServiceImpl implements SellerService {
         List<OrderDTO> orders = buildOrderDTOs(env.getListOrder());
         return SaleEnvDTO.builder()
                 .createdAt(Utils.formatTimeStamp(env.getCreatedAt()))
-                .sellerName(env.getRequest().getSellerId().getUserName())
-                .sellerLink(env.getRequest().getSellerId().getLink())
+                .sellerName(env.getRequest().getSellerName())
                 .productName(productName)
                 .publicLink(env.getPublicLink())
                 .createdBy(env.getRequest().getCreatedBy().getName())

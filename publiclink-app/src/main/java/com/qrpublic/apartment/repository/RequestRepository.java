@@ -10,5 +10,5 @@ import java.util.Optional;
 public interface RequestRepository extends JpaRepository<Request, Long> {
 
     @Lock(LockModeType.PESSIMISTIC_READ)
-    Optional<Request> findByUUID(String uuid);
+    Optional<Request> findByReqUUID(String uuid);
 }

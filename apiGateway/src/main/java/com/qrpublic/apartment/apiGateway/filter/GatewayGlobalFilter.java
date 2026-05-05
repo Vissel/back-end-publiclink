@@ -1,10 +1,6 @@
 package com.qrpublic.apartment.apiGateway.filter;
 
-import com.qrpublic.apartment.apiGateway.authentication.JwtTokenProducer;
-import com.qrpublic.apartment.apiGateway.ratelimit.resolver.KeyResolver;
-import com.qrpublic.apartment.apiGateway.ratelimit.service.RateLimiterService;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.util.AntPathMatcher;
 
 @Slf4j
@@ -16,12 +12,12 @@ public class GatewayGlobalFilter
     //    private final RateLimitProperties rateLimitProperties;
     private final AntPathMatcher pathMatcher = new AntPathMatcher();
 
-    @Autowired
-    private KeyResolver keyResolver;
-    @Autowired
-    private RateLimiterService rateLimiterService;
-    @Autowired
-    private JwtTokenProducer jwtTokenProducer;
+//    @Autowired
+//    private KeyResolver keyResolver;
+//    @Autowired
+//    private RateLimiterService rateLimiterService;
+//    @Autowired
+//    private JwtTokenProducer jwtTokenProducer;
 
 //    public GatewayGlobalFilter(RateLimitProperties rateLimitProperties) {
 //        this.rateLimitProperties = rateLimitProperties;

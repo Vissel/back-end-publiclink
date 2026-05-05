@@ -13,7 +13,10 @@ import com.qrpublic.apartment.user.response.ListUserResponse;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 import reactor.core.publisher.Mono;
 
 import java.util.List;
@@ -36,9 +39,11 @@ public class AdminController {
      *
      * @return
      */
-    @GetMapping("/getAllEnvironment")
-    public ResponseEntity<List<SaleEnvDTO>> getAllEnvironment(@RequestBody Pagination<ListEnvironmentRequest> request) {
-        return ResponseEntity.ok(envService.getAllEnvironment());
+    @PostMapping("/getAllEnvironment")
+    public Mono<ResponseEntity<List<SaleEnvDTO>>> getAllEnvironment(@RequestBody Pagination<ListEnvironmentRequest> request) {
+        return adminService.getSaleEnvironment(request)
+                .map(ResponseEntity::ok)
+                .defaultIfEmpty(ResponseEntity.status(HttpStatus.NO_CONTENT).build());
     }
 
     /**

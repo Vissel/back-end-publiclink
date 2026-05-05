@@ -18,8 +18,10 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.server.SecurityWebFilterChain;
 import org.springframework.web.cors.CorsConfiguration;
-import org.springframework.web.cors.reactive.CorsWebFilter;
+import org.springframework.web.cors.reactive.CorsConfigurationSource;
 import org.springframework.web.cors.reactive.UrlBasedCorsConfigurationSource;
+
+import com.qrpublic.apartment.apiGateway.constant.FilterConstant;
 
 import java.util.Arrays;
 import java.util.List;
@@ -52,12 +54,10 @@ public class SecurityConfig {
     }
 
     @Bean
-    SecurityWebFilterChain securityWebFilterChain(ServerHttpSecurity http) {
+    SecurityWebFilterChain securityWebFilterChain(ServerHttpSecurity http, CorsConfigurationSource corsConfigurationSource) {
         http
-//                // Disable CSRF for simpler development (be cautious in production)
                 .csrf(ServerHttpSecurity.CsrfSpec::disable)
-//                // Configure CORS
-                .cors(ServerHttpSecurity.CorsSpec::disable)
+                .cors(corsSpec -> corsSpec.configurationSource(corsConfigurationSource))
                 .authorizeExchange(exchanges -> exchanges
                         .pathMatchers(
                                 "/api/v1/auth/**", "/actuator/**", "/security/v1/public/**",
@@ -73,17 +73,23 @@ public class SecurityConfig {
     }
 
     @Bean
-    CorsWebFilter corsWebFilter() {
+    CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
         configuration.setAllowedOriginPatterns(List.of("*"));
         configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(List.of("*"));
         configuration.setAllowCredentials(true);
-        configuration.setExposedHeaders(List.of("token"));
-
+        configuration.setExposedHeaders(List.of(
+                FilterConstant.USER_ID_HEADER,
+                FilterConstant.TRACE_ID_HEADER,
+                FilterConstant.AUTH_TIMESTAMP_HEADER,
+                FilterConstant.CONTENT_TYPE_OPTIONS_HEADER,
+                FilterConstant.FRAME_OPTIONS_HEADER,
+                FilterConstant.XSS_PROTECTION_HEADER
+        ));
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", configuration);
-        return new CorsWebFilter(source);
+        return source;
     }
 
     @Bean

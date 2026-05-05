@@ -25,7 +25,7 @@ public class Request {
     @Column(updatable = false, insertable = false)
     private Timestamp createdAt;
 
-    @OneToOne(fetch = FetchType.LAZY, cascade = CascadeType.DETACH)
+    @OneToOne(cascade = CascadeType.DETACH)
     @JoinColumn(name = "created_by")
     private User createdBy;
 

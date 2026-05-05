@@ -5,7 +5,9 @@ import com.qrpublic.apartment.requestmodel.Pagination;
 import com.qrpublic.apartment.requestmodel.SaleEnvDTO;
 import com.qrpublic.apartment.saleenv.SaleEnvironmentService;
 import com.qrpublic.apartment.saleenv.request.CreateEnvironmentRequest;
+import com.qrpublic.apartment.saleenv.request.ListEnvironmentRequest;
 import com.qrpublic.apartment.saleenv.response.CreateEnvironmentResponse;
+import com.qrpublic.apartment.template.model.Result;
 import com.qrpublic.apartment.user.PubUserService;
 import com.qrpublic.apartment.user.request.ListUserRequest;
 import com.qrpublic.apartment.user.response.ListUserResponse;
@@ -14,6 +16,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
+
+import java.util.List;
 
 @Service
 @PreAuthorize("hasRole('Admin')")
@@ -49,12 +53,19 @@ public class AdminService {
 
     public Mono<ListUserResponse> listInnerUsers(Pagination<ListUserRequest> listUserRequestPagination) {
         return Mono.fromCallable(() -> pubUserService.listUser(listUserRequestPagination))
-                .flatMap(result -> {
-                    if (result.isSuccess()) {
-                        return Mono.just(result.getData());
-                    } else {
-                        return Mono.error(new RuntimeException(result.getErrorMessage()));
-                    }
-                });
+                .flatMap(result -> returnResult(result, result.getErrorMessage()));
+    }
+
+    public Mono<List<SaleEnvDTO>> getSaleEnvironment(Pagination<ListEnvironmentRequest> listEnvironmentRequestPagination) {
+        return Mono.fromCallable(() -> saleEnvironmentService.getAllEnvironment(listEnvironmentRequestPagination))
+                .flatMap(result -> returnResult(result, "Can not get list environment"));
+    }
+
+    private <R> Mono<R> returnResult(Result<R> result, String errorMessage) {
+        if (result.isSuccess()) {
+            return Mono.just(result.getData());
+        } else {
+            return Mono.error(new RuntimeException(errorMessage));
+        }
     }
 }

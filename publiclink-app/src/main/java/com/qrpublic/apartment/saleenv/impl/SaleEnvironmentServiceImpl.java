@@ -2,7 +2,9 @@ package com.qrpublic.apartment.saleenv.impl;
 
 import com.qrpublic.apartment.constant.CommonConstant;
 import com.qrpublic.apartment.constant.LinkConstant;
+import com.qrpublic.apartment.core.model.EnvStateEnum;
 import com.qrpublic.apartment.core.model.LinkModel;
+import com.qrpublic.apartment.core.service.CoreEnvironmentService;
 import com.qrpublic.apartment.core.service.CoreRequestService;
 import com.qrpublic.apartment.entity.Request;
 import com.qrpublic.apartment.entity.SaleEnvironment;
@@ -10,16 +12,21 @@ import com.qrpublic.apartment.exception.ResourceNotFoundException;
 import com.qrpublic.apartment.model.convertor.OrderConvertor;
 import com.qrpublic.apartment.repository.SaleEnvironmentRepository;
 import com.qrpublic.apartment.requestmodel.OrderDTO;
+import com.qrpublic.apartment.requestmodel.Pagination;
 import com.qrpublic.apartment.requestmodel.RequestDTO;
 import com.qrpublic.apartment.requestmodel.SaleEnvDTO;
 import com.qrpublic.apartment.saleenv.SaleEnvironmentService;
 import com.qrpublic.apartment.saleenv.request.CreateEnvironmentRequest;
+import com.qrpublic.apartment.saleenv.request.ListEnvironmentRequest;
 import com.qrpublic.apartment.service.LinkService;
+import com.qrpublic.apartment.template.model.Result;
+import com.qrpublic.apartment.template.service.ProcessCallback;
+import com.qrpublic.apartment.template.service.PublicLinkServiceTemplate;
 import com.qrpublic.apartment.util.Utils;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
-import org.springframework.data.domain.Sort.Order;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 
@@ -37,9 +44,14 @@ public class SaleEnvironmentServiceImpl implements SaleEnvironmentService {
 
     @Autowired
     CoreRequestService coreRequestService;
+    @Autowired
+    CoreEnvironmentService coreEnvironmentService;
 
     @Autowired
     LinkService linkService;
+
+    @Autowired
+    PublicLinkServiceTemplate publicLinkServiceTemplate;
 
     @Override
     public SaleEnvironment createSaleEnvironment(Request request) {
@@ -107,9 +119,45 @@ public class SaleEnvironmentServiceImpl implements SaleEnvironmentService {
     }
 
     @Override
-    public List<SaleEnvDTO> getAllEnvironment() {
-        List<SaleEnvironment> entities = repo.findAll(Sort.by(Order.desc("createdAt")));
-        return entities.stream().map(entity -> buildEnvDTO(entity)).toList();
+    public Result<List<SaleEnvDTO>> getAllEnvironment(Pagination<ListEnvironmentRequest> listEnvironmentRequestPagination) {
+        return publicLinkServiceTemplate.execute(new ProcessCallback<Pagination<ListEnvironmentRequest>, List<SaleEnvDTO>>() {
+            @Override
+            public Pagination<ListEnvironmentRequest> getRequest() {
+                return listEnvironmentRequestPagination;
+            }
+
+            @Override
+            public void preProcess(Pagination<ListEnvironmentRequest> request) {
+
+            }
+
+            @Override
+            public List<SaleEnvDTO> process() {
+                PageRequest pageable = PageRequest.of(
+                        getRequest().getPage(),
+                        getRequest().getSize(),
+                        Sort.by(Sort.Order.desc("createdAt")));
+                return coreEnvironmentService.getEnvironments(pageable).stream()
+                        .map(model -> {
+                            List<OrderDTO> orders = model.getOrders() == null ? List.of()
+                                    : model.getOrders().stream()
+                                      .map(o -> new OrderDTO(0, null, o.getBuyerName(), null, false, false, null, 0, null, null))
+                                      .toList();
+                            return SaleEnvDTO.builder()
+                                    .requestUUID(model.getRequestUUID())
+                                    .createdAt(model.getCreatedAt())
+                                    .sellerName(model.getSeller() != null ? model.getSeller().getName() : null)
+                                    .createdBy(model.getSeller() != null ? model.getSeller().getUsername() : null)
+                                    .publicLink(model.getPublicLink())
+                                    .envStatus(model.getEnvState() == EnvStateEnum.ACTIVE)
+                                    .productName(model.getProducts() != null && !model.getProducts().isEmpty()
+                                            ? model.getProducts().getFirst().getProductName() : null)
+                                    .orders(orders)
+                                    .build();
+                        })
+                        .toList();
+            }
+        });
     }
 
     @Override

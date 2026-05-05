@@ -2,8 +2,11 @@ package com.qrpublic.apartment.saleenv;
 
 import com.qrpublic.apartment.entity.Request;
 import com.qrpublic.apartment.entity.SaleEnvironment;
+import com.qrpublic.apartment.requestmodel.Pagination;
 import com.qrpublic.apartment.requestmodel.SaleEnvDTO;
 import com.qrpublic.apartment.saleenv.request.CreateEnvironmentRequest;
+import com.qrpublic.apartment.saleenv.request.ListEnvironmentRequest;
+import com.qrpublic.apartment.template.model.Result;
 
 import java.util.List;
 
@@ -18,7 +21,7 @@ public interface SaleEnvironmentService {
      */
     SaleEnvDTO createSaleEnvironment(CreateEnvironmentRequest request);
 
-    public List<SaleEnvDTO> getAllEnvironment();
+    Result<List<SaleEnvDTO>> getAllEnvironment(Pagination<ListEnvironmentRequest> listEnvironmentRequestPagination);
 
     public SaleEnvironment getEnvironmentByPublicLink(String publicLink);
 

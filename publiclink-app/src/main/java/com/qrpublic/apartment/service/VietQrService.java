@@ -58,26 +58,26 @@ public class VietQrService extends JwtService implements LinkService {
          */
         Date issueAt = new Date();
         Date validDate = new Date(System.currentTimeMillis() + ACCESS_TOKEN_VALIDITY);
-        String link = Jwts.builder()
+        String generatedToken = Jwts.builder()
                 .setClaims(claims)
                 .setSubject(subject)
                 .setIssuedAt(issueAt)
                 .signWith(Keys.hmacShaKeyFor(Base64.getDecoder().decode(secretKey.getBytes())),
                         SignatureAlgorithm.HS256)
                 .setExpiration(validDate).compact();
-        return new LinkModel(link, issueAt, validDate);
+        return new LinkModel(generatedToken, issueAt, validDate);
     }
 
     @Override
     public LinkModel generateAuthLink(Map<String, String> claims) {
         Date issueAt = new Date();
         Date validDate = new Date(System.currentTimeMillis() + LINK_AUTH_EXPIRED);
-        String link = Jwts.builder()
+        String generatedToken = Jwts.builder()
                 .setClaims(claims)
                 .setIssuedAt(issueAt)
                 .signWith(Keys.hmacShaKeyFor(secretKey.getBytes()), SignatureAlgorithm.HS256)
                 .setExpiration(validDate).compact();
-        return new LinkModel(link, issueAt, validDate);
+        return new LinkModel(generatedToken, issueAt, validDate);
     }
 
 

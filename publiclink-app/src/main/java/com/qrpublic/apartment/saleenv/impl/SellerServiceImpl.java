@@ -7,12 +7,12 @@ import com.qrpublic.apartment.requestmodel.OrderDTO;
 import com.qrpublic.apartment.requestmodel.Pagination;
 import com.qrpublic.apartment.requestmodel.SaleEnvDTO;
 import com.qrpublic.apartment.saleenv.SellerService;
+import com.qrpublic.apartment.saleenv.convertor.SaleEnvConvertor;
 import com.qrpublic.apartment.saleenv.request.ListSellerRequestsRequest;
 import com.qrpublic.apartment.saleenv.response.ListSellerRequestResponse;
 import com.qrpublic.apartment.template.model.Result;
 import com.qrpublic.apartment.template.service.ProcessCallback;
 import com.qrpublic.apartment.template.service.PublicLinkServiceTemplate;
-import com.qrpublic.apartment.util.Utils;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
@@ -72,7 +72,8 @@ public class SellerServiceImpl implements SellerService {
                                                                   .findBySellerName(sellerName, pageable);
 
                                                           List<SaleEnvDTO> envDTOs = resultPage.getContent().stream()
-                                                                  .map(SellerServiceImpl::buildEnvDTO)
+                                                                  .map(SaleEnvConvertor::buildEnvDTO)
+                                                                  .map(SaleEnvDTO.SaleEnvDTOBuilder::build)
                                                                   .toList();
 
                                                           ListSellerRequestResponse response = new ListSellerRequestResponse();
@@ -82,24 +83,6 @@ public class SellerServiceImpl implements SellerService {
                                                       }
                                                   }
                 );
-    }
-
-    private static SaleEnvDTO buildEnvDTO(SaleEnvironment env) {
-        String productName = CommonConstant.EMPTY;
-        if (!env.getRequest().getProducts().isEmpty()) {
-            productName = env.getRequest().getProducts().getFirst().getProductName();
-        }
-        List<OrderDTO> orders = buildOrderDTOs(env.getListOrder());
-        return SaleEnvDTO.builder()
-                .createdAt(Utils.formatTimeStamp(env.getCreatedAt()))
-                .sellerName(env.getRequest().getSellerName())
-                .productName(productName)
-                .publicLink(env.getPublicLink())
-                .createdBy(env.getRequest().getCreatedBy().getName())
-                .envStatus(env.isState())
-                .orders(orders)
-                .requestUUID(env.getRequest().getReqUUID())
-                .build();
     }
 
     private static List<OrderDTO> buildOrderDTOs(List<com.qrpublic.apartment.entity.Order> listOrder) {
@@ -118,5 +101,9 @@ public class SellerServiceImpl implements SellerService {
         return new OrderDTO(order.getOrderId(), orderTime, order.getBuyerName(), publicLink,
                 order.isDelivered(), order.isGetMoney(), order.getSellerNote(),
                 order.getAmount(), order.getUnit(), order.getNote());
+    }
+
+    private static <T> T getEntityOrDefault(T object) {
+        return org.hibernate.Hibernate.isInitialized(object) ? object : null;
     }
 }

@@ -2,8 +2,6 @@ package com.qrpublic.apartment.core.model;
 
 import lombok.Data;
 
-import java.util.Date;
-
 @Data
 public class SellerModel {
 
@@ -12,13 +10,9 @@ public class SellerModel {
     private String name;
 
     private String sellerProfileLink;
-    /**
-     * the link for seller while 1st time accessing sale environment
-     */
-    private String sellerAuthLink;
-    /**
-     * expired of seller authentication link
-     */
-    private Date sellerAuthLinkExpire;
 
+    /**
+     * link model
+     */
+    private LinkModel sellerLinkModel;
 }

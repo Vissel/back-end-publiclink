@@ -12,6 +12,7 @@ import com.qrpublic.apartment.util.Utils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Map;
@@ -23,6 +24,7 @@ public class CoreEnvironmentService {
     @Autowired
     private SaleEnvironmentRepository repo;
 
+    @Transactional
     public List<SaleEnvironmentModel> getEnvironments(Pageable pageable) {
         List<SaleEnvironment> all = repo.findAllWithProducts();
         List<String> ids = all.stream().map(SaleEnvironment::getEnvId).toList();

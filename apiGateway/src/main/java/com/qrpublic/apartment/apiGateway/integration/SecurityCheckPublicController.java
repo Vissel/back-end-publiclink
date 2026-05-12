@@ -1,5 +1,9 @@
 package com.qrpublic.apartment.apiGateway.integration;
 
+import com.qrpublic.apartment.adapter.user.request.UserAuthenTokenRequest;
+import com.qrpublic.apartment.adapter.user.response.UserAuthTokenResponse;
+import com.qrpublic.apartment.apiGateway.authentication.request.AuthenticatedTokenRequest;
+import com.qrpublic.apartment.apiGateway.authentication.response.AuthenticatedTokenResponse;
 import com.qrpublic.apartment.apiGateway.service.SecurityCheckService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
@@ -20,4 +24,32 @@ public class SecurityCheckPublicController {
         return securityCheckService.checkValidToken(token)
                 .map(valid -> ResponseEntity.ok(valid));
     }
+
+    @PostMapping("/generateAuthenToken")
+    public Mono<UserAuthTokenResponse> checkToken(@RequestBody UserAuthenTokenRequest userAuthenTokenRequest) {
+        AuthenticatedTokenRequest request = convertToAuthenticatedLinkRequest(userAuthenTokenRequest);
+        return convertToUserAuthLinkResponse(securityCheckService.generateAuthenticationLink(request));
+    }
+
+    private Mono<UserAuthTokenResponse> convertToUserAuthLinkResponse(Mono<AuthenticatedTokenResponse> authenticatedLinkResponseMono) {
+        return authenticatedLinkResponseMono.map(src -> {
+            UserAuthTokenResponse res = new UserAuthTokenResponse();
+            res.setAuthenticationToken(src.getAuthenticatedToken());
+            res.setIssueAt(src.getIssueAt());
+            res.setExpire(src.getExpire());
+            return res;
+        });
+    }
+
+
+    private AuthenticatedTokenRequest convertToAuthenticatedLinkRequest(UserAuthenTokenRequest userAuthenTokenRequest) {
+        // Convert UserAuthenLinkRequest properties to AuthenticatedLinkRequest properties
+        AuthenticatedTokenRequest request = new AuthenticatedTokenRequest();
+        request.setUsername(userAuthenTokenRequest.getUsername());
+        request.setValidTime(userAuthenTokenRequest.getValidTime());
+        request.setRole(userAuthenTokenRequest.getRole());
+        return request;
+    }
+
+
 }

@@ -2,27 +2,26 @@ package com.qrpublic.apartment.saleenv.impl;
 
 import com.qrpublic.apartment.constant.CommonConstant;
 import com.qrpublic.apartment.constant.LinkConstant;
-import com.qrpublic.apartment.core.model.EnvStateEnum;
+import com.qrpublic.apartment.core.linkBuilder.LinkBuilder;
 import com.qrpublic.apartment.core.model.LinkModel;
+import com.qrpublic.apartment.core.model.SellerModel;
 import com.qrpublic.apartment.core.service.CoreEnvironmentService;
 import com.qrpublic.apartment.core.service.CoreRequestService;
 import com.qrpublic.apartment.entity.Request;
 import com.qrpublic.apartment.entity.SaleEnvironment;
 import com.qrpublic.apartment.exception.ResourceNotFoundException;
-import com.qrpublic.apartment.model.convertor.OrderConvertor;
 import com.qrpublic.apartment.repository.SaleEnvironmentRepository;
-import com.qrpublic.apartment.requestmodel.OrderDTO;
 import com.qrpublic.apartment.requestmodel.Pagination;
 import com.qrpublic.apartment.requestmodel.RequestDTO;
 import com.qrpublic.apartment.requestmodel.SaleEnvDTO;
 import com.qrpublic.apartment.saleenv.SaleEnvironmentService;
+import com.qrpublic.apartment.saleenv.convertor.SaleEnvConvertor;
 import com.qrpublic.apartment.saleenv.request.CreateEnvironmentRequest;
 import com.qrpublic.apartment.saleenv.request.ListEnvironmentRequest;
 import com.qrpublic.apartment.service.LinkService;
 import com.qrpublic.apartment.template.model.Result;
 import com.qrpublic.apartment.template.service.ProcessCallback;
 import com.qrpublic.apartment.template.service.PublicLinkServiceTemplate;
-import com.qrpublic.apartment.util.Utils;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.PageRequest;
@@ -30,7 +29,6 @@ import org.springframework.data.domain.Sort;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -83,24 +81,31 @@ public class SaleEnvironmentServiceImpl implements SaleEnvironmentService {
         SaleEnvironment environment = createSaleEnvironment(requestDTO);
         // create auth link and add to response
         LinkModel authLink = generateReqAuthLink(requestDTO);
+        SellerModel sellerModel = createOrGetSeller(requestDTO);
 
         log.info("{} Creating sale environment for request ID: {}", CommonConstant.END, request.getRequestUuid());
         return convertToSaleEnvDto(environment, authLink);
     }
 
     private SaleEnvironment createSaleEnvironment(RequestDTO requestDTO) {
-        Request requestEntity = coreRequestService.getRequestByUuid(requestDTO.getReqUUID())
-                .orElseThrow(() -> new ResourceNotFoundException("Request not found with UUID: " + requestDTO.getReqUUID()));
+        Request requestEntity = coreRequestService.getRequestByUuid(requestDTO.getReqUUID()).orElseThrow(() -> new ResourceNotFoundException("Request not found with UUID: " + requestDTO.getReqUUID()));
 
         // Create SaleEnvironment
         SaleEnvironment env = new SaleEnvironment();
         env.setRequest(requestEntity);
         // Generate public link by username + requestID
         final LinkModel linkModel = generatePublicLink(requestDTO);
-        final String publicLink = linkModel.getLink();
+        final String publicLink = linkModel.getToken();
         log.debug("Generated public link: {}", publicLink);
         env.setPublicLink(publicLink);
         return repo.save(env);
+    }
+
+    private SellerModel createOrGetSeller(RequestDTO requestDTO) {
+        // findSeller from
+        // updateSellerTokenById
+
+
     }
 
     private RequestDTO convertToRequestDTO(CreateEnvironmentRequest request) {
@@ -115,7 +120,9 @@ public class SaleEnvironmentServiceImpl implements SaleEnvironmentService {
     }
 
     private LinkModel generateReqAuthLink(RequestDTO requestDTO) {
-        return linkService.generateAuthLink(Map.of(LinkConstant.PARAM_USERNAME, requestDTO.getUsername()));
+        LinkModel linkModel = linkService.generateAuthLink(Map.of(LinkConstant.PARAM_USERNAME, requestDTO.getUsername()));
+        linkModel.setContextString(LinkBuilder.buildAuthenticationLink(requestDTO.getReqUUID(), linkModel.getToken()));
+        return linkModel;
     }
 
     @Override
@@ -133,29 +140,9 @@ public class SaleEnvironmentServiceImpl implements SaleEnvironmentService {
 
             @Override
             public List<SaleEnvDTO> process() {
-                PageRequest pageable = PageRequest.of(
-                        getRequest().getPage(),
-                        getRequest().getSize(),
-                        Sort.by(Sort.Order.desc("createdAt")));
+                PageRequest pageable = PageRequest.of(getRequest().getPage(), getRequest().getSize(), Sort.by(Sort.Order.desc("createdAt")));
                 return coreEnvironmentService.getEnvironments(pageable).stream()
-                        .map(model -> {
-                            List<OrderDTO> orders = model.getOrders() == null ? List.of()
-                                    : model.getOrders().stream()
-                                      .map(o -> new OrderDTO(0, null, o.getBuyerName(), null, false, false, null, 0, null, null))
-                                      .toList();
-                            return SaleEnvDTO.builder()
-                                    .requestUUID(model.getRequestUUID())
-                                    .createdAt(model.getCreatedAt())
-                                    .sellerName(model.getSeller() != null ? model.getSeller().getName() : null)
-                                    .createdBy(model.getSeller() != null ? model.getSeller().getUsername() : null)
-                                    .publicLink(model.getPublicLink())
-                                    .envStatus(model.getEnvState() == EnvStateEnum.ACTIVE)
-                                    .productName(model.getProducts() != null && !model.getProducts().isEmpty()
-                                            ? model.getProducts().getFirst().getProductName() : null)
-                                    .orders(orders)
-                                    .build();
-                        })
-                        .toList();
+                        .map(SaleEnvConvertor::buildSaleEnvDTOFromModel).toList();
             }
         });
     }
@@ -170,42 +157,11 @@ public class SaleEnvironmentServiceImpl implements SaleEnvironmentService {
         return repo.findByRequest(request).get().getPublicLink();
     }
 
-    private SaleEnvDTO buildEnvDTO(SaleEnvironment env) {
-        String productName = CommonConstant.EMPTY;
-        if (!env.getRequest().getProducts().isEmpty()) {
-            productName = env.getRequest().getProducts().getFirst().getProductName();
-        }
-        List<OrderDTO> orders = createListOrderDTO(env.getListOrder());
-
-        return SaleEnvDTO.builder()
-                .createdAt(Utils.formatTimeStamp(env.getCreatedAt()))
-                .sellerName(env.getRequest().getSellerName())
-                .productName(productName)
-                .publicLink(env.getPublicLink())
-                .createdBy(env.getRequest().getCreatedBy().getName())
-                .envStatus(env.isState())
-                .orders(orders)
-                .requestUUID(env.getRequest().getReqUUID())
-                .build();
-    }
-
     private SaleEnvDTO convertToSaleEnvDto(SaleEnvironment env, LinkModel linkModel) {
-        return buildEnvDTO(env)
-                .builder()
-                .sellerAuthLink(linkModel.getLink())
+        return SaleEnvConvertor.buildEnvDTO(env)
+                .sellerAuthLink(linkModel.getContextString())
                 .sellerAuthLinkExpire(linkModel.getExpire())
                 .createdBy(linkModel.getIssueAt().toString())
                 .build();
     }
-
-    private static List<OrderDTO> createListOrderDTO(List<com.qrpublic.apartment.entity.Order> listOrder) {
-        List<OrderDTO> orderDTOs = new ArrayList<>();
-        if (listOrder != null && !listOrder.isEmpty()) {
-            String publicLink = listOrder.get(0).getSaleEnvironment().getPublicLink();
-            listOrder.stream().forEach(o -> orderDTOs.add(OrderConvertor.createOrderDTO(o, o.getOrderedAt().getTime(), publicLink)));
-        }
-        return orderDTOs;
-    }
-
-
 }

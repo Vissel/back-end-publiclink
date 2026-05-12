@@ -8,7 +8,15 @@ import java.util.Date;
 @Data
 @AllArgsConstructor
 public class LinkModel {
-    private String link;
+    private String contextString;
+    private String token;
     private Date issueAt;
     private Date expire;
+
+    public LinkModel(String token, Date issueAt, Date expire) {
+        this.token = token;
+        this.issueAt = issueAt;
+        this.expire = expire;
+    }
+
 }

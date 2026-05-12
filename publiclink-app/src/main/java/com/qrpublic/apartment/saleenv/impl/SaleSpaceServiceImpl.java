@@ -93,14 +93,25 @@ public class SaleSpaceServiceImpl implements SaleSpaceService {
                 // 4. Get SaleEnvironment from Request, fetch list order and list product
                 SaleEnvironment saleEnvironment = requestOpt.flatMap(saleEnvironmentRepository::findByRequest)
                         .orElseThrow(() -> new EnvironmentCreationException("Environment not found:" + requestUUID));
-                // TODO - remain the payment method,... waiting for FE integration
-                return buildGetSaleSpaceResponse(requestOpt, saleEnvironment, sellerName, requestUUID, tokenValid);
+
+                String envId = saleEnvironment.getEnvId();
+                List<Order> orders = tokenValid
+                        ? saleEnvironmentRepository.findWithOrdersById(envId)
+                          .map(SaleEnvironment::getListOrder)
+                          .orElse(Collections.emptyList())
+                        : Collections.emptyList();
+                List<Product> products = saleEnvironmentRepository.findWithProductsById(envId)
+                        .map(se -> se.getRequest().getProducts())
+                        .orElse(Collections.emptyList());
+
+                return buildGetSaleSpaceResponse(saleEnvironment, orders, products, sellerName, requestUUID, tokenValid);
             }
         });
     }
 
-    private GetSaleSpaceResponse buildGetSaleSpaceResponse(Optional<Request> requestOpt,
-                                                           SaleEnvironment saleEnvironment,
+    private GetSaleSpaceResponse buildGetSaleSpaceResponse(SaleEnvironment saleEnvironment,
+                                                           List<Order> orders,
+                                                           List<Product> products,
                                                            String sellerName,
                                                            String requestUUID,
                                                            Boolean tokenValid) {
@@ -118,12 +129,9 @@ public class SaleSpaceServiceImpl implements SaleSpaceService {
             response.setEndedAt(saleEnvironment.getEndedAt().toString());
         }
         if (tokenValid) {
-            response.setListOrder(toOrderDTOs(saleEnvironment.getListOrder(), saleEnvironment.getPublicLink()));
+            response.setListOrder(toOrderDTOs(orders, saleEnvironment.getPublicLink()));
         }
-
-        requestOpt.ifPresent(req ->
-                response.setListProduct(toProductDTOs(req.getProducts())));
-
+        response.setListProduct(toProductDTOs(products));
         return response;
     }
 

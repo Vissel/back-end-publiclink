@@ -1,13 +1,12 @@
 package com.qrpublic.apartment.controller;
 
+import com.qrpublic.apartment.exception.ApplicationException;
 import com.qrpublic.apartment.saleenv.request.CreateEnvironmentRequest;
 import com.qrpublic.apartment.saleenv.request.CreateRequestIdRequest;
 import com.qrpublic.apartment.saleenv.response.CreateEnvironmentResponse;
 import com.qrpublic.apartment.saleenv.response.CreateRequestIdResponse;
 import com.qrpublic.apartment.service.AdminService;
 import com.qrpublic.apartment.service.RequestService;
-import com.qrpublic.apartment.template.model.Result;
-import com.qrpublic.apartment.util.ErrorHandler;
 import jakarta.validation.Valid;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -49,14 +48,14 @@ public class GenerationController {
      * Exceptions are handled by GlobalExceptionHandler
      */
     @PostMapping("/generateRequestId")
-    public Mono<ResponseEntity<Result<CreateRequestIdResponse>>> generateRequestId(@RequestBody CreateRequestIdRequest request) {
+    public Mono<ResponseEntity<CreateRequestIdResponse>> generateRequestId(@RequestBody CreateRequestIdRequest request) {
         log.info("Received request to generate request ID");
 
         return requestService.generateRequestId(request)
-                .map(response -> {
-                    log.info("Request ID generated successfully");
-                    Result<CreateRequestIdResponse> result = ErrorHandler.buildSuccessResult(response);
-                    return ResponseEntity.ok(result);
+                .map(ResponseEntity::ok)
+                .doOnError(throwable -> {
+                    log.error("Error generating request ID", throwable);
+                    throw new ApplicationException("Error generating request ID", 500);
                 });
     }
 }

@@ -1,5 +1,6 @@
 package com.qrpublic.apartment.core.service;
 
+import com.qrpublic.apartment.core.coreException.EntityAssert;
 import com.qrpublic.apartment.core.model.UserModel;
 import com.qrpublic.apartment.entity.User;
 import com.qrpublic.apartment.model.SellerDTO;
@@ -53,5 +54,12 @@ public class CoreUserService {
                 .name(user.getName())
                 .type(user.getType())
                 .build();
+    }
+
+    @Transactional
+    public void updateSellerTokenById(String id) {
+        User user = userRepo.getUserForUpdate(id);
+        EntityAssert.notNull(user, "User is not found");
+
     }
 }

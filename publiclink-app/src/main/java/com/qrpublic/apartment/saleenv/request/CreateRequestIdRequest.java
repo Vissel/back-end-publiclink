@@ -6,4 +6,6 @@ import lombok.Data;
 @Data
 public class CreateRequestIdRequest {
     private PubUserRequest sellerRequest;
+
+    private String productName;
 }

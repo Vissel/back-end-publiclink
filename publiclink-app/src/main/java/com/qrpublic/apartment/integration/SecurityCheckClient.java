@@ -21,4 +21,6 @@ public class SecurityCheckClient {
                 .retrieve()
                 .bodyToMono(Boolean.class);
     }
+
+
 }

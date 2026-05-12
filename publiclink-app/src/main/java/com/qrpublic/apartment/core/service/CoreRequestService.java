@@ -65,7 +65,7 @@ public class CoreRequestService {
             sellerModel.setUsername(request.getSellerName());
         }
         model.setSeller(sellerModel);
-        model.setCreatedAt(request.getCreatedAt().toString());
+        model.setCreatedAt("Jade");
         model.setAuthentication(request.isAuthenticated() ? AuthenticationEnum.BASIC : AuthenticationEnum.UNAUTHENTICATED);
         return model;
     }

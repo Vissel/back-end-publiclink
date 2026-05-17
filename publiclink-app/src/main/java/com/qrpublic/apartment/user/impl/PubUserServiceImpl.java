@@ -26,6 +26,10 @@ import com.qrpublic.apartment.user.response.SellerRegisterResponse;
 import io.micrometer.common.util.StringUtils;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
@@ -60,16 +64,38 @@ public class PubUserServiceImpl implements PubUserService {
             public void preProcess(Pagination<ListUserRequest> request) {
                 Assert.notNull(getRequest(), "Pagination request cannot be null");
                 Assert.notEmpty(getRequest().getListData(), "ListUserRequest cannot be empty");
+                Assert.isTrue(getRequest().getSize() > 0, "Page size must be greater than 0");
+                Assert.isTrue(getRequest().getPage() >= 0, "Page index cannot be negative");
             }
 
             @Override
             public ListUserResponse process() {
-                List<User> users = coreUserService.getAllUser();
-                List<GetUserResponse> userResponses = users.stream()
+                ListUserRequest filter = getRequest().getListData() != null && !getRequest().getListData().isEmpty()
+                        ? getRequest().getListData().get(0)
+                        : null;
+
+                Pageable pageable = PageRequest.of(
+                        getRequest().getPage(),
+                        getRequest().getSize(),
+                        Sort.by(Sort.Order.asc("userName"))
+                );
+
+                Page<User> resultPage;
+                if (filter != null) {
+                    resultPage = coreUserService.getUsers(pageable,
+                            filter.getUsername(),
+                            filter.getName(),
+                            filter.getEmail(),
+                            filter.getRole());
+                } else {
+                    resultPage = coreUserService.getUsers(pageable);
+                }
+
+                List<GetUserResponse> userResponses = resultPage.getContent().stream()
                         .map(this::toGetUserResponse)
                         .collect(Collectors.toList());
                 ListUserResponse response = new ListUserResponse();
-                response.setTotal(userResponses.size());
+                response.setTotal((int) resultPage.getTotalElements());
                 response.setListUser(userResponses);
                 return response;
             }

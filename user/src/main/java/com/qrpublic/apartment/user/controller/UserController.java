@@ -5,9 +5,12 @@ import com.qrpublic.apartment.adapter.authentication.response.FindUserResponse;
 import com.qrpublic.apartment.adapter.template.Result;
 import com.qrpublic.apartment.adapter.user.request.UserRegisterRequest;
 import com.qrpublic.apartment.adapter.user.request.UserRemoveRequest;
+import com.qrpublic.apartment.adapter.user.request.UserUserAuthRequest;
 import com.qrpublic.apartment.adapter.user.response.UserRegisterResponse;
 import com.qrpublic.apartment.adapter.user.response.UserRemoveResponse;
+import com.qrpublic.apartment.adapter.user.response.UserUserAuthResponse;
 import com.qrpublic.apartment.user.service.UserService;
+import com.qrpublic.apartment.user.service.request.CreateUserAuthRequest;
 import com.qrpublic.apartment.user.service.request.UserCreateRequest;
 import com.qrpublic.apartment.user.service.request.UserDeleteRequest;
 import com.qrpublic.apartment.user.service.response.FoundUserResponse;
@@ -63,6 +66,30 @@ public class UserController {
                     }
                     return ResponseEntity.status(result.getErrorCode()).<Result<UserRemoveResponse>>body(Result.error(result.getErrorCode(), null));
                 });
+    }
+
+    @PostMapping("/createUserAndUserAuth")
+    public Mono<Result<UserUserAuthResponse>> createUserAndUserAuth(@Valid @RequestBody UserUserAuthRequest userUserAuthRequest) {
+        CreateUserAuthRequest createUserAuthRequest = convertToCreateUserAuthRequest(userUserAuthRequest);
+        return userService.createUserAuth(createUserAuthRequest)
+                .filter(result -> result.isSuccess())
+                .map(
+                        createUserAuthResponse -> {
+                            UserUserAuthResponse response = new UserUserAuthResponse();
+                            response.setSuccess(createUserAuthResponse.isSuccess());
+                            response.setErrorMessage(createUserAuthResponse.getErrorMessage());
+                            response.setErrorCode(createUserAuthResponse.getErrorCode());
+                            return Result.success(response);
+                        }
+                );
+    }
+
+    private CreateUserAuthRequest convertToCreateUserAuthRequest(@Valid UserUserAuthRequest userUserAuthRequest) {
+        CreateUserAuthRequest createUserAuthRequest = new CreateUserAuthRequest();
+        createUserAuthRequest.setUserName(userUserAuthRequest.getUserName());
+        createUserAuthRequest.setAuthToken(userUserAuthRequest.getAuthToken());
+        createUserAuthRequest.setExpire(userUserAuthRequest.getExpire());
+        return createUserAuthRequest;
     }
 
     private UserCreateRequest toUserCreateRequest(UserRegisterRequest request) {

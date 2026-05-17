@@ -2,8 +2,13 @@ package com.qrpublic.apartment.user.controller;
 
 import com.qrpublic.apartment.adapter.authentication.request.FindUserAuthenRequest;
 import com.qrpublic.apartment.adapter.authentication.response.FindUserAuthenResponse;
+import com.qrpublic.apartment.adapter.template.Result;
+import com.qrpublic.apartment.adapter.user.request.UserUserAuthRequest;
+import com.qrpublic.apartment.adapter.user.response.UserUserAuthResponse;
 import com.qrpublic.apartment.user.service.UserAuthenService;
 import com.qrpublic.apartment.user.service.request.FoundUserAuthenRequest;
+import com.qrpublic.apartment.user.service.request.UpdateUserAuthRequest;
+import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -31,7 +36,43 @@ public class SellerAuthenticationController {
                     response.setIsActive(user.getIsActive());
                     response.setExtendedNum(user.getExtendedNum());
                     return response;
+                })
+                .defaultIfEmpty(new FindUserAuthenResponse());
+    }
+
+    @PostMapping("/updateUserAndUserAuth")
+    public Mono<Result<UserUserAuthResponse>> updateUserAndUserAuth(@Valid @RequestBody UserUserAuthRequest userUserAuthRequest) {
+        UpdateUserAuthRequest updateUserAuthRequest = convertToUpdateUserAuthRequest(userUserAuthRequest);
+        return userAuthenService.updateUserAuth(updateUserAuthRequest).map(
+                updateUserAuthResponse -> {
+                    if (!Boolean.TRUE.equals(updateUserAuthResponse.getSuccess())) {
+                        return Result.error(updateUserAuthResponse.getErrorCode(), updateUserAuthResponse.getErrorMessage());
+                    }
+                    UserUserAuthResponse response = new UserUserAuthResponse();
+                    response.setSuccess(updateUserAuthResponse.getSuccess());
+                    return Result.success(response);
                 });
+    }
+
+    @PostMapping("/invalidateUserAuth")
+    public Mono<Result<UserUserAuthResponse>> invalidateUserAuth(@Valid @RequestBody UserUserAuthRequest invalidUserAuthRequest) {
+        return userAuthenService.invalidateUserAuthByUsername(invalidUserAuthRequest.getUserName())
+                .map(updateUserAuthResponse -> {
+                    if (!Boolean.TRUE.equals(updateUserAuthResponse.getSuccess())) {
+                        return Result.error(updateUserAuthResponse.getErrorCode(), updateUserAuthResponse.getErrorMessage());
+                    }
+                    UserUserAuthResponse response = new UserUserAuthResponse();
+                    response.setSuccess(updateUserAuthResponse.getSuccess());
+                    return Result.success(response);
+                });
+    }
+
+    private UpdateUserAuthRequest convertToUpdateUserAuthRequest(@Valid UserUserAuthRequest userUserAuthRequest) {
+        UpdateUserAuthRequest updateUserAuthRequest = new UpdateUserAuthRequest();
+        updateUserAuthRequest.setUserName(userUserAuthRequest.getUserName());
+        updateUserAuthRequest.setAuthToken(userUserAuthRequest.getAuthToken());
+        updateUserAuthRequest.setExpire(userUserAuthRequest.getExpire());
+        return updateUserAuthRequest;
     }
 
     private FoundUserAuthenRequest convertToFoundUserAuthRequest(FindUserAuthenRequest findUserAuthenRequest) {

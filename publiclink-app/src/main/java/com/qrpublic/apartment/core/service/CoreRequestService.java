@@ -7,6 +7,7 @@ import com.qrpublic.apartment.entity.Request;
 import com.qrpublic.apartment.entity.User;
 import com.qrpublic.apartment.model.SellerDTO;
 import com.qrpublic.apartment.repository.RequestRepository;
+import com.qrpublic.apartment.util.DateUtils;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -57,16 +58,16 @@ public class CoreRequestService {
         return convertToModel(requestRepository.save(req));
     }
 
-    private RequestModel convertToModel(Request request) {
+    private RequestModel convertToModel(Request savedRequestEntity) {
         RequestModel model = new RequestModel();
-        model.setRequestUuid(request.getReqUUID());
+        model.setRequestUuid(savedRequestEntity.getReqUUID());
         UserModel sellerModel = UserModel.builder().build();
-        if (request.getSellerName() != null) {
-            sellerModel.setUsername(request.getSellerName());
+        if (savedRequestEntity.getSellerName() != null) {
+            sellerModel.setUsername(savedRequestEntity.getSellerName());
         }
         model.setSeller(sellerModel);
-        model.setCreatedAt("Jade");
-        model.setAuthentication(request.isAuthenticated() ? AuthenticationEnum.BASIC : AuthenticationEnum.UNAUTHENTICATED);
+        model.setCreatedAt(DateUtils.dateToString(savedRequestEntity.getCreatedAt()));
+        model.setAuthentication(savedRequestEntity.isAuthenticated() ? AuthenticationEnum.BASIC : AuthenticationEnum.UNAUTHENTICATED);
         return model;
     }
 }

@@ -4,7 +4,6 @@ import com.qrpublic.apartment.adapter.msgbroker.model.MessageEvent;
 import com.qrpublic.apartment.service.IdempotencyService;
 import com.rabbitmq.client.Channel;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.amqp.rabbit.annotation.RabbitListener;
 import org.springframework.amqp.support.AmqpHeaders;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.messaging.handler.annotation.Header;
@@ -18,7 +17,7 @@ public class EventListener {
     @Autowired
     IdempotencyService idempotencyService;
 
-    @RabbitListener(queues = "transaction.queue", containerFactory = "rabbitListenerContainerFactory")
+    //    @RabbitListener(queues = "transaction.queue", containerFactory = "rabbitListenerContainerFactory")
     public void handleTransactionEvent(MessageEvent event, Channel channel,
                                        @Header(AmqpHeaders.DELIVERY_TAG) long tag) throws IOException {
         try {

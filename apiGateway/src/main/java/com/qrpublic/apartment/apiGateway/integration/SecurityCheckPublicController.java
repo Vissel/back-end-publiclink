@@ -26,7 +26,7 @@ public class SecurityCheckPublicController {
     }
 
     @PostMapping("/generateAuthenToken")
-    public Mono<UserAuthTokenResponse> checkToken(@RequestBody UserAuthenTokenRequest userAuthenTokenRequest) {
+    public Mono<UserAuthTokenResponse> generateAuthenToken(@RequestBody UserAuthenTokenRequest userAuthenTokenRequest) {
         AuthenticatedTokenRequest request = convertToAuthenticatedLinkRequest(userAuthenTokenRequest);
         return convertToUserAuthLinkResponse(securityCheckService.generateAuthenticationLink(request));
     }

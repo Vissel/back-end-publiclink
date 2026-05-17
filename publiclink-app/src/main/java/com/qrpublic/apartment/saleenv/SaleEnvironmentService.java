@@ -6,9 +6,9 @@ import com.qrpublic.apartment.requestmodel.Pagination;
 import com.qrpublic.apartment.requestmodel.SaleEnvDTO;
 import com.qrpublic.apartment.saleenv.request.CreateEnvironmentRequest;
 import com.qrpublic.apartment.saleenv.request.ListEnvironmentRequest;
+import com.qrpublic.apartment.saleenv.response.ListEnvironmentResponse;
 import com.qrpublic.apartment.template.model.Result;
-
-import java.util.List;
+import reactor.core.publisher.Mono;
 
 public interface SaleEnvironmentService {
     public SaleEnvironment createSaleEnvironment(Request request);
@@ -21,7 +21,7 @@ public interface SaleEnvironmentService {
      */
     SaleEnvDTO createSaleEnvironment(CreateEnvironmentRequest request);
 
-    Result<List<SaleEnvDTO>> getAllEnvironment(Pagination<ListEnvironmentRequest> listEnvironmentRequestPagination);
+    Mono<Result<ListEnvironmentResponse>> getEnvironments(Pagination<ListEnvironmentRequest> listEnvironmentRequestPagination);
 
     public SaleEnvironment getEnvironmentByPublicLink(String publicLink);
 

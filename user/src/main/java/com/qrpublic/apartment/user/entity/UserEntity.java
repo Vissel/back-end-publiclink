@@ -15,14 +15,13 @@ import java.util.List;
 @NoArgsConstructor
 public class UserEntity {
     @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
     private String userId;
 
     private String username;
     private String password;
     private String fullName;
 
-    @OneToMany(cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     private List<ProfileEntity> profiles;
     private String role;
     private Boolean isActive;
@@ -30,4 +29,9 @@ public class UserEntity {
     @Column(updatable = false, insertable = false)
     private Timestamp createdAt;
 
+    @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    private List<UserAuthEntity> userAuthentication;
+
+    @Version
+    private long version;
 }

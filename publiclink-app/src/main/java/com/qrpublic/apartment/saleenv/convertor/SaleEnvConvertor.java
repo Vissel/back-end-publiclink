@@ -12,6 +12,7 @@ import com.qrpublic.apartment.requestmodel.SaleEnvDTO;
 import com.qrpublic.apartment.util.Utils;
 
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.List;
 
 public class SaleEnvConvertor {
@@ -52,14 +53,17 @@ public class SaleEnvConvertor {
                 .map(o ->
                      new OrderDTO(0, null, o.getBuyerName(), null, false, false, null, 0, null, null)
                 ).toList();
-        final String sellerAuthLink = LinkBuilder.buildAuthenticationLink(model.getRequestUUID(), model.getSeller().getSellerLinkModel().getContextString());
+        final String authenToken = model.getSeller().getSellerLinkModel() != null ? model.getSeller().getSellerLinkModel().getToken() : CommonConstant.EMPTY;
+        final String sellerAuthLink = LinkBuilder.buildAuthenticationLink(model.getRequestUUID(), authenToken);
+        final Date sellerAutheLinkExpire = model.getSeller().getSellerLinkModel() != null ? model.getSeller().getSellerLinkModel().getExpire() : null;
         final String publicLink = LinkBuilder.buildPublicLink(model.getPublicLink());
         return SaleEnvDTO.builder()
                 .requestUUID(model.getRequestUUID())
                 .createdAt(model.getCreatedAt())
                 .sellerName(model.getSeller() != null ? model.getSeller().getName() : null)
-                .createdBy(model.getSeller() != null ? model.getSeller().getUsername() : null)
+                .createdBy("Jade")
                 .sellerAuthLink(sellerAuthLink)
+                .sellerAuthLinkExpire(sellerAutheLinkExpire)
                 .publicLink(publicLink)
                 .envStatus(model.getEnvState() == EnvStateEnum.ACTIVE)
                 .productName(model.getProducts() != null && !model.getProducts().isEmpty() ? model.getProducts().getFirst().getProductName() : null)

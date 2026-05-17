@@ -25,8 +25,9 @@ public class UserAuthEntity {
 
     private Boolean isActive;
 
-    @ManyToOne(fetch = FetchType.EAGER)
-    private UserEntity userEntity;
+    @ManyToOne()
+    @JoinColumn(name = "user_id")
+    private UserEntity user;
 
     private int extendedNum;
 }

@@ -6,6 +6,8 @@ import com.qrpublic.apartment.entity.User;
 import com.qrpublic.apartment.model.SellerDTO;
 import com.qrpublic.apartment.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -37,6 +39,16 @@ public class CoreUserService {
     @Transactional
     public List<User> getAllUser() {
         return userRepo.findAllWithLock();
+    }
+
+    @Transactional
+    public Page<User> getUsers(Pageable pageable) {
+        return userRepo.findAll(pageable);
+    }
+
+    @Transactional
+    public Page<User> getUsers(Pageable pageable, String username, String name, String email, String role) {
+        return userRepo.findByFilters(username, name, email, role, pageable);
     }
 
     @Transactional

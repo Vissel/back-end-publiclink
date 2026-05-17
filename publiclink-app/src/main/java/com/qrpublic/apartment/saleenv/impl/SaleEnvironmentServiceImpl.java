@@ -1,15 +1,27 @@
 package com.qrpublic.apartment.saleenv.impl;
 
+import com.qrpublic.apartment.adapter.authentication.request.FindUserAuthenRequest;
+import com.qrpublic.apartment.adapter.authentication.response.FindUserAuthenResponse;
+import com.qrpublic.apartment.adapter.user.request.UserAuthenTokenRequest;
+import com.qrpublic.apartment.adapter.user.request.UserUserAuthRequest;
+import com.qrpublic.apartment.adapter.user.response.UserAuthTokenResponse;
 import com.qrpublic.apartment.constant.CommonConstant;
 import com.qrpublic.apartment.constant.LinkConstant;
 import com.qrpublic.apartment.core.linkBuilder.LinkBuilder;
 import com.qrpublic.apartment.core.model.LinkModel;
+import com.qrpublic.apartment.core.model.SaleEnvironmentModel;
 import com.qrpublic.apartment.core.model.SellerModel;
 import com.qrpublic.apartment.core.service.CoreEnvironmentService;
 import com.qrpublic.apartment.core.service.CoreRequestService;
+import com.qrpublic.apartment.core.service.CoreUserService;
 import com.qrpublic.apartment.entity.Request;
 import com.qrpublic.apartment.entity.SaleEnvironment;
 import com.qrpublic.apartment.exception.ResourceNotFoundException;
+import com.qrpublic.apartment.integration.OperatedSellerClient;
+import com.qrpublic.apartment.integration.OperatedUserClient;
+import com.qrpublic.apartment.integration.SecurityCheckClient;
+import com.qrpublic.apartment.model.SellerDTO;
+import com.qrpublic.apartment.model.UserType;
 import com.qrpublic.apartment.repository.SaleEnvironmentRepository;
 import com.qrpublic.apartment.requestmodel.Pagination;
 import com.qrpublic.apartment.requestmodel.RequestDTO;
@@ -18,25 +30,33 @@ import com.qrpublic.apartment.saleenv.SaleEnvironmentService;
 import com.qrpublic.apartment.saleenv.convertor.SaleEnvConvertor;
 import com.qrpublic.apartment.saleenv.request.CreateEnvironmentRequest;
 import com.qrpublic.apartment.saleenv.request.ListEnvironmentRequest;
+import com.qrpublic.apartment.saleenv.response.ListEnvironmentResponse;
 import com.qrpublic.apartment.service.LinkService;
 import com.qrpublic.apartment.template.model.Result;
-import com.qrpublic.apartment.template.service.ProcessCallback;
 import com.qrpublic.apartment.template.service.PublicLinkServiceTemplate;
+import com.qrpublic.apartment.util.DateUtils;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
 
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.concurrent.CompletableFuture;
 
 @Slf4j
 @Service
 @PreAuthorize("hasRole('Admin')")
 public class SaleEnvironmentServiceImpl implements SaleEnvironmentService {
 
+    private static final long FIFTEEN_MINUTES = 15 * 60 * 1000L;
+    private static final long FIVE_MINUTES = 5 * 60 * 1000L;
     @Autowired
     private SaleEnvironmentRepository repo;
 
@@ -50,6 +70,18 @@ public class SaleEnvironmentServiceImpl implements SaleEnvironmentService {
 
     @Autowired
     PublicLinkServiceTemplate publicLinkServiceTemplate;
+
+    @Autowired
+    CoreUserService coreUserService;
+
+    @Autowired
+    OperatedUserClient operatedUserClient;
+
+    @Autowired
+    OperatedSellerClient operatedSellerClient;
+
+    @Autowired
+    SecurityCheckClient securityCheckClient;
 
     @Override
     public SaleEnvironment createSaleEnvironment(Request request) {
@@ -77,14 +109,20 @@ public class SaleEnvironmentServiceImpl implements SaleEnvironmentService {
         log.info("{} Creating sale environment for request ID: {}", CommonConstant.START, request.getRequestUuid());
         RequestDTO requestDTO = convertToRequestDTO(request);
 
-        // create sale environment including public link
-        SaleEnvironment environment = createSaleEnvironment(requestDTO);
-        // create auth link and add to response
-        LinkModel authLink = generateReqAuthLink(requestDTO);
-        SellerModel sellerModel = createOrGetSeller(requestDTO);
+        CompletableFuture<SaleEnvironment> environmentFuture = CompletableFuture
+                .supplyAsync(() -> createSaleEnvironment(requestDTO));
+        CompletableFuture<SellerModel> sellerFuture = CompletableFuture
+                .supplyAsync(() -> createOrGetSeller(requestDTO));
+
+        SaleEnvironment environment = environmentFuture.join();
+        SellerModel sellerModel = sellerFuture.join();
+
+        final String authenToken = sellerModel.getSellerLinkModel() != null ? sellerModel.getSellerLinkModel().getToken() : CommonConstant.EMPTY;
+        sellerModel.getSellerLinkModel().setContextString(
+                LinkBuilder.buildAuthenticationLink(requestDTO.getReqUUID(), authenToken));
 
         log.info("{} Creating sale environment for request ID: {}", CommonConstant.END, request.getRequestUuid());
-        return convertToSaleEnvDto(environment, authLink);
+        return convertToSaleEnvDto(environment, sellerModel.getSellerLinkModel());
     }
 
     private SaleEnvironment createSaleEnvironment(RequestDTO requestDTO) {
@@ -102,10 +140,99 @@ public class SaleEnvironmentServiceImpl implements SaleEnvironmentService {
     }
 
     private SellerModel createOrGetSeller(RequestDTO requestDTO) {
-        // findSeller from
-        // updateSellerTokenById
+        String username = requestDTO.getUsername();
+        SellerDTO sellerDTO = requestDTO.getSeller();
 
+        return operatedSellerClient.findUserByUsername(new FindUserAuthenRequest(username))
+                .filter(response -> response.getUserName() != null && !response.getUserName().isBlank())
+                .flatMap(findUserAuthen -> {
+                    boolean isExpiringSoon = findUserAuthen.getExpiredAt() != null
+                            && findUserAuthen.getExpiredAt().before(new java.util.Date(System.currentTimeMillis() + FIVE_MINUTES));
+                    if (isExpiringSoon) {
+                        // expiry < 5 min => generate new token with 15 min validity, then update
+                        return generateToken(username, FIFTEEN_MINUTES)
+                                .flatMap(authLink -> operatedSellerClient.updateUserAuth(toUserAuthRequest(username, authLink))
+                                        .flatMap(result -> {
+                                            if (!result.isSuccess()) {
+                                                return Mono.error(new RuntimeException("Failed to update user auth: " + result.getErrorMessage()));
+                                            }
+                                            log.info("Refreshed token for seller: {}", username);
+                                            return Mono.just(toSellerModel(username, authLink));
+                                        }));
+                    }
+                    // expiry >= 5 min => use existing token
+                    LinkModel existingLink = new LinkModel(findUserAuthen.getAuthenticationToken(),
+                            findUserAuthen.getCreatedAt(), findUserAuthen.getExpiredAt());
+                    return Mono.just(toSellerModel(username, existingLink));
+                })
+                .switchIfEmpty(Mono.defer(() -> generateToken(username, FIFTEEN_MINUTES)
+                        .flatMap(authLink -> {
+                            // Step 1: Create user auth
+                            return operatedUserClient.createUserAuth(toUserAuthRequest(username, authLink))
+                                    .flatMap(result -> {
+                                        if (!result.isSuccess()) {
+                                            return Mono.error(new RuntimeException("Failed to create user auth: " + result.getErrorMessage()));
+                                        }
+                                        // Step 2: Create seller in internal DB (compensating transaction)
+                                        try {
+                                            SellerDTO newSellerDTO = new SellerDTO();
+                                            newSellerDTO.setUsername(username);
+                                            newSellerDTO.setUserType(UserType.SELLER);
+                                            if (sellerDTO != null) newSellerDTO.setName(sellerDTO.getName());
 
+                                            if (coreUserService.findSeller(newSellerDTO) == null) {
+                                                coreUserService.createNewUser(newSellerDTO);
+                                            }
+
+                                            log.info("Created new seller in internal DB: {}", username);
+                                            return Mono.just(toSellerModel(username, authLink));
+                                        } catch (Exception e) {
+                                            // Compensating transaction: rollback user auth
+                                            log.error("Failed to create seller in internal DB, rolling back user auth for: {}", username, e);
+                                            return operatedSellerClient.invalidateUserAuth(new FindUserAuthenRequest(username))
+                                                    .flatMap(invalidateResult -> {
+                                                        if (invalidateResult.isSuccess()) {
+                                                            log.info("Successfully rolled back user auth for: {}", username);
+                                                        } else {
+                                                            log.error("Failed to rollback user auth for: {}. Manual cleanup required!", username);
+                                                        }
+                                                        return Mono.<SellerModel>error(new RuntimeException("Failed to create seller. Rolled back user auth. Error: " + e.getMessage(), e));
+                                                    })
+                                                    .onErrorResume(rollbackError -> {
+                                                        log.error("Rollback also failed for: {}. Manual cleanup required!", username, rollbackError);
+                                                        return Mono.<SellerModel>error(new RuntimeException("Failed to create seller and rollback failed. Manual cleanup required!", e));
+                                                    });
+                                        }
+                                    });
+                        })))
+                .block();
+    }
+
+    private Mono<LinkModel> generateToken(String username, long validTimeMillis) {
+        UserAuthenTokenRequest tokenRequest = new UserAuthenTokenRequest();
+        tokenRequest.setUsername(username);
+        tokenRequest.setRole(UserType.SELLER.name());
+        tokenRequest.setValidTime(validTimeMillis);
+        return securityCheckClient.generateAuthenToken(tokenRequest).map(this::toAuthLinkModel);
+    }
+
+    private UserUserAuthRequest toUserAuthRequest(String username, LinkModel authLink) {
+        UserUserAuthRequest request = new UserUserAuthRequest();
+        request.setUserName(username);
+        request.setAuthToken(authLink.getToken());
+        request.setExpire(authLink.getExpire());
+        return request;
+    }
+
+    private SellerModel toSellerModel(String username, LinkModel authLink) {
+        SellerModel sellerModel = new SellerModel();
+        sellerModel.setUsername(username);
+        sellerModel.setSellerLinkModel(authLink);
+        return sellerModel;
+    }
+
+    private LinkModel toAuthLinkModel(UserAuthTokenResponse tokenResponse) {
+        return new LinkModel(tokenResponse.getAuthenticationToken(), tokenResponse.getIssueAt(), tokenResponse.getExpire());
     }
 
     private RequestDTO convertToRequestDTO(CreateEnvironmentRequest request) {
@@ -126,25 +253,73 @@ public class SaleEnvironmentServiceImpl implements SaleEnvironmentService {
     }
 
     @Override
-    public Result<List<SaleEnvDTO>> getAllEnvironment(Pagination<ListEnvironmentRequest> listEnvironmentRequestPagination) {
-        return publicLinkServiceTemplate.execute(new ProcessCallback<Pagination<ListEnvironmentRequest>, List<SaleEnvDTO>>() {
-            @Override
-            public Pagination<ListEnvironmentRequest> getRequest() {
-                return listEnvironmentRequestPagination;
+    public Mono<Result<ListEnvironmentResponse>> getEnvironments(Pagination<ListEnvironmentRequest> listEnvironmentRequestPagination) {
+        return Mono.fromCallable(() -> {
+            ListEnvironmentRequest filter = listEnvironmentRequestPagination.getListData() != null && !listEnvironmentRequestPagination.getListData().isEmpty()
+                    ? listEnvironmentRequestPagination.getListData().get(0)
+                    : null;
+
+            PageRequest pageable = PageRequest.of(listEnvironmentRequestPagination.getPage() - 1, listEnvironmentRequestPagination.getSize(), Sort.by(Sort.Order.desc("createdAt")));
+
+            if (filter != null) {
+                return coreEnvironmentService.getEnvironments(pageable,
+                        filter.getCreatedAt(),
+                        filter.getCreatedBy(),
+                        filter.getSellerName(),
+                        filter.getRequestUuid());
+            } else {
+                return coreEnvironmentService.getEnvironments(pageable);
+            }
+        }).flatMap(resultPage -> {
+            List<SaleEnvironmentModel> models = resultPage.getContent();
+            List<String> usernames = models.stream()
+                    .map(m -> m.getSeller() != null ? m.getSeller().getUsername() : null)
+                    .filter(Objects::nonNull)
+                    .distinct()
+                    .toList();
+
+            if (usernames.isEmpty()) {
+                return Mono.just(buildEnvironmentResult(models, resultPage.getTotalElements()));
             }
 
-            @Override
-            public void preProcess(Pagination<ListEnvironmentRequest> request) {
-
-            }
-
-            @Override
-            public List<SaleEnvDTO> process() {
-                PageRequest pageable = PageRequest.of(getRequest().getPage(), getRequest().getSize(), Sort.by(Sort.Order.desc("createdAt")));
-                return coreEnvironmentService.getEnvironments(pageable).stream()
-                        .map(SaleEnvConvertor::buildSaleEnvDTOFromModel).toList();
-            }
+            return Flux.fromIterable(usernames)
+                    .<SellerModel>flatMap(username ->
+                            operatedSellerClient.findUserByUsername(new FindUserAuthenRequest(username))
+                                    .map(this::convertToSellerModel)
+                                    .filter(sm -> sm.getUsername() != null)
+                                    .timeout(Duration.ofSeconds(3))
+                                    .onErrorResume(error -> {
+                                        log.error("Failed to fetch seller auth for [{}]: {}", username, error.getMessage());
+                                        return Mono.empty();
+                                    })
+                    )
+                    .collectMap(SellerModel::getUsername)
+                    .map(sellerMap -> {
+                        List<SaleEnvironmentModel> hydratedModels = models.stream()
+                                .map(model -> {
+                                    if (model.getSeller() != null) {
+                                        model.setSeller(sellerMap.getOrDefault(
+                                                model.getSeller().getUsername(), model.getSeller()));
+                                    }
+                                    return model;
+                                })
+                                .toList();
+                        return buildEnvironmentResult(hydratedModels, resultPage.getTotalElements());
+                    });
         });
+    }
+
+    private Result<ListEnvironmentResponse> buildEnvironmentResult(List<SaleEnvironmentModel> models, long totalElements) {
+        ListEnvironmentResponse response = new ListEnvironmentResponse();
+        response.setTotal((int) totalElements);
+        response.setListSaleEnv(models.stream()
+                .map(SaleEnvConvertor::buildSaleEnvDTOFromModel)
+                .toList());
+
+        Result<ListEnvironmentResponse> resultWrapper = new Result<>();
+        resultWrapper.setData(response);
+        resultWrapper.setSuccess(true);
+        return resultWrapper;
     }
 
     @Override
@@ -157,11 +332,21 @@ public class SaleEnvironmentServiceImpl implements SaleEnvironmentService {
         return repo.findByRequest(request).get().getPublicLink();
     }
 
+    private SellerModel convertToSellerModel(FindUserAuthenResponse response) {
+        SellerModel sellerModel = new SellerModel();
+        sellerModel.setUsername(response.getUserName());
+        sellerModel.setName(response.getUserName());
+        LinkModel sellerLinkModel = new LinkModel(response.getAuthenticationToken(),
+                response.getExpiredAt(), response.getCreatedAt());
+        sellerModel.setSellerLinkModel(sellerLinkModel);
+        return sellerModel;
+    }
+
     private SaleEnvDTO convertToSaleEnvDto(SaleEnvironment env, LinkModel linkModel) {
         return SaleEnvConvertor.buildEnvDTO(env)
                 .sellerAuthLink(linkModel.getContextString())
                 .sellerAuthLinkExpire(linkModel.getExpire())
-                .createdBy(linkModel.getIssueAt().toString())
+                .createdBy(DateUtils.dateToString(linkModel.getIssueAt()))
                 .build();
     }
 }

@@ -20,15 +20,15 @@ public class PublicLinkServiceTemplate {
             result.setData(data);
             result.setSuccess(true);
         } catch (IllegalArgumentException e) {
-            log.error("[IllegalArgumentException] message:", e.getMessage());
+            log.error("[IllegalArgumentException] message: {}", e.getMessage(), e);
             result.setErrorCode(HttpStatus.BAD_REQUEST.value());
             errorMess = e.getMessage();
         } catch (ApplicationException e) {
-            log.error("[ApplicationException] message:", e.getMessage());
+            log.error("[ApplicationException] message: {}", e.getMessage(), e);
             result.setErrorCode(e.getErrorCode());
             errorMess = e.getMessage();
         } catch (Throwable e) {
-            log.error("[Throwable] message:", e.getMessage());
+            log.error("[Throwable] message: {}", e.getMessage(), e);
             result.setErrorCode(Integer.valueOf(ResultEnum.INTERNAL_SERVER_ERROR.getCode()));
             errorMess = "Server error.";
         } finally {

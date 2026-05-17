@@ -3,9 +3,9 @@ package com.qrpublic.apartment.controller;
 import com.qrpublic.apartment.model.SellerDTO;
 import com.qrpublic.apartment.requestmodel.Pagination;
 import com.qrpublic.apartment.requestmodel.RequestDTO;
-import com.qrpublic.apartment.requestmodel.SaleEnvDTO;
 import com.qrpublic.apartment.saleenv.SaleEnvironmentService;
 import com.qrpublic.apartment.saleenv.request.ListEnvironmentRequest;
+import com.qrpublic.apartment.saleenv.response.ListEnvironmentResponse;
 import com.qrpublic.apartment.service.AdminService;
 import com.qrpublic.apartment.service.RequestService;
 import com.qrpublic.apartment.user.request.ListUserRequest;
@@ -18,8 +18,6 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import reactor.core.publisher.Mono;
-
-import java.util.List;
 
 @RestController
 @RequestMapping("/admin/v1")
@@ -39,8 +37,8 @@ public class AdminController {
      *
      * @return
      */
-    @PostMapping("/getAllEnvironment")
-    public Mono<ResponseEntity<List<SaleEnvDTO>>> getAllEnvironment(@RequestBody Pagination<ListEnvironmentRequest> request) {
+    @PostMapping("/getEnvironments")
+    public Mono<ResponseEntity<ListEnvironmentResponse>> getEnvironments(@RequestBody Pagination<ListEnvironmentRequest> request) {
         return adminService.getSaleEnvironment(request)
                 .map(ResponseEntity::ok)
                 .defaultIfEmpty(ResponseEntity.status(HttpStatus.NO_CONTENT).build());

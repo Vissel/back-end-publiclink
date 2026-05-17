@@ -3,37 +3,50 @@ package com.qrpublic.apartment.user.service;
 import com.qrpublic.apartment.adapter.template.Result;
 import com.qrpublic.apartment.user.core.UserServiceCore;
 import com.qrpublic.apartment.user.entity.ProfileEntity;
+import com.qrpublic.apartment.user.entity.UserAuthEntity;
 import com.qrpublic.apartment.user.entity.UserEntity;
 import com.qrpublic.apartment.user.exception.UserDeleteException;
 import com.qrpublic.apartment.user.exception.UserErrorEnum;
 import com.qrpublic.apartment.user.exception.UserNotFoundException;
 import com.qrpublic.apartment.user.model.User;
+import com.qrpublic.apartment.user.model.UserType;
+import com.qrpublic.apartment.user.repository.UserAuthEntityRepository;
 import com.qrpublic.apartment.user.repository.UserEntityRepository;
+import com.qrpublic.apartment.user.service.request.CreateUserAuthRequest;
 import com.qrpublic.apartment.user.service.request.UserCreateRequest;
 import com.qrpublic.apartment.user.service.request.UserDeleteRequest;
+import com.qrpublic.apartment.user.service.response.CreateUserAuthResponse;
 import com.qrpublic.apartment.user.service.response.FoundUserResponse;
 import com.qrpublic.apartment.user.service.response.UserCreateResponse;
 import com.qrpublic.apartment.user.service.response.UserDeleteResponse;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.TransactionTemplate;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
 
 import java.util.List;
 import java.util.Objects;
+import java.util.UUID;
 import java.util.function.Consumer;
 import java.util.stream.Stream;
 
 import static com.qrpublic.apartment.adapter.template.Result.success;
 
+@Slf4j
 @Service
 public class UserServiceImpl implements UserService {
 
     @Autowired
     private UserEntityRepository userEntityRepository;
+
+    @Autowired
+    private UserAuthEntityRepository userAuthEntityRepository;
 
     @Autowired
     UserServiceCore userServiceCore;
@@ -43,6 +56,16 @@ public class UserServiceImpl implements UserService {
 
     @Autowired
     private RsaClient rsaClient;
+
+    @Autowired
+    private PlatformTransactionManager transactionManager;
+
+    private final TransactionTemplate transactionTemplate;
+
+    public UserServiceImpl(PlatformTransactionManager transactionManager) {
+        this.transactionTemplate = new TransactionTemplate(transactionManager);
+        transactionTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRED);
+    }
 
     @Override
     public Mono<Result<FoundUserResponse>> findByUserName(String userName) {
@@ -57,17 +80,58 @@ public class UserServiceImpl implements UserService {
 
     @Override
     public Mono<Result<UserCreateResponse>> createUser(UserCreateRequest userCreateRequest) {
-        return Mono.fromCallable(() -> doCreateUser(userCreateRequest))
+        return Mono.fromCallable(() ->
+                        transactionTemplate.execute(status ->
+                                doCreateUser(userCreateRequest))
+                )
                 .subscribeOn(Schedulers.boundedElastic());
     }
 
     @Override
     public Mono<Result<UserDeleteResponse>> deleteUserByUsername(UserDeleteRequest userDeleteRequest) {
-        return Mono.fromCallable(() -> doDeleteUser(userDeleteRequest))
+        return Mono.fromCallable(() ->
+                        transactionTemplate.execute(status ->
+                                doDeleteUser(userDeleteRequest))
+                )
                 .subscribeOn(Schedulers.boundedElastic());
     }
 
-    @Transactional
+    @Override
+    public Mono<Result<CreateUserAuthResponse>> createUserAuth(CreateUserAuthRequest createUserAuthRequest) {
+        return Mono.fromCallable(() ->
+                        transactionTemplate.execute((status) ->
+                                doCreateUserAuth(createUserAuthRequest)
+                        )
+                )
+                .subscribeOn(Schedulers.boundedElastic())
+                .doOnError(ex -> log.error("Failed to create user auth for {}", createUserAuthRequest.getUserName(), ex))
+                .onErrorReturn(Result.error(UserErrorEnum.USER_CREATE_AUTH_ERROR.getCode(), UserErrorEnum.USER_CREATE_AUTH_ERROR.getMessage()));
+
+    }
+
+
+    protected Result<CreateUserAuthResponse> doCreateUserAuth(CreateUserAuthRequest request) {
+        UserEntity user = userEntityRepository.findByUsername(request.getUserName())
+                .orElseGet(() -> {
+                    User userModel = new User();
+                    userModel.setUsername(request.getUserName());
+                    userModel.setRole(UserType.SELLER.name());
+                    userModel.setIsActive(true);
+                    return createNewUser(userModel);
+                });
+
+        UserAuthEntity auth = new UserAuthEntity();
+        auth.setUser(user);
+        auth.setAuthToken(request.getAuthToken());
+        auth.setExpireAt(new java.sql.Timestamp(request.getExpire().getTime()));
+        auth.setIsActive(true);
+        userAuthEntityRepository.save(auth);
+
+        CreateUserAuthResponse response = new CreateUserAuthResponse();
+        response.setSuccess(true);
+        return success(response);
+    }
+
     protected Result<UserCreateResponse> doCreateUser(UserCreateRequest request) {
         if (request == null) return Result.error(400, "Invalid user request");
         User user = convertUserRegisterToUserModel(request);
@@ -77,7 +141,6 @@ public class UserServiceImpl implements UserService {
         return success(buildUserCreateResponse(user));
     }
 
-    @Transactional
     protected Result<UserDeleteResponse> doDeleteUser(UserDeleteRequest request) {
         if (request == null || StringUtils.isBlank(request.getUserId()))
             throw new UserDeleteException(UserErrorEnum.USER_DELETE_ERROR, "invalid");
@@ -140,8 +203,11 @@ public class UserServiceImpl implements UserService {
 
     private UserEntity createNewUser(User user) {
         UserEntity newUser = new UserEntity();
+        newUser.setUserId(UUID.randomUUID().toString());
         newUser.setUsername(user.getUsername());
-        newUser.setPassword(passwordEncoder.encode(user.getPlainTextPassword()));
+        if (StringUtils.isNotBlank(user.getPlainTextPassword())) {
+            newUser.setPassword(passwordEncoder.encode(user.getPlainTextPassword()));
+        }
         newUser.setFullName(user.getFullName());
         newUser.setRole(user.getRole());
         newUser.setIsActive(user.getIsActive());

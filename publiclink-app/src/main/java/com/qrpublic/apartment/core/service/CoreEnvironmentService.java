@@ -10,13 +10,14 @@ import com.qrpublic.apartment.entity.SaleEnvironment;
 import com.qrpublic.apartment.repository.SaleEnvironmentRepository;
 import com.qrpublic.apartment.util.Utils;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 @Service
 public class CoreEnvironmentService {
@@ -24,22 +25,45 @@ public class CoreEnvironmentService {
     @Autowired
     private SaleEnvironmentRepository repo;
 
-    @Transactional
-    public List<SaleEnvironmentModel> getEnvironments(Pageable pageable) {
-        List<SaleEnvironment> all = repo.findAllWithProducts();
-        List<String> ids = all.stream().map(SaleEnvironment::getEnvId).toList();
-        Map<String, List<Order>> ordersMap = repo.findAllWithOrdersByIds(ids).stream()
-                .collect(Collectors.toMap(SaleEnvironment::getEnvId,
-                        se -> se.getListOrder() == null ? List.of() : se.getListOrder()));
+    @Autowired
+    private CoreOrderService coreOrderService;
+    @Autowired
+    private CoreProductService coreProductService;
 
-        int start = (int) pageable.getOffset();
-        int end = Math.min(start + pageable.getPageSize(), all.size());
-        return all.subList(start, end).stream()
-                .map(se -> toModel(se, ordersMap.getOrDefault(se.getEnvId(), List.of())))
+    @Transactional
+    public Page<SaleEnvironmentModel> getEnvironments(Pageable pageable) {
+        Page<SaleEnvironment> resultPage = repo.findAll(pageable);
+        List<SaleEnvironmentModel> environmentModels = toEnvironmentModels(resultPage.getContent());
+        return new PageImpl<>(environmentModels, pageable, resultPage.getTotalElements());
+    }
+
+    @Transactional
+    public Page<SaleEnvironmentModel> getEnvironments(Pageable pageable, String createdAt, String createdBy, String sellerName, String requestUuid) {
+        Page<SaleEnvironment> resultPage = repo.findByFilters(createdAt, createdBy, sellerName, requestUuid, pageable);
+        List<SaleEnvironmentModel> environmentModels = toEnvironmentModels(resultPage.getContent());
+        return new PageImpl<>(environmentModels, pageable, resultPage.getTotalElements());
+    }
+
+    private List<SaleEnvironmentModel> toEnvironmentModels(List<SaleEnvironment> saleEnvironmentList) {
+        if (saleEnvironmentList.isEmpty()) {
+            return List.of();
+        }
+
+        List<String> envIds = saleEnvironmentList.stream().map(SaleEnvironment::getEnvId).toList();
+        List<Long> requestIds = saleEnvironmentList.stream()
+                .map(se -> se.getRequest().getReqId()).toList();
+
+        Map<String, List<Order>> ordersMap = coreOrderService.getOrdersMapByEnvironmentIds(envIds);
+        Map<Long, List<Product>> productsMap = coreProductService.getProductsMapByRequestIds(requestIds);
+
+        return saleEnvironmentList.stream()
+                .map(se -> toModel(se,
+                        ordersMap.getOrDefault(se.getEnvId(), List.of()),
+                        productsMap.getOrDefault(se.getRequest().getReqId(), List.of())))
                 .toList();
     }
 
-    private SaleEnvironmentModel toModel(SaleEnvironment env, List<Order> orders) {
+    private SaleEnvironmentModel toModel(SaleEnvironment env, List<Order> orders, List<Product> products) {
         SaleEnvironmentModel model = new SaleEnvironmentModel();
         model.setRequestUUID(env.getRequest().getReqUUID());
         model.setCreatedAt(Utils.formatTimeStamp(env.getCreatedAt()));
@@ -47,20 +71,11 @@ public class CoreEnvironmentService {
         model.setEnvState(env.isState()
                 ? com.qrpublic.apartment.core.model.EnvStateEnum.ACTIVE
                 : com.qrpublic.apartment.core.model.EnvStateEnum.INACTIVE);
-
-        SellerModel seller = new SellerModel();
-        seller.setName(env.getRequest().getSellerName());
-        if (env.getRequest().getCreatedBy() != null) {
-            seller.setUsername(env.getRequest().getCreatedBy().getUserName());
-            seller.setName(env.getRequest().getCreatedBy().getName());
-        }
-        model.setSeller(seller);
-
-        model.setProducts(env.getRequest().getProducts() == null ? List.of()
-                : env.getRequest().getProducts().stream().map(this::toProductModel).toList());
-
         model.setOrders(orders.stream().map(this::toOrderModel).toList());
-
+        model.setProducts(products.stream().map(this::toProductModel).toList());
+        SellerModel sellerModel = new SellerModel();
+        sellerModel.setUsername(env.getRequest().getSellerName());
+        model.setSeller(sellerModel);
         return model;
     }
 

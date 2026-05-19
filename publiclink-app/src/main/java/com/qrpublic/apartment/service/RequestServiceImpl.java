@@ -36,30 +36,33 @@ public class RequestServiceImpl implements RequestService {
     @Autowired
     CoreRequestService coreRequestService;
 
-
     @Override
     public RequestDTO createTempRequestDTO(SellerDTO seller) {
         log.info("Creating seller:{}", seller.getUsername());
         RequestDTO requestDTO = null;
-//		List<User> listSeller = userRepo.findByNameAndLink(seller.getUsername(), seller.getLink());
+        // List<User> listSeller = userRepo.findByNameAndLink(seller.getUsername(),
+        // seller.getLink());
         // handle 1 seller as currently
-//		User requestSeller;
-//		if (!listSeller.isEmpty()) {
-//			requestSeller = listSeller.get(0);
-//		} else {
-//			requestSeller = createNewSeller(seller);
-//		}
+        // User requestSeller;
+        // if (!listSeller.isEmpty()) {
+        // requestSeller = listSeller.get(0);
+        // } else {
+        // requestSeller = createNewSeller(seller);
+        // }
         // created_at get from DB as
-//        UserDetails u = UserUtils.getCurrentUser();
-//        if (u != null
-//                && u.getAuthorities().stream().anyMatch(auth -> auth.getAuthority().equals(RoleEnum.ADMIN))) {
-//            User admin = userRepo.findByUserName(u.getUsername()).orElseThrow(
-//                    () -> new UsernameNotFoundException("User not found with username: " + u.getUsername()));
-//
-//            // response DTO
-//            requestDTO = new RequestDTO(seller, CommonConstant.EMPTY, admin, false, new ArrayList<>());
-//            log.info("Creating seller successfull by {}", u.getUsername());
-//        }
+        // UserDetails u = UserUtils.getCurrentUser();
+        // if (u != null
+        // && u.getAuthorities().stream().anyMatch(auth ->
+        // auth.getAuthority().equals(RoleEnum.ADMIN))) {
+        // User admin = userRepo.findByUserName(u.getUsername()).orElseThrow(
+        // () -> new UsernameNotFoundException("User not found with username: " +
+        // u.getUsername()));
+        //
+        // // response DTO
+        // requestDTO = new RequestDTO(seller, CommonConstant.EMPTY, admin, false, new
+        // ArrayList<>());
+        // log.info("Creating seller successfull by {}", u.getUsername());
+        // }
         log.info("Creating seller:{}{}", seller.getUsername(), CommonConstant.END);
         return requestDTO;
     }
@@ -76,7 +79,7 @@ public class RequestServiceImpl implements RequestService {
             Request request = new Request();
             request.setSellerName(seller.getUserName());
             String adminUserName = null;
-//                    UserUtils.getCurrentUser().getUsername();
+            // UserUtils.getCurrentUser().getUsername();
             User createdBy = userService.findByUserName(adminUserName);
             request.setCreatedBy(createdBy);
 
@@ -111,7 +114,7 @@ public class RequestServiceImpl implements RequestService {
             request.setCreatedBy(requestDTO.getCreatedBy()); // debug check admin
             request.setAuthenticated(requestDTO.isAuthenticated());
             // save request 1st
-//			saveRequest(request);
+            // saveRequest(request);
             List<Product> products = requestDTO.getProducts().stream().map(p -> createProduct(p, request))
                     .collect(Collectors.toList());
             request.setProducts(products);
@@ -176,6 +179,8 @@ public class RequestServiceImpl implements RequestService {
             SellerDTO sellerDTO = new SellerDTO();
             sellerDTO.setUsername(sellerReq.getUsername());
             sellerDTO.setLink(sellerReq.getLink());
+            sellerDTO.setName(sellerReq.getName());
+            sellerDTO.setPrice(sellerReq.getPrice());
 
             return convertModelToCreateRequestIdResponse(coreRequestService.generateRequestForSeller(sellerDTO));
         });

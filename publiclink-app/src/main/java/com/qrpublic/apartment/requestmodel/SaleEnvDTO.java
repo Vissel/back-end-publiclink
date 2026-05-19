@@ -5,6 +5,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.math.BigDecimal;
 import java.util.Date;
 import java.util.List;
 
@@ -36,10 +37,13 @@ public class SaleEnvDTO {
     private boolean envStatus;
     private String requestId;
     private List<OrderDTO> orders;
+    private BigDecimal totalPrice;
+    private String currency;
+    private List<PricingDTO> pricings;
 
     // dont have sellerAuthLink
     public SaleEnvDTO(String createdAt, String sellerName, String sellerLink, String productName, String publicLink,
-                      String createdBy, boolean envStatus, List<OrderDTO> orders) {
+            String createdBy, boolean envStatus, List<OrderDTO> orders) {
         super();
         this.createdAt = createdAt;
         this.sellerName = sellerName;

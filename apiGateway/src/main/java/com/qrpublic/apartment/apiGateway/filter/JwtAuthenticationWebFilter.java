@@ -31,11 +31,6 @@ public class JwtAuthenticationWebFilter implements WebFilter, Ordered {
 
     //    @Override
     public Mono<Void> filter(ServerWebExchange exchange, WebFilterChain chain) {
-//        if (duplicatedRequest(exchange)) {
-//            log.warn("Duplicate request detected | TraceID: {} | Path: {}",
-//                    generateTraceId(), exchange.getRequest().getPath().value());
-//            return exchange.getResponse().setComplete();
-//        }
         String traceId = generateTraceId();
         try {
             String authHeader = exchange.getRequest().getHeaders().getFirst(FilterConstant.AUTHORIZATION_HEADER);
@@ -47,6 +42,16 @@ public class JwtAuthenticationWebFilter implements WebFilter, Ordered {
                 // Use flatMap to handle the async username extraction reactively
                 return jwtTokenProducer.getUsernameFromToken(token).doOnNext(username -> log.debug("Successfully extracted username: {} | TraceID: {}", username, traceId)).flatMap(username -> {
                     try {
+                        // Banking security: Validate token type is 'access' (not 'refresh')
+                        var claims = jwtTokenProducer.extractClaims(token);
+                        String tokenType = claims.get(FilterConstant.TOKEN_TYPE_CLAIM, String.class);
+                        
+                        if (!FilterConstant.ACCESS_TOKEN_TYPE.equals(tokenType)) {
+                            log.warn("Invalid token type for authentication: {} | Expected: access | TraceID: {} | Path: {}", 
+                                    tokenType, traceId, exchange.getRequest().getPath().value());
+                            return sendUnauthorized(exchange, "Invalid token type. Access token required.", traceId);
+                        }
+                        
                         List<String> roles = extractRolesFromToken(token);
 
                         if (roles.isEmpty()) {

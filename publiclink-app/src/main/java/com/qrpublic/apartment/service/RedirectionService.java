@@ -1,18 +1,21 @@
 package com.qrpublic.apartment.service;
 
-import com.qrpublic.apartment.constant.LinkConstant;
+import com.qrpublic.apartment.adapter.authentication.response.TokenClaimsResponse;
 import com.qrpublic.apartment.core.service.CoreRequestService;
-import com.qrpublic.apartment.entity.Request;
 import com.qrpublic.apartment.entity.User;
+import com.qrpublic.apartment.integration.SecurityCheckClient;
 import com.qrpublic.apartment.service.generating.JwtService;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.util.Map;
-import java.util.Optional;
 
+@Slf4j
 @Service
 public class RedirectionService {
+
+    private static final String BEARER_PREFIX = "Bearer ";
 
     @Autowired
     private LinkService linkService;
@@ -24,37 +27,57 @@ public class RedirectionService {
     @Autowired
     UserService userService;
 
+    @Autowired
+    private SecurityCheckClient securityCheckClient;
+
     /**
      * Resolves the redirect destination for a secure link request.
      *
      * @return redirect path, or null if the request is invalid
      */
-    public String resolveDestination(String reqId, String token, Map<String, String> headers) {
-        if (!linkService.validateLink(token)) {
+    public String resolveDestination(String reqUuid, String token, Map<String, String> headers) {
+        // Step 1: Validate the link token
+        Boolean valid = securityCheckClient.checkToken(token).block();
+        if (valid == null || !valid) {
+            log.warn("Invalid link token for request: {}", reqUuid);
             return null;
         }
-        Optional<Request> requestOpt = coreRequestService.getRequestByUuid(reqId);
-        if (requestOpt.isEmpty()) {
+
+        // Step 2: Extract claims (username, name) from the link token
+        TokenClaimsResponse claims = securityCheckClient.extractTokenClaims(token).block();
+        if (claims == null || claims.getUsername() == null) {
+            log.warn("Failed to extract claims from token for request: {}", reqUuid);
             return null;
         }
-        // extract username from token by calling linkService.extractClaimByKey(token, "username")
-        // call UserService.findUserByUsername(username) to get user object
-        // if user is not found, return /api/v1/publish/register
-        // else, validate header headers.get("Authorization") beares token. => valid => "/api/v1/publish/saleUrl", invalid => /login
 
-        Request request = requestOpt.get();
-        Object usernameObj = linkService.extractClaimByKey(token, LinkConstant.PARAM_USERNAME);
-        final String username = (String) usernameObj;
+        String username = claims.getUsername();
+        String name = claims.getName();
 
+        // Step 3: Look up user by username
         User user = userService.findByUserName(username);
         if (user == null) {
+            // User not found -> redirect to register page with name
+            log.info("User not found: {}, redirecting to register", username);
+            if (name != null && !name.isBlank()) {
+                return "/api/v1/publish/register?name=" + name;
+            }
             return "/api/v1/publish/register";
         }
 
-        String authorization = headers.get("Authorization");
-        if (authorization != null && jwtService.isHeaderTokenValid(authorization)) {
-            return "/api/v1/publish/saleUrl";
+        // Step 4: User exists -> validate Authorization header
+        String authorization = headers != null ? headers.get(BEARER_PREFIX) : null;
+        if (authorization != null && authorization.startsWith(BEARER_PREFIX)) {
+            String authToken = authorization.substring(BEARER_PREFIX.length());
+            Boolean authValid = securityCheckClient.checkToken(authToken).block();
+            if (Boolean.TRUE.equals(authValid)) {
+                // Auth token is still valid -> redirect to saleUrl
+                log.info("User {} authenticated, redirecting to saleUrl", username);
+                return "/api/v1/publish/saleUrl?requestUuid=" + reqUuid;
+            }
         }
-        return "/api/v1/auth/basic";
+
+        // Step 5: Auth token invalid or missing -> redirect to login
+        log.info("User {} not authenticated, redirecting to login", username);
+        return "/login?username=" + username + "&requestUuid=" + reqUuid;
     }
 }

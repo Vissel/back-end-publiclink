@@ -60,8 +60,11 @@ public class SecurityConfig {
                 .cors(corsSpec -> corsSpec.configurationSource(corsConfigurationSource))
                 .authorizeExchange(exchanges -> exchanges
                         .pathMatchers(
-                                "/api/v1/auth/**", "/actuator/**", "/security/v1/public/**",
-                                "/api/v1/user/**", "/api/v1/publish/**")// temporary allow user creation without auth for testing
+                                "/api/v1/auth/**", // Includes /basic, /refresh, /logout, /public-key
+                                "/actuator/**", 
+                                "/security/v1/public/**",
+                                "/api/v1/user/**", 
+                                "/api/v1/publish/**")// temporary allow user creation without auth for testing
                         .permitAll()
                         .anyExchange().authenticated()
                 )

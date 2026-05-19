@@ -1,11 +1,15 @@
 package com.qrpublic.apartment.controller;
 
+import com.qrpublic.apartment.core.model.EnvStateEnum;
 import com.qrpublic.apartment.entity.SaleEnvironment;
+import com.qrpublic.apartment.exception.ResourceNotFoundException;
 import com.qrpublic.apartment.requestmodel.OrderDTO;
+import com.qrpublic.apartment.requestmodel.SaleEnvDTO;
 import com.qrpublic.apartment.saleenv.SaleEnvironmentService;
 import com.qrpublic.apartment.saleenv.SaleSpaceService;
 import com.qrpublic.apartment.saleenv.request.GetSaleSpaceRequest;
 import com.qrpublic.apartment.saleenv.response.GetSaleSpaceResponse;
+import com.qrpublic.apartment.saleenv.response.SaleUrlResponse;
 import com.qrpublic.apartment.service.LinkService;
 import com.qrpublic.apartment.service.OrderService;
 import com.qrpublic.apartment.service.RedirectionService;
@@ -76,6 +80,22 @@ public class PageController {
                     response.getHeaders().setLocation(URI.create(destination));
                     return response.setComplete();
                 });
+    }
+
+    @GetMapping("/getSaleUrl")
+    public Mono<ResponseEntity<SaleUrlResponse>> getSaleUrl(@RequestParam String requestUuid) {
+        return Mono.fromCallable(() -> {
+                    SaleEnvDTO dto = envService.getSaleEnvironmentByRequestUuid(requestUuid);
+                    return SaleUrlResponse.builder()
+                            .sellerName(dto.getSellerName())
+                            .publicLink(dto.getPublicLink())
+                            .envState(dto.isEnvStatus() ? EnvStateEnum.ACTIVE.name() : EnvStateEnum.INACTIVE.name())
+                            .build();
+                })
+                .subscribeOn(Schedulers.boundedElastic())
+                .map(ResponseEntity::ok)
+                .onErrorResume(ResourceNotFoundException.class, e ->
+                        Mono.just(ResponseEntity.notFound().build()));
     }
 
     @PostMapping("/publink")

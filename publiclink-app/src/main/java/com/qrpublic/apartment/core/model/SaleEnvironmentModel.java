@@ -2,6 +2,7 @@ package com.qrpublic.apartment.core.model;
 
 import lombok.Data;
 
+import java.math.BigDecimal;
 import java.util.Date;
 import java.util.List;
 
@@ -23,4 +24,6 @@ public class SaleEnvironmentModel {
 
     private EnvStateEnum envState;
 
+    private BigDecimal totalPrice;
+    private String currency;
 }

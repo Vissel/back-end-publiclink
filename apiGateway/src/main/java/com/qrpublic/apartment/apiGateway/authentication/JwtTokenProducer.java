@@ -70,8 +70,8 @@ public class JwtTokenProducer {
      * @param validTime
      * @return
      */
-    public String generateTokenByValidTime(String username, String role, long validTime) {
-        return Jwts.builder().setSubject(username).claim("role", role).setIssuedAt(new Date())
+    public String generateTokenByValidTime(String username, String role, long validTime, String name) {
+        return Jwts.builder().setSubject(username).claim("role", role).claim("name", name).setIssuedAt(new Date())
                 .setExpiration(new Date(System.currentTimeMillis() + validTime))
                 .signWith(Keys.hmacShaKeyFor(Base64.getDecoder().decode(secretKey.getBytes())),
                         SignatureAlgorithm.HS256)
@@ -133,7 +133,7 @@ public class JwtTokenProducer {
     }
 
     /**
-     * Validate token by checking type and expiration
+     * Validate token by checking expiration
      *
      * @param token
      * @return
@@ -142,12 +142,74 @@ public class JwtTokenProducer {
         return Mono.fromCallable(() -> {
             try {
                 Claims claims = extractAllClaims(token);
-                boolean isAccessToken = FilterConstant.ACCESS_TOKEN_TYPE.equals(claims.get(FilterConstant.TOKEN_TYPE_CLAIM));
-                boolean isExpired = claims.getExpiration().before(new Date());
-                return isAccessToken && !isExpired;
+                return !claims.getExpiration().before(new Date());
             } catch (Exception e) {
                 log.error("Token validation failed: {}", e.getMessage());
                 return false;
+            }
+        });
+    }
+
+    /**
+     * Validate refresh token with type checking
+     * Banking security: Ensure token type is 'refresh' before allowing rotation
+     *
+     * @param token The refresh token to validate
+     * @return Mono<Boolean> true if valid refresh token
+     */
+    public Mono<Boolean> validateRefreshToken(String token) {
+        return Mono.fromCallable(() -> {
+            try {
+                Claims claims = extractAllClaims(token);
+                
+                // Check expiration
+                if (claims.getExpiration().before(new Date())) {
+                    log.warn("Refresh token expired");
+                    return false;
+                }
+                
+                // Check token type
+                String tokenType = claims.get(FilterConstant.TOKEN_TYPE_CLAIM, String.class);
+                if (!FilterConstant.REFRESH_TOKEN_TYPE.equals(tokenType)) {
+                    log.warn("Invalid token type for refresh: {}", tokenType);
+                    return false;
+                }
+                
+                return true;
+            } catch (Exception e) {
+                log.error("Refresh token validation failed: {}", e.getMessage());
+                return false;
+            }
+        });
+    }
+
+    /**
+     * Extract username from refresh token with validation
+     *
+     * @param token The refresh token
+     * @return Mono<String> username or error
+     */
+    public Mono<String> extractUsernameFromRefreshToken(String token) {
+        return Mono.fromCallable(() -> {
+            try {
+                Claims claims = extractAllClaims(token);
+                
+                // Validate token type
+                String tokenType = claims.get(FilterConstant.TOKEN_TYPE_CLAIM, String.class);
+                if (!FilterConstant.REFRESH_TOKEN_TYPE.equals(tokenType)) {
+                    throw new JwtException("Invalid token type: expected refresh token");
+                }
+                
+                String username = claims.getSubject();
+                if (username == null || username.isBlank()) {
+                    throw new JwtException("Username claim not found in refresh token");
+                }
+                
+                return username;
+            } catch (JwtException e) {
+                throw e;
+            } catch (Exception e) {
+                throw new JwtException("Failed to extract username from refresh token: " + e.getMessage(), e);
             }
         });
     }

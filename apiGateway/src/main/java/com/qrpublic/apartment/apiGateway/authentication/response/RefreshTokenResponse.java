@@ -8,14 +8,11 @@ import java.util.List;
 
 @Data
 @Builder
-public class BasicLoginResponse {
-    private Boolean authenticated = Boolean.FALSE;
-    private String message;
-    private String username;
-    private String token;
-    private Date validUntil;
+public class RefreshTokenResponse {
+    private String accessToken;
     private String refreshToken;
-    private String reqUuid;
-
+    private String username;
     private List<String> roles;
+    private Date expiresAt;
+    private String message;
 }

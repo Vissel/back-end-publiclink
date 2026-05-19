@@ -9,4 +9,6 @@ public class AuthenticatedTokenRequest {
     private long validTime;
 
     private String role;
+
+    private String name;
 }

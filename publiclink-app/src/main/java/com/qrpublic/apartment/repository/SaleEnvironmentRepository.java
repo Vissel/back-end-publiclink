@@ -40,6 +40,9 @@ public interface SaleEnvironmentRepository extends JpaRepository<SaleEnvironment
     @Query("SELECT se FROM SaleEnvironment se JOIN FETCH se.request r LEFT JOIN FETCH r.products WHERE se.envId = :envId")
     Optional<SaleEnvironment> findWithProductsById(@Param("envId") String envId);
 
+    @Query("SELECT se FROM SaleEnvironment se LEFT JOIN FETCH se.request r LEFT JOIN FETCH r.products WHERE r.reqUUID = :reqUuid")
+    Optional<SaleEnvironment> findByRequestReqUuid(@Param("reqUuid") String reqUuid);
+
     @Query("SELECT se FROM SaleEnvironment se " +
             "LEFT JOIN se.request r " +
             "LEFT JOIN r.createdBy cb " +

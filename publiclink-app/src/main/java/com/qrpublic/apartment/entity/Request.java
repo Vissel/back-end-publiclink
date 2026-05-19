@@ -31,8 +31,11 @@ public class Request {
 
     private boolean authenticated;
 
-    @OneToMany(mappedBy = "request", cascade = {CascadeType.PERSIST, CascadeType.MERGE, CascadeType.REMOVE})
+    @OneToMany(mappedBy = "request", cascade = { CascadeType.PERSIST, CascadeType.MERGE, CascadeType.REMOVE })
     private List<Product> products;
+
+    @OneToMany(mappedBy = "request", cascade = { CascadeType.PERSIST, CascadeType.MERGE })
+    private List<Pricing> pricings;
 
     @Column(name = "req_uuid", unique = true, nullable = false)
     private String reqUUID;

@@ -11,4 +11,6 @@ public class UserAuthenTokenRequest {
     private long validTime;
 
     private String role;
+
+    private String name;
 }

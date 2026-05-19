@@ -14,18 +14,27 @@ public interface SaleEnvironmentService {
     public SaleEnvironment createSaleEnvironment(Request request);
 
     /**
-     * Create a sale environment for a given request and return the public link and other details.
+     * Create a sale environment for a given request and return the public link and
+     * other details.
      *
      * @param request
      * @return
      */
     SaleEnvDTO createSaleEnvironment(CreateEnvironmentRequest request);
 
-    Mono<Result<ListEnvironmentResponse>> getEnvironments(Pagination<ListEnvironmentRequest> listEnvironmentRequestPagination);
+    Mono<Result<ListEnvironmentResponse>> getEnvironments(
+            Pagination<ListEnvironmentRequest> listEnvironmentRequestPagination);
 
     public SaleEnvironment getEnvironmentByPublicLink(String publicLink);
 
     public String getPublicLinkBy(Request request);
 
+    SaleEnvDTO getSaleEnvironmentByRequestUuid(String requestUuid);
+
+    /**
+     * Get detailed environment info including pricing records for a given request
+     * UUID.
+     */
+    Mono<SaleEnvDTO> getEnvironmentDetailByRequestUuid(String requestUuid);
 
 }

@@ -10,4 +10,5 @@ public class BasicLoginRequest {
     @NotBlank
     private String encryptedPassword;
     private long validDuring;
+    private String reqUuid;
 }

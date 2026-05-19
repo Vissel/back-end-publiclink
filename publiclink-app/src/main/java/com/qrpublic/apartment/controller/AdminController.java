@@ -3,6 +3,7 @@ package com.qrpublic.apartment.controller;
 import com.qrpublic.apartment.model.SellerDTO;
 import com.qrpublic.apartment.requestmodel.Pagination;
 import com.qrpublic.apartment.requestmodel.RequestDTO;
+import com.qrpublic.apartment.requestmodel.SaleEnvDTO;
 import com.qrpublic.apartment.saleenv.SaleEnvironmentService;
 import com.qrpublic.apartment.saleenv.request.ListEnvironmentRequest;
 import com.qrpublic.apartment.saleenv.response.ListEnvironmentResponse;
@@ -13,10 +14,7 @@ import com.qrpublic.apartment.user.response.ListUserResponse;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Mono;
 
 @RestController
@@ -32,23 +30,26 @@ public class AdminController {
     AdminService adminService;
 
     /**
-     * Display environment list for administrator to manage, including the link generation
+     * Display environment list for administrator to manage, including the link
+     * generation
      * TODO
      *
      * @return
      */
     @PostMapping("/getEnvironments")
-    public Mono<ResponseEntity<ListEnvironmentResponse>> getEnvironments(@RequestBody Pagination<ListEnvironmentRequest> request) {
+    public Mono<ResponseEntity<ListEnvironmentResponse>> getEnvironments(
+            @RequestBody Pagination<ListEnvironmentRequest> request) {
         return adminService.getSaleEnvironment(request)
                 .map(ResponseEntity::ok)
                 .defaultIfEmpty(ResponseEntity.status(HttpStatus.NO_CONTENT).build());
     }
 
     /**
-     * Administrator create request, product and response access generation page Not used
+     * Administrator create request, product and response access generation page Not
+     * used
      */
     @PostMapping("/generationPage")
-//    @PreAuthorize(value = "hasRole('Admin')")
+    // @PreAuthorize(value = "hasRole('Admin')")
     public ResponseEntity<RequestDTO> getGenerationPage(@RequestBody SellerDTO sellerDTO) {
         // create request
         RequestDTO requestDTO = requestService.createTempRequestDTO(sellerDTO);
@@ -62,5 +63,16 @@ public class AdminController {
         return adminService.listInnerUsers(request)
                 .map(ResponseEntity::ok)
                 .defaultIfEmpty(ResponseEntity.status(HttpStatus.NO_CONTENT).build());
+    }
+
+    /**
+     * Get detailed environment info including pricing records for a given request
+     * UUID.
+     */
+    @GetMapping("/getEnvironmentDetail")
+    public Mono<ResponseEntity<SaleEnvDTO>> getEnvironmentDetail(@RequestParam String requestUuid) {
+        return envService.getEnvironmentDetailByRequestUuid(requestUuid)
+                .map(ResponseEntity::ok)
+                .defaultIfEmpty(ResponseEntity.notFound().build());
     }
 }

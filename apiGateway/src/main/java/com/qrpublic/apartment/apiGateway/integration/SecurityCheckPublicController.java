@@ -1,5 +1,6 @@
 package com.qrpublic.apartment.apiGateway.integration;
 
+import com.qrpublic.apartment.adapter.authentication.response.TokenClaimsResponse;
 import com.qrpublic.apartment.adapter.user.request.UserAuthenTokenRequest;
 import com.qrpublic.apartment.adapter.user.response.UserAuthTokenResponse;
 import com.qrpublic.apartment.apiGateway.authentication.request.AuthenticatedTokenRequest;
@@ -25,6 +26,11 @@ public class SecurityCheckPublicController {
                 .map(valid -> ResponseEntity.ok(valid));
     }
 
+    @PostMapping("/extract-token-claims")
+    public Mono<TokenClaimsResponse> extractTokenClaims(@RequestBody String token) {
+        return securityCheckService.extractTokenClaims(token);
+    }
+
     @PostMapping("/generateAuthenToken")
     public Mono<UserAuthTokenResponse> generateAuthenToken(@RequestBody UserAuthenTokenRequest userAuthenTokenRequest) {
         AuthenticatedTokenRequest request = convertToAuthenticatedLinkRequest(userAuthenTokenRequest);
@@ -48,6 +54,7 @@ public class SecurityCheckPublicController {
         request.setUsername(userAuthenTokenRequest.getUsername());
         request.setValidTime(userAuthenTokenRequest.getValidTime());
         request.setRole(userAuthenTokenRequest.getRole());
+        request.setName(userAuthenTokenRequest.getName());
         return request;
     }
 

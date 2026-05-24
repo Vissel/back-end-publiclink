@@ -18,5 +18,5 @@ public interface UserService {
      * @param userName
      * @return
      */
-    User findByUserName(String userName);
+    boolean checkAuthentedUserExist(String userName);
 }

@@ -4,7 +4,6 @@ import com.qrpublic.apartment.adapter.authentication.request.FindUserRequest;
 import com.qrpublic.apartment.adapter.user.request.ProfileLink;
 import com.qrpublic.apartment.adapter.user.request.UserRegisterRequest;
 import com.qrpublic.apartment.adapter.user.request.UserRemoveRequest;
-import com.qrpublic.apartment.adapter.user.response.UserRegisterResponse;
 import com.qrpublic.apartment.core.model.UserModel;
 import com.qrpublic.apartment.core.service.CoreUserService;
 import com.qrpublic.apartment.entity.User;
@@ -120,12 +119,48 @@ public class PubUserServiceImpl implements PubUserService {
         final String requestUuid = request.getReqUuid();
         Assert.isTrue(StringUtils.isNotBlank(requestUuid), String.format("Request uuid is required. Request uuid: %s", requestUuid));
         return operatedUserClient.findUserByUsername(new FindUserRequest(sellerDTO.getUsername()))
+
                 .flatMap(findUserResponse -> {
-                    // user exists in user-service → reject
-                    SellerRegisterResponse conflict = new SellerRegisterResponse();
-                    conflict.setMessage("User already exists");
-                    conflict.setReqUuid(requestUuid);
-                    return Mono.just(ResponseEntity.status(HttpStatus.CONFLICT).<SellerRegisterResponse>body(conflict));
+                    if (findUserResponse.getEncodedPassword() != null) {
+                        // user exists in user-service → reject
+                        SellerRegisterResponse conflict = new SellerRegisterResponse();
+                        conflict.setMessage("User already exists");
+                        conflict.setReqUuid(requestUuid);
+                        return Mono.just(ResponseEntity.status(HttpStatus.CONFLICT).<SellerRegisterResponse>body(conflict));
+                    }
+
+                    // user exists in user-service → update user
+                    return operatedUserClient.updateUser(toUserRegisterRequestForUpdate(request))
+                            .flatMap(updateResult -> {
+                                if (!updateResult.isSuccess()) {
+                                    String errMsg = updateResult.getErrorMessage() != null ? updateResult.getErrorMessage() : "Failed to update user";
+                                    log.error("User service update failed for [{}]: {}", sellerDTO.getUsername(), errMsg);
+                                    SellerRegisterResponse response = new SellerRegisterResponse();
+                                    response.setReqUuid(requestUuid);
+                                    response.setMessage(errMsg);
+                                    return Mono.just(ResponseEntity.badRequest().<SellerRegisterResponse>body(response));
+                                }
+
+                                // Update successful → update authenticationMethod to BASIC in local DB
+                                return Mono.fromCallable(() -> {
+                                            User existingUser = coreUserService.findSeller(sellerDTO);
+                                            if (existingUser != null) {
+                                                coreUserService.updateUserWithAuthentication(
+                                                        existingUser);
+                                            }
+                                            return existingUser;
+                                        })
+                                        .subscribeOn(Schedulers.boundedElastic())
+                                        .map(updatedUser -> {
+                                            SellerRegisterResponse response = new SellerRegisterResponse();
+                                            response.setReqUuid(requestUuid);
+                                            response.setUsername(sellerDTO.getUsername());
+                                            response.setName(request.getName());
+                                            response.setProfileLink(request.getProfileLink());
+                                            response.setMessage("User updated successfully with BASIC authentication");
+                                            return ResponseEntity.<SellerRegisterResponse>ok(response);
+                                        });
+                            });
                 })
                 .switchIfEmpty(Mono.defer(() -> {
                     try {
@@ -236,6 +271,19 @@ public class PubUserServiceImpl implements PubUserService {
         req.setFullName(sellerDTO.getName());
         req.setRole(UserType.SELLER.name());
         req.setProfileLink(profileLink);
+        return req;
+    }
+
+    private UserRegisterRequest toUserRegisterRequestForUpdate(SellerRegisterRequest request) {
+        ProfileLink profileLink = new ProfileLink();
+        profileLink.setLink(request.getProfileLink());
+        UserRegisterRequest req = new UserRegisterRequest();
+        req.setUserName(request.getUsername());
+        req.setFullName(request.getName());
+        req.setRole(UserType.SELLER.name());
+        req.setProfileLink(profileLink);
+        req.setEncryptedPassword(request.getPassword());
+        // Note: Password is not set here as it will be handled separately
         return req;
     }
 }

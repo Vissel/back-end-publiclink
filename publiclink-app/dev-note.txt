@@ -19,3 +19,15 @@ WHERE
     TABLE_SCHEMA = 'publiclink-db' 
     AND TABLE_NAME = 'request' 
     AND REFERENCED_COLUMN_NAME IS NOT NULL;
+
+
+
+Caused by: org.hibernate.exception.SQLGrammarException: Unable to open JDBC Connection for DDL execution [User 'newuser03' has exceeded the 'max_connections_per_hour' resource (current value: 50)] [n/a]
+	at org.hibernate.exception.internal.SQLExceptionTypeDelegate.convert(SQLExceptionTypeDelegate.java:66) ~[hibernate-core-6.6.15.Final.jar:6.6.15.Final]
+	at org.hibernate.exception.internal.StandardSQLExceptionConverter.convert(StandardSQLExceptionConverter.java:58) ~[hibernate-core-6.6.15.Final.jar:6.6.15.Final]
+	at org.hibernate.engine.jdbc.spi.SqlExceptionHelper.convert(SqlExceptionHelper.java:108) ~[hibernate-core-6.6.15.Final.jar:6.6.15.Final]
+	at org.hibernate.engine.jdbc.spi.SqlExceptionHelper.convert(SqlExceptionHelper.java:94) ~[hibernate-core-6.6.15.Final.jar:6.6.15.Final]
+	at org.hibernate.resource.transaction.backend.jdbc.internal.DdlTransactionIsolatorNonJtaImpl.getIsolatedConnection(DdlTransactionIsolatorNonJtaImpl.java:74) ~[hibernate-core-6.6.15.Final.jar:6.6.15.Final]
+	at org.hibernate.resource.transaction.backend.jdbc.internal.DdlTransactionIsolatorNonJtaImpl.getIsolatedConnection(DdlTransactionIsolatorNonJtaImpl.java:39) ~[hibernate-core-6.6.15.Final.jar:6.6.15.Final]
+	at org.hibernate.tool.schema.internal.exec.ImprovedExtractionContextImpl.getJdbcConnection(ImprovedExtractionContextImpl.java:63) ~[hibernate-core-6.6.15.Final.jar:6.6.15.Final]
+	at org.hibernate.tool.schema.internal.exec.ImprovedExtractionContextImpl.getJdbcDatabaseMetaData(ImprovedExtractionContextImpl.java:70) ~[hibernate-core-6.6.15.Final.jar:6.6.15.Final]

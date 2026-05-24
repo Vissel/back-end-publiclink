@@ -13,13 +13,17 @@ import com.qrpublic.apartment.user.service.UserService;
 import com.qrpublic.apartment.user.service.request.CreateUserAuthRequest;
 import com.qrpublic.apartment.user.service.request.UserCreateRequest;
 import com.qrpublic.apartment.user.service.request.UserDeleteRequest;
+import com.qrpublic.apartment.user.service.request.UserUpdateRequest;
 import com.qrpublic.apartment.user.service.response.FoundUserResponse;
 import com.qrpublic.apartment.user.service.response.UserCreateResponse;
 import com.qrpublic.apartment.user.service.response.UserDeleteResponse;
+import com.qrpublic.apartment.user.service.response.UserUpdateResponse;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -84,6 +88,23 @@ public class UserController {
                 );
     }
 
+    @PutMapping("/{username}")
+    public Mono<Result<UserRegisterResponse>> updateUser(
+            @PathVariable String username,
+            @Valid @RequestBody UserRegisterRequest request) {
+        // Set username from path variable (immutable, cannot be updated via body)
+        request.setUserName(username);
+        return userService.updateUser(toUserUpdateRequest(request))
+                .map(result -> {
+                    if (result.isSuccess()) {
+                        UserRegisterResponse resp = toUserRegisterResponseFromUpdate(result.getData());
+                        resp.setMessage("User updated successfully");
+                        return Result.success(resp);
+                    }
+                    return Result.<UserRegisterResponse>error(result.getErrorCode(), result.getErrorMessage());
+                });
+    }
+
     private CreateUserAuthRequest convertToCreateUserAuthRequest(@Valid UserUserAuthRequest userUserAuthRequest) {
         CreateUserAuthRequest createUserAuthRequest = new CreateUserAuthRequest();
         createUserAuthRequest.setUserName(userUserAuthRequest.getUserName());
@@ -102,6 +123,16 @@ public class UserController {
         return r;
     }
 
+    private UserUpdateRequest toUserUpdateRequest(UserRegisterRequest request) {
+        UserUpdateRequest r = new UserUpdateRequest();
+        r.setUserName(request.getUserName());  // Username is required for identification but won't be updated
+        r.setEncryptedPassword(request.getEncryptedPassword());
+        r.setFullName(request.getFullName());
+        r.setLink(request.getProfileLink() != null ? request.getProfileLink().toString() : null);
+        r.setRole(request.getRole());
+        return r;
+    }
+
     private UserDeleteRequest toUserDeleteRequest(UserRemoveRequest request) {
         UserDeleteRequest r = new UserDeleteRequest();
         r.setUserId(request.getUserId());
@@ -109,6 +140,15 @@ public class UserController {
     }
 
     private UserRegisterResponse toUserRegisterResponse(UserCreateResponse data) {
+        UserRegisterResponse r = new UserRegisterResponse();
+        r.setUserName(data.getUserName());
+        r.setLink(data.getLink());
+        r.setRole(data.getRole());
+        r.setPassword(data.getPassword());
+        return r;
+    }
+
+    private UserRegisterResponse toUserRegisterResponseFromUpdate(UserUpdateResponse data) {
         UserRegisterResponse r = new UserRegisterResponse();
         r.setUserName(data.getUserName());
         r.setLink(data.getLink());

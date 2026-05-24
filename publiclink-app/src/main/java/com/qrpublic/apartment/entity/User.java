@@ -26,6 +26,8 @@ public class User {
     @Column(updatable = false, insertable = false)
     private Timestamp createdAt;
 
+    private String authenticationMethod;
+
     public User(String username, String pass, String name, String link, String type) {
         this.userName = username;
         this.tempPassword = pass;

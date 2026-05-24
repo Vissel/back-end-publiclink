@@ -28,12 +28,12 @@ public class SaleEnvConvertor {
         List<OrderDTO> orders = org.hibernate.Hibernate.isInitialized(env.getListOrder())
                 ? createListOrderDTO(env.getListOrder())
                 : List.of();
-
+        final String publicLink = LinkBuilder.buildPublicLink(env.getPublicLink());
         return SaleEnvDTO.builder()
                 .createdAt(Utils.formatTimeStamp(env.getCreatedAt()))
                 .sellerName(req != null ? req.getSellerName() : null)
                 .productName(productName)
-                .publicLink(env.getPublicLink())
+                .publicLink(publicLink)
                 .createdBy(req != null && req.getCreatedBy() != null ? req.getCreatedBy().getName() : null)
                 .envStatus(env.isState())
                 .orders(orders)
@@ -53,8 +53,8 @@ public class SaleEnvConvertor {
     public static SaleEnvDTO buildSaleEnvDTOFromModel(SaleEnvironmentModel model) {
         List<OrderDTO> orders = model.getOrders() == null ? List.of()
                 : model.getOrders().stream()
-                        .map(o -> new OrderDTO(0, null, o.getBuyerName(), null, false, false, null, 0, null, null))
-                        .toList();
+                  .map(o -> new OrderDTO(0, null, o.getBuyerName(), null, false, false, null, 0, null, null))
+                  .toList();
         final String authenToken = model.getSeller().getSellerLinkModel() != null
                 ? model.getSeller().getSellerLinkModel().getToken()
                 : CommonConstant.EMPTY;

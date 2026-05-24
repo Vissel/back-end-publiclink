@@ -2,7 +2,6 @@ package com.qrpublic.apartment.service;
 
 import com.qrpublic.apartment.adapter.authentication.response.TokenClaimsResponse;
 import com.qrpublic.apartment.core.service.CoreRequestService;
-import com.qrpublic.apartment.entity.User;
 import com.qrpublic.apartment.integration.SecurityCheckClient;
 import com.qrpublic.apartment.service.generating.JwtService;
 import lombok.extern.slf4j.Slf4j;
@@ -15,6 +14,7 @@ import java.util.Map;
 @Service
 public class RedirectionService {
 
+    private static final String AUTH_HEADER = "Authorization";
     private static final String BEARER_PREFIX = "Bearer ";
 
     @Autowired
@@ -54,30 +54,48 @@ public class RedirectionService {
         String name = claims.getName();
 
         // Step 3: Look up user by username
-        User user = userService.findByUserName(username);
-        if (user == null) {
-            // User not found -> redirect to register page with name
+        if (!userService.checkAuthentedUserExist(username)) {
+            // User not found -> redirect to register page with username, reqUuid and name
             log.info("User not found: {}, redirecting to register", username);
+            StringBuilder registerUrl = new StringBuilder("/api/v1/publish/register");
+            registerUrl.append("?username=").append(username);
+            registerUrl.append("&reqUuid=").append(reqUuid);
             if (name != null && !name.isBlank()) {
-                return "/api/v1/publish/register?name=" + name;
+                registerUrl.append("&name=").append(name);
             }
-            return "/api/v1/publish/register";
+            return registerUrl.toString();
         }
 
         // Step 4: User exists -> validate Authorization header
-        String authorization = headers != null ? headers.get(BEARER_PREFIX) : null;
-        if (authorization != null && authorization.startsWith(BEARER_PREFIX)) {
-            String authToken = authorization.substring(BEARER_PREFIX.length());
-            Boolean authValid = securityCheckClient.checkToken(authToken).block();
-            if (Boolean.TRUE.equals(authValid)) {
-                // Auth token is still valid -> redirect to saleUrl
-                log.info("User {} authenticated, redirecting to saleUrl", username);
-                return "/api/v1/publish/saleUrl?requestUuid=" + reqUuid;
-            }
+        if (checkValidToken(username, headers)) {
+            log.info("User {} authenticated, redirecting to saleUrl", username);
+            return "/api/v1/publish/saleUrl?requestUuid=" + reqUuid;
         }
 
         // Step 5: Auth token invalid or missing -> redirect to login
         log.info("User {} not authenticated, redirecting to login", username);
         return "/login?username=" + username + "&requestUuid=" + reqUuid;
+    }
+
+    public boolean checkValidToken(String username, Map<String, String> headers) {
+        String authorization = headers != null ? headers.get(AUTH_HEADER) : null;
+        if (authorization != null && authorization.startsWith(BEARER_PREFIX)) {
+            String authToken = authorization.substring(BEARER_PREFIX.length());
+            Boolean authValid = securityCheckClient.checkToken(authToken).block();
+            return authValid != null && authValid && validClaims(username, authToken);
+        }
+        return false;
+    }
+
+    private boolean validClaims(String username, String headerAuthToken) {
+
+        TokenClaimsResponse claims = securityCheckClient.extractTokenClaims(headerAuthToken).block();
+
+        if (claims == null || claims.getUsername() == null) {
+            log.warn("Failed to extract claims from header: {}", username);
+            return false;
+        }
+        String claimUsername = claims.getUsername();
+        return claimUsername != null && claimUsername.equals(username);
     }
 }

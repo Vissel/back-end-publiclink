@@ -13,7 +13,7 @@ public class LinkBuilder {
 
     public static String buildAuthenticationLink(String requestUuid, String validToken) {
         return UriComponentsBuilder.fromPath("/link")
-                .queryParam("reqId", requestUuid)
+                .queryParam("reqUuid", requestUuid)
                 .queryParam("token", validToken)
                 .build()
                 .toUriString();

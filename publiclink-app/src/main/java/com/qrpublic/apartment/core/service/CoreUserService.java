@@ -1,6 +1,7 @@
 package com.qrpublic.apartment.core.service;
 
 import com.qrpublic.apartment.core.coreException.EntityAssert;
+import com.qrpublic.apartment.core.model.AuthenticationEnum;
 import com.qrpublic.apartment.core.model.UserModel;
 import com.qrpublic.apartment.entity.User;
 import com.qrpublic.apartment.model.SellerDTO;
@@ -73,5 +74,62 @@ public class CoreUserService {
         User user = userRepo.getUserForUpdate(id);
         EntityAssert.notNull(user, "User is not found");
 
+    }
+
+    @Transactional
+    public UserModel checkUserExists(String username) {
+        return userRepo.findByUserName(username).map(user -> UserModel.builder()
+                .username(user.getUserName())
+                .link(user.getLink())
+                .name(user.getName())
+                .type(user.getType())
+                .authenticationEnum(AuthenticationEnum.fromString(user.getAuthenticationMethod()))
+                .build()).orElse(null);
+    }
+
+    @Transactional
+    public UserModel updateUserWithAuthentication(User existingUser) {
+        // Set authentication method to BASIC
+        existingUser.setAuthenticationMethod(AuthenticationEnum.BASIC.name());
+
+        userRepo.save(existingUser);
+
+        return UserModel.builder()
+                .username(existingUser.getUserName())
+                .link(existingUser.getLink())
+                .name(existingUser.getName())
+                .type(existingUser.getType())
+                .authenticationEnum(AuthenticationEnum.BASIC)
+                .build();
+    }
+
+    @Transactional
+    public UserModel findAndUpdateUserWithAuthentication(String username, String password, String email, String name, String profileLink) {
+        // Find user by username
+        User existingUser = userRepo.findByUserName(username)
+                .orElseThrow(() -> new IllegalArgumentException("User not found: " + username));
+
+        // Update user fields if provided
+        if (password != null && !password.trim().isEmpty()) {
+            existingUser.setTempPassword(password);
+        }
+        if (name != null && !name.trim().isEmpty()) {
+            existingUser.setName(name);
+        }
+        if (profileLink != null && !profileLink.trim().isEmpty()) {
+            existingUser.setLink(profileLink);
+        }
+        // Set authentication method to BASIC
+        existingUser.setAuthenticationMethod(AuthenticationEnum.BASIC.name());
+
+        userRepo.save(existingUser);
+
+        return UserModel.builder()
+                .username(existingUser.getUserName())
+                .link(existingUser.getLink())
+                .name(existingUser.getName())
+                .type(existingUser.getType())
+                .authenticationEnum(AuthenticationEnum.BASIC)
+                .build();
     }
 }

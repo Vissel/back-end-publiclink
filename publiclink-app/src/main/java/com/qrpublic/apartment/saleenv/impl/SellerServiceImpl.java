@@ -13,6 +13,9 @@ import com.qrpublic.apartment.saleenv.response.ListSellerRequestResponse;
 import com.qrpublic.apartment.template.model.Result;
 import com.qrpublic.apartment.template.service.ProcessCallback;
 import com.qrpublic.apartment.template.service.PublicLinkServiceTemplate;
+import com.qrpublic.apartment.user.PubUserService;
+import com.qrpublic.apartment.user.request.GetSellerRequest;
+import com.qrpublic.apartment.user.response.GetUserResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
@@ -31,7 +34,7 @@ import java.util.TimeZone;
 
 @Slf4j
 @Service
-@PreAuthorize("hasRole('Seller')")
+@PreAuthorize("hasRole('SELLER')")
 public class SellerServiceImpl implements SellerService {
 
     @Autowired
@@ -39,6 +42,9 @@ public class SellerServiceImpl implements SellerService {
 
     @Autowired
     private PublicLinkServiceTemplate publicLinkServiceTemplate;
+
+    @Autowired
+    private PubUserService pubUserService;
 
     @Override
     public Result<ListSellerRequestResponse> listRequestEnvironment(Pagination<ListSellerRequestsRequest> listRequestEnvironmentRequest) {
@@ -63,7 +69,7 @@ public class SellerServiceImpl implements SellerService {
                                                           String sellerName = filter.getSellerName();
 
                                                           Pageable pageable = PageRequest.of(
-                                                                  getRequest().getPage(),
+                                                                  Math.max(0, getRequest().getPage() - 1),
                                                                   getRequest().getSize(),
                                                                   Sort.by(Sort.Order.desc("createdAt"))
                                                           );
@@ -83,6 +89,11 @@ public class SellerServiceImpl implements SellerService {
                                                       }
                                                   }
                 );
+    }
+
+    @Override
+    public Result<GetUserResponse> getUserInfo(GetSellerRequest getSellerRequest) {
+        return pubUserService.getUserInfo(getSellerRequest);
     }
 
     private static List<OrderDTO> buildOrderDTOs(List<com.qrpublic.apartment.entity.Order> listOrder) {

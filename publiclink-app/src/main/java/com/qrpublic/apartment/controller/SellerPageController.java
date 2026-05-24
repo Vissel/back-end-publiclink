@@ -5,7 +5,6 @@ import com.qrpublic.apartment.saleenv.SellerService;
 import com.qrpublic.apartment.saleenv.request.ListSellerRequestsRequest;
 import com.qrpublic.apartment.saleenv.response.ListSellerRequestResponse;
 import com.qrpublic.apartment.template.ResponseEntityConvertor;
-import com.qrpublic.apartment.user.PubUserService;
 import com.qrpublic.apartment.user.request.GetSellerRequest;
 import com.qrpublic.apartment.user.response.GetUserResponse;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -19,16 +18,13 @@ import reactor.core.publisher.Mono;
 @RestController
 @RequestMapping("/api/v1/seller")
 public class SellerPageController {
-    @Autowired
-    PubUserService pubUserService;
 
     @Autowired
     SellerService sellerService;
 
-
     @PostMapping("/getInfo")
     public Mono<ResponseEntity<GetUserResponse>> getInfo(@RequestBody GetSellerRequest getSellerRequest) {
-        return ResponseEntityConvertor.convertToMonoResponseEntity(pubUserService.getUserInfo(getSellerRequest));
+        return ResponseEntityConvertor.convertToMonoResponseEntity(sellerService.getUserInfo(getSellerRequest));
     }
 
     @PostMapping("/listRequest")

@@ -15,10 +15,12 @@ import com.qrpublic.apartment.user.repository.UserEntityRepository;
 import com.qrpublic.apartment.user.service.request.CreateUserAuthRequest;
 import com.qrpublic.apartment.user.service.request.UserCreateRequest;
 import com.qrpublic.apartment.user.service.request.UserDeleteRequest;
+import com.qrpublic.apartment.user.service.request.UserUpdateRequest;
 import com.qrpublic.apartment.user.service.response.CreateUserAuthResponse;
 import com.qrpublic.apartment.user.service.response.FoundUserResponse;
 import com.qrpublic.apartment.user.service.response.UserCreateResponse;
 import com.qrpublic.apartment.user.service.response.UserDeleteResponse;
+import com.qrpublic.apartment.user.service.response.UserUpdateResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -30,10 +32,12 @@ import org.springframework.transaction.support.TransactionTemplate;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.function.Consumer;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static com.qrpublic.apartment.adapter.template.Result.success;
@@ -83,6 +87,15 @@ public class UserServiceImpl implements UserService {
         return Mono.fromCallable(() ->
                         transactionTemplate.execute(status ->
                                 doCreateUser(userCreateRequest))
+                )
+                .subscribeOn(Schedulers.boundedElastic());
+    }
+
+    @Override
+    public Mono<Result<UserUpdateResponse>> updateUser(UserUpdateRequest userUpdateRequest) {
+        return Mono.fromCallable(() ->
+                        transactionTemplate.execute(status ->
+                                doUpdateUser(userUpdateRequest))
                 )
                 .subscribeOn(Schedulers.boundedElastic());
     }
@@ -139,6 +152,44 @@ public class UserServiceImpl implements UserService {
                 .map(existing -> setNewValueForExistUser(existing, user))
                 .orElseGet(() -> createNewUser(user));
         return success(buildUserCreateResponse(user));
+    }
+
+    protected Result<UserUpdateResponse> doUpdateUser(UserUpdateRequest request) {
+        if (request == null || StringUtils.isBlank(request.getUserName())) {
+            return Result.error(400, "Username is required for update");
+        }
+        
+        return userEntityRepository.findByUsername(request.getUserName())
+                .map(existingUser -> {
+                    // Update fields except username (username is not allowed to be updated)
+                    Stream.of(
+                            updatePassword(existingUser, rsaClient.decrypt(request.getEncryptedPassword())),
+                            updateFullName(existingUser, request.getFullName()),
+                            updateRole(existingUser, request.getRole()),
+                            updateIsActive(existingUser, true),
+                            updateProfileLinks(existingUser, request.getLink() != null ? List.of(request.getLink()) : null)
+                    ).filter(Objects::nonNull).forEach(updater -> updater.accept(existingUser));
+                    
+                    userEntityRepository.save(existingUser);
+                    
+                    // Build response
+                    UserUpdateResponse response = new UserUpdateResponse();
+                    response.setUserName(existingUser.getUsername());
+                    if (StringUtils.isNotBlank(request.getEncryptedPassword())) {
+                        String decryptedPassword = rsaClient.decrypt(request.getEncryptedPassword());
+                        response.setPassword(PasswordMasker.maskPassword(decryptedPassword));
+                    }
+                    response.setFullName(existingUser.getFullName());
+                    response.setRole(existingUser.getRole());
+                    if (existingUser.getProfiles() != null && !existingUser.getProfiles().isEmpty()) {
+                        response.setLink(existingUser.getProfiles().get(0).getProfileLink());
+                    }
+                    response.setMessage("User updated successfully");
+                    response.setSuccess(true);
+                    
+                    return success(response);
+                })
+                .orElse(Result.error(404, "User not found: " + request.getUserName()));
     }
 
     protected Result<UserDeleteResponse> doDeleteUser(UserDeleteRequest request) {
@@ -259,14 +310,32 @@ public class UserServiceImpl implements UserService {
 
     private Consumer<UserEntity> updateProfileLinks(UserEntity u, List<String> links) {
         if (links != null && !links.isEmpty()) {
+            // Check if profiles already exist with the same links (idempotency check)
+            List<String> existingLinks = u.getProfiles() != null 
+                    ? u.getProfiles().stream().map(ProfileEntity::getProfileLink).toList()
+                    : List.of();
+            
+            // Only update if links are different
+            if (existingLinks.equals(links)) {
+                return null; // No change needed
+            }
+            
+            // Clear existing profiles and add new ones
+            if (u.getProfiles() != null) {
+                u.getProfiles().clear();
+            } else {
+                u.setProfiles(new ArrayList<>());
+            }
+            
             List<ProfileEntity> profiles = links.stream().map(link -> {
                 ProfileEntity p = new ProfileEntity();
                 p.setProfileLink(link);
                 p.setProfileType("default");
                 p.setUser(u);
                 return p;
-            }).toList();
-            u.setProfiles(profiles);
+            }).collect(Collectors.toCollection(ArrayList::new));
+            
+            u.getProfiles().addAll(profiles);
             return e -> {
             };
         }

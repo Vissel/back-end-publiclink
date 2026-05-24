@@ -68,4 +68,13 @@ public class OperatedUserClient {
                 });
     }
 
+    public Mono<Result<UserRegisterResponse>> updateUser(UserRegisterRequest request) {
+        return webClient.put()
+                .uri("/{username}", request.getUserName())
+                .bodyValue(request)
+                .retrieve()
+                .bodyToMono(new ParameterizedTypeReference<Result<UserRegisterResponse>>() {
+                });
+    }
+
 }

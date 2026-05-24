@@ -1,5 +1,6 @@
 package com.qrpublic.apartment.apiGateway.gatewayConfig;
 
+import com.qrpublic.apartment.apiGateway.constant.FilterConstant;
 import com.qrpublic.apartment.apiGateway.filter.JwtAuthenticationWebFilter;
 import com.qrpublic.apartment.apiGateway.filter.RateLimitingWebFilter;
 import com.qrpublic.apartment.apiGateway.service.ApiUserService;
@@ -20,8 +21,6 @@ import org.springframework.security.web.server.SecurityWebFilterChain;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.reactive.CorsConfigurationSource;
 import org.springframework.web.cors.reactive.UrlBasedCorsConfigurationSource;
-
-import com.qrpublic.apartment.apiGateway.constant.FilterConstant;
 
 import java.util.Arrays;
 import java.util.List;
@@ -61,10 +60,10 @@ public class SecurityConfig {
                 .authorizeExchange(exchanges -> exchanges
                         .pathMatchers(
                                 "/api/v1/auth/**", // Includes /basic, /refresh, /logout, /public-key
-                                "/actuator/**", 
+                                "/actuator/**",
                                 "/security/v1/public/**",
-                                "/api/v1/user/**", 
-                                "/api/v1/publish/**")// temporary allow user creation without auth for testing
+                                "/api/v1/user/**",
+                                "publiclink/api/v1/publish/**")// temporary allow user creation without auth for testing
                         .permitAll()
                         .anyExchange().authenticated()
                 )

@@ -1,5 +1,6 @@
 package com.qrpublic.apartment.saleenv.impl;
 
+import com.qrpublic.apartment.adapter.authentication.response.TokenClaimsResponse;
 import com.qrpublic.apartment.constant.CommonConstant;
 import com.qrpublic.apartment.constant.LinkConstant;
 import com.qrpublic.apartment.core.service.CoreRequestService;
@@ -24,9 +25,12 @@ import com.qrpublic.apartment.template.service.ProcessCallback;
 import com.qrpublic.apartment.template.service.PublicLinkServiceTemplate;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.util.Assert;
+import reactor.core.publisher.Mono;
 
 import java.text.SimpleDateFormat;
 import java.util.*;
+import java.util.TimeZone;
 import java.util.stream.Stream;
 
 @Service
@@ -87,24 +91,20 @@ public class SaleSpaceServiceImpl implements SaleSpaceService {
                                 .findFirst()
                                 .orElse(null);
 
-                // 3. Call check-token to validate token
-                Boolean tokenValid = Boolean.TRUE.equals(securityCheckClient.checkToken(token).block());
-
                 // 4. Get SaleEnvironment from Request, fetch list order and list product
                 SaleEnvironment saleEnvironment = requestOpt.flatMap(saleEnvironmentRepository::findByRequest)
                         .orElseThrow(() -> new EnvironmentCreationException("Environment not found:" + requestUUID));
 
                 String envId = saleEnvironment.getEnvId();
-                List<Order> orders = tokenValid
-                        ? saleEnvironmentRepository.findWithOrdersById(envId)
+                List<Order> orders = saleEnvironmentRepository.findWithOrdersById(envId)
                           .map(SaleEnvironment::getListOrder)
                           .orElse(Collections.emptyList())
-                        : Collections.emptyList();
+                      ;
                 List<Product> products = saleEnvironmentRepository.findWithProductsById(envId)
                         .map(se -> se.getRequest().getProducts())
                         .orElse(Collections.emptyList());
 
-                return buildGetSaleSpaceResponse(saleEnvironment, orders, products, sellerName, requestUUID, tokenValid);
+                return buildGetSaleSpaceResponse(saleEnvironment, orders, products, sellerName, requestUUID, true);
             }
         });
     }

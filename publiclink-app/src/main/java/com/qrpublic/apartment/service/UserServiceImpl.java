@@ -1,6 +1,8 @@
 package com.qrpublic.apartment.service;
 
 import com.qrpublic.apartment.constant.CommonConstant;
+import com.qrpublic.apartment.core.model.AuthenticationEnum;
+import com.qrpublic.apartment.core.model.UserModel;
 import com.qrpublic.apartment.core.service.CoreUserService;
 import com.qrpublic.apartment.entity.User;
 import com.qrpublic.apartment.model.SellerDTO;
@@ -82,8 +84,12 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
-    public User findByUserName(String userName) {
-        return userRepo.findByUserName(userName).orElse(null);
+    public boolean checkAuthentedUserExist(String userName) {
+        UserModel userModel = coreUserService.checkUserExists(userName);
+        if (userModel != null && !AuthenticationEnum.UNAUTHENTICATED.equals(userModel.getAuthenticationEnum())) {
+            return true;
+        }
+        return false;
     }
 
 }

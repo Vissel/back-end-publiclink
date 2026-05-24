@@ -33,4 +33,7 @@
     <changeSet id="012" author="thach">
         <sqlFile path="db/changelog/changeset-012-create-pricing.sql"/>
     </changeSet>
+    <changeSet id="014" author="thach">
+        <sqlFile path="db/changelog/changeset-014-update-user.sql"/>
+    </changeSet>
 </databaseChangeLog>

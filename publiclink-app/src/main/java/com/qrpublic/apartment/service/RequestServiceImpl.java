@@ -78,10 +78,10 @@ public class RequestServiceImpl implements RequestService {
             // save request, product, img to db
             Request request = new Request();
             request.setSellerName(seller.getUserName());
-            String adminUserName = null;
-            // UserUtils.getCurrentUser().getUsername();
-            User createdBy = userService.findByUserName(adminUserName);
-            request.setCreatedBy(createdBy);
+//            String adminUserName = null;
+//            // UserUtils.getCurrentUser().getUsername();
+//            User createdBy = userSice.checkUserExist(adminUserName);
+//            request.setCreatedBy(createdBy);erv
 
             // product infor
             if (sellerDTO.getProductName() != null && !sellerDTO.getProductName().isBlank()) {

@@ -9,6 +9,7 @@ import com.qrpublic.apartment.saleenv.SaleEnvironmentService;
 import com.qrpublic.apartment.saleenv.SaleSpaceService;
 import com.qrpublic.apartment.saleenv.request.GetSaleSpaceRequest;
 import com.qrpublic.apartment.saleenv.response.GetSaleSpaceResponse;
+import com.qrpublic.apartment.saleenv.response.LinkRedirectResponse;
 import com.qrpublic.apartment.saleenv.response.SaleUrlResponse;
 import com.qrpublic.apartment.service.LinkService;
 import com.qrpublic.apartment.service.OrderService;
@@ -19,15 +20,11 @@ import com.qrpublic.apartment.user.request.SellerRegisterRequest;
 import com.qrpublic.apartment.user.response.SellerRegisterResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.http.server.reactive.ServerHttpResponse;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
 
-import java.net.URI;
 import java.util.Map;
 
 @Slf4j
@@ -55,35 +52,38 @@ public class PageController {
     }
 
     /**
-     * Determine the direction of seller. Redirect to:
-     * - /api/v1/publish/saleUrl if the link is valid and not expired, username is existed in database and seller has valid JWT token.
-     * + If the seller has invalid JWT token (expired), redirect to /login.
-     * - /api/v1/publish/register, if the link is valid and not expired, username is not exist in database.
-     *
-     * @param token
-     * @param headers
-     * @return
+     * Determine the direction of seller. Returns JSON with destination path:
+     * - /api/v1/publish/saleUrl if the link is valid and not expired, username
+     * exists and seller has valid JWT token.
+     * - /login if the seller has invalid or missing JWT token.
+     * - /api/v1/publish/register if the link is valid and not expired, username
+     * does not exist.
+     * Returns INVALID status if the link token is invalid or expired.
      */
     @GetMapping("/link")
-    public Mono<Void> handleSecureLink(@RequestParam String reqUuid, @RequestParam String token,
-                                       @RequestHeader Map<String, String> headers,
-                                       ServerWebExchange exchange) {
+    public Mono<ResponseEntity<LinkRedirectResponse>> handleSecureLink(
+            @RequestParam String reqUuid, @RequestParam String token,
+            @RequestHeader Map<String, String> headers) {
         return Mono.fromCallable(() -> redirectionService.resolveDestination(reqUuid, token, headers))
                 .subscribeOn(Schedulers.boundedElastic())
-                .flatMap(destination -> {
-                    ServerHttpResponse response = exchange.getResponse();
+                .map(destination -> {
                     if (destination == null) {
-                        response.setStatusCode(HttpStatus.BAD_REQUEST);
-                        return response.setComplete();
+                        return ResponseEntity.badRequest().body(
+                                LinkRedirectResponse.builder()
+                                        .status("INVALID")
+                                        .destination(null)
+                                        .build());
                     }
-                    response.setStatusCode(HttpStatus.FOUND);
-                    response.getHeaders().setLocation(URI.create(destination));
-                    return response.setComplete();
+                    return ResponseEntity.ok(
+                            LinkRedirectResponse.builder()
+                                    .status("REDIRECT")
+                                    .destination(destination)
+                                    .build());
                 });
     }
 
     @GetMapping("/getSaleUrl")
-    public Mono<ResponseEntity<SaleUrlResponse>> getSaleUrl(@RequestParam String requestUuid) {
+    public Mono<SaleUrlResponse> getSaleUrl(@RequestParam String requestUuid) {
         return Mono.fromCallable(() -> {
                     SaleEnvDTO dto = envService.getSaleEnvironmentByRequestUuid(requestUuid);
                     return SaleUrlResponse.builder()
@@ -93,13 +93,14 @@ public class PageController {
                             .build();
                 })
                 .subscribeOn(Schedulers.boundedElastic())
-                .map(ResponseEntity::ok)
-                .onErrorResume(ResourceNotFoundException.class, e ->
-                        Mono.just(ResponseEntity.notFound().build()));
+                .onErrorResume(ResourceNotFoundException.class, e -> Mono.empty());
     }
 
     @PostMapping("/publink")
-    public Mono<ResponseEntity<GetSaleSpaceResponse>> accessPublicLink(@RequestBody GetSaleSpaceRequest getSaleSpaceRequest) {
+    public Mono<ResponseEntity<GetSaleSpaceResponse>> accessPublicLink(
+            @RequestParam String token,
+            @RequestBody GetSaleSpaceRequest getSaleSpaceRequest) {
+        getSaleSpaceRequest.setToken(token);
         return ResponseEntityConvertor.convertToMonoResponseEntity(saleSpaceService.getSaleSpace(getSaleSpaceRequest));
     }
 

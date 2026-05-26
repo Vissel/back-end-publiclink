@@ -7,7 +7,6 @@ import com.qrpublic.apartment.requestmodel.OrderDTO;
 import com.qrpublic.apartment.requestmodel.SaleEnvDTO;
 import com.qrpublic.apartment.saleenv.SaleEnvironmentService;
 import com.qrpublic.apartment.saleenv.SaleSpaceService;
-import com.qrpublic.apartment.saleenv.request.GetSaleSpaceRequest;
 import com.qrpublic.apartment.saleenv.response.GetSaleSpaceResponse;
 import com.qrpublic.apartment.saleenv.response.LinkRedirectResponse;
 import com.qrpublic.apartment.saleenv.response.SaleUrlResponse;
@@ -99,9 +98,9 @@ public class PageController {
     @PostMapping("/publink")
     public Mono<ResponseEntity<GetSaleSpaceResponse>> accessPublicLink(
             @RequestParam String token,
-            @RequestBody GetSaleSpaceRequest getSaleSpaceRequest) {
-        getSaleSpaceRequest.setToken(token);
-        return ResponseEntityConvertor.convertToMonoResponseEntity(saleSpaceService.getSaleSpace(getSaleSpaceRequest));
+            @RequestHeader Map<String, Object> headers
+    ) {
+        return ResponseEntityConvertor.convertToMonoResponseEntity(saleSpaceService.getSaleSpace(token, headers));
     }
 
     @PostMapping("/order")

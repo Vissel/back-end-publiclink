@@ -31,11 +31,12 @@ public class CoreUserService {
         // Find with username and link
         Optional<User> user = userRepo.findByNameAndLink(sellerDTO.getUsername(), sellerDTO.getLink());
         if (!user.isPresent()) {
-            // find with username
+            // TODO: will be refactor. find with username
             user = userRepo.findByUserName(sellerDTO.getUsername());
         }
         return user.orElse(null);
     }
+
 
     @Transactional
     public List<User> getAllUser() {
@@ -77,7 +78,7 @@ public class CoreUserService {
     }
 
     @Transactional
-    public UserModel checkUserExists(String username) {
+    public UserModel findByUsername(String username) {
         return userRepo.findByUserName(username).map(user -> UserModel.builder()
                 .username(user.getUserName())
                 .link(user.getLink())

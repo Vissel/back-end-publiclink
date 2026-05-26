@@ -1,7 +1,7 @@
 package com.qrpublic.apartment.saleenv.impl;
 
-import com.qrpublic.apartment.adapter.authentication.response.TokenClaimsResponse;
 import com.qrpublic.apartment.constant.CommonConstant;
+import com.qrpublic.apartment.constant.HeaderConstant;
 import com.qrpublic.apartment.constant.LinkConstant;
 import com.qrpublic.apartment.core.service.CoreRequestService;
 import com.qrpublic.apartment.core.service.CoreUserService;
@@ -17,20 +17,18 @@ import com.qrpublic.apartment.requestmodel.OrderDTO;
 import com.qrpublic.apartment.requestmodel.PictureDTO;
 import com.qrpublic.apartment.requestmodel.ProductDTO;
 import com.qrpublic.apartment.saleenv.SaleSpaceService;
-import com.qrpublic.apartment.saleenv.request.GetSaleSpaceRequest;
 import com.qrpublic.apartment.saleenv.response.GetSaleSpaceResponse;
 import com.qrpublic.apartment.service.LinkService;
 import com.qrpublic.apartment.template.model.Result;
 import com.qrpublic.apartment.template.service.ProcessCallback;
 import com.qrpublic.apartment.template.service.PublicLinkServiceTemplate;
+import io.jsonwebtoken.lang.Assert;
+import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
-import org.springframework.util.Assert;
-import reactor.core.publisher.Mono;
 
 import java.text.SimpleDateFormat;
 import java.util.*;
-import java.util.TimeZone;
 import java.util.stream.Stream;
 
 @Service
@@ -55,41 +53,32 @@ public class SaleSpaceServiceImpl implements SaleSpaceService {
     SecurityCheckClient securityCheckClient;
 
     @Override
-    public Result<GetSaleSpaceResponse> getSaleSpace(GetSaleSpaceRequest getSaleSpaceRequest) {
-        return publicLinkServiceTemplate.execute(new ProcessCallback<GetSaleSpaceRequest, GetSaleSpaceResponse>() {
+    public Result<GetSaleSpaceResponse> getSaleSpace(String token, Map<String, Object> headers) {
+        return publicLinkServiceTemplate.execute(new ProcessCallback<Void, GetSaleSpaceResponse>() {
 
             @Override
-            public GetSaleSpaceRequest getRequest() {
-                return getSaleSpaceRequest;
+            public Void getRequest() {
+                return null;
             }
 
             @Override
-            public void preProcess(GetSaleSpaceRequest request) {
-                if (!linkService.validateLink(request.getToken())) {
+            public void preProcess(Void request) {
+                if (!linkService.validateLink(token)) {
                     throw new IllegalArgumentException("Invalid or expired token.");
                 }
             }
 
             @Override
             public GetSaleSpaceResponse process() {
-                String token = getRequest().getToken();
-
+                final String loggedInUsername = (String) headers.get("X-User-ID");
                 // 1. Extract subject (requestUUID) from token, get Request
                 String requestUUID = (String) linkService.extractClaimByKey(token, LinkConstant.CLAIM_SUBJECT);
                 Optional<Request> requestOpt = coreRequestService.getRequestByUuid(requestUUID);
 
-                // 2. Extract username claim, find Seller (empty if not found)
-                String username = (String) linkService.extractClaimByKey(token, LinkConstant.PARAM_USERNAME);
-                String sellerName =
-                        Stream.of(username).filter(Objects::nonNull)
-                                .map(u -> {
-                                    SellerDTO sellerDTO = new SellerDTO();
-                                    sellerDTO.setUsername(u);
-                                    return coreUserService.findSeller(sellerDTO);
-                                })
-                                .map(com.qrpublic.apartment.entity.User::getName)
-                                .findFirst()
-                                .orElse(null);
+                // 2. Extract usernameOfEnv claim, find Seller (empty if not found)
+                String usernameOfEnv = (String) linkService.extractClaimByKey(token, LinkConstant.PARAM_USERNAME);
+                String sellerName = findUserByUsername(usernameOfEnv);
+                boolean isValidSellerView = checkValidSellerView(sellerName, loggedInUsername, headers);
 
                 // 4. Get SaleEnvironment from Request, fetch list order and list product
                 SaleEnvironment saleEnvironment = requestOpt.flatMap(saleEnvironmentRepository::findByRequest)
@@ -97,14 +86,35 @@ public class SaleSpaceServiceImpl implements SaleSpaceService {
 
                 String envId = saleEnvironment.getEnvId();
                 List<Order> orders = saleEnvironmentRepository.findWithOrdersById(envId)
-                          .map(SaleEnvironment::getListOrder)
-                          .orElse(Collections.emptyList())
-                      ;
+                        .map(SaleEnvironment::getListOrder)
+                        .orElse(Collections.emptyList());
                 List<Product> products = saleEnvironmentRepository.findWithProductsById(envId)
                         .map(se -> se.getRequest().getProducts())
                         .orElse(Collections.emptyList());
 
-                return buildGetSaleSpaceResponse(saleEnvironment, orders, products, sellerName, requestUUID, true);
+                return buildGetSaleSpaceResponse(saleEnvironment, orders, products, sellerName, isValidSellerView, requestUUID);
+            }
+
+            private boolean checkValidSellerView(String sellerName, String loggedInUsername, Map<String, Object> headers) {
+                if (StringUtils.isNotBlank(sellerName) && sellerName.equals(loggedInUsername)) {
+                    String authHeader = (String) headers.get(HeaderConstant.AUTHORIZATION);
+                    Assert.isTrue(authHeader != null && authHeader.startsWith(HeaderConstant.BEARER_PREFIX));
+                    String authToken = authHeader.substring(HeaderConstant.BEARER_PREFIX.length());
+                    return securityCheckClient.checkToken(authToken).block();
+                }
+                return false;
+            }
+
+            private String findUserByUsername(String username) {
+                return Stream.of(username).filter(Objects::nonNull)
+                        .map(u -> {
+                            SellerDTO sellerDTO = new SellerDTO();
+                            sellerDTO.setUsername(u);
+                            return coreUserService.findSeller(sellerDTO);
+                        })
+                        .map(com.qrpublic.apartment.entity.User::getName)
+                        .findFirst()
+                        .orElse(null);
             }
         });
     }
@@ -113,12 +123,15 @@ public class SaleSpaceServiceImpl implements SaleSpaceService {
                                                            List<Order> orders,
                                                            List<Product> products,
                                                            String sellerName,
-                                                           String requestUUID,
-                                                           Boolean tokenValid) {
+                                                           boolean isValidSellerView,
+                                                           String requestUUID
+    ) {
         GetSaleSpaceResponse response = new GetSaleSpaceResponse();
         response.setReqUuid(requestUUID);
-        response.setSellerName(sellerName);
-        response.setIsSellerView(tokenValid);
+        if (isValidSellerView) {
+            response.setSellerName(sellerName);
+            response.setIsSellerView(true);
+        }
 
         response.setPublicLink(saleEnvironment.getPublicLink());
         response.setEnvState(String.valueOf(saleEnvironment.isState()));
@@ -128,9 +141,7 @@ public class SaleSpaceServiceImpl implements SaleSpaceService {
         if (saleEnvironment.getEndedAt() != null) {
             response.setEndedAt(saleEnvironment.getEndedAt().toString());
         }
-        if (tokenValid) {
-            response.setListOrder(toOrderDTOs(orders, saleEnvironment.getPublicLink()));
-        }
+        response.setListOrder(toOrderDTOs(orders, saleEnvironment.getPublicLink()));
         response.setListProduct(toProductDTOs(products));
         return response;
     }

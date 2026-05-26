@@ -85,7 +85,7 @@ public class UserServiceImpl implements UserService {
 
     @Override
     public boolean checkAuthentedUserExist(String userName) {
-        UserModel userModel = coreUserService.checkUserExists(userName);
+        UserModel userModel = coreUserService.findByUsername(userName);
         if (userModel != null && !AuthenticationEnum.UNAUTHENTICATED.equals(userModel.getAuthenticationEnum())) {
             return true;
         }

@@ -36,4 +36,7 @@
     <changeSet id="014" author="thach">
         <sqlFile path="db/changelog/changeset-014-update-user.sql"/>
     </changeSet>
+    <changeSet id="015" author="thach">
+        <sqlFile path="db/changelog/changeset-015-add-picture-data.sql"/>
+    </changeSet>
 </databaseChangeLog>

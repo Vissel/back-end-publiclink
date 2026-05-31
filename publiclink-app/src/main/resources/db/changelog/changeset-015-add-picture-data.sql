@@ -1,0 +1,1 @@
+ALTER TABLE picture ADD COLUMN data LONGTEXT;

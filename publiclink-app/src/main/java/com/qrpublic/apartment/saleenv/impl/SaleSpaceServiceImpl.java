@@ -173,7 +173,7 @@ public class SaleSpaceServiceImpl implements SaleSpaceService {
             if (p.getListPicProMap() != null) {
                 pictures = p.getListPicProMap().stream()
                         .filter(map -> map.getPicture() != null)
-                        .map(map -> new PictureDTO(map.getPicture().getLink(), map.getPicture().getTitle()))
+                        .map(map -> new PictureDTO(map.getPicture().getLink(), map.getPicture().getTitle(), map.getPicture().getData()))
                         .toList();
             }
             result.add(new ProductDTO(p.getProductName(), p.getAmount(), p.getUnit(),

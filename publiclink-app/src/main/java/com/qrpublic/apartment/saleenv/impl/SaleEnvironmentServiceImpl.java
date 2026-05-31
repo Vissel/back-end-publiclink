@@ -12,6 +12,7 @@ import com.qrpublic.apartment.core.model.LinkModel;
 import com.qrpublic.apartment.core.model.SaleEnvironmentModel;
 import com.qrpublic.apartment.core.model.SellerModel;
 import com.qrpublic.apartment.core.service.CoreEnvironmentService;
+import com.qrpublic.apartment.core.service.CoreProductService;
 import com.qrpublic.apartment.core.service.CoreRequestService;
 import com.qrpublic.apartment.core.service.CoreUserService;
 import com.qrpublic.apartment.entity.Pricing;
@@ -23,6 +24,7 @@ import com.qrpublic.apartment.integration.OperatedUserClient;
 import com.qrpublic.apartment.integration.SecurityCheckClient;
 import com.qrpublic.apartment.model.SellerDTO;
 import com.qrpublic.apartment.model.UserType;
+import com.qrpublic.apartment.product.request.CreateProductRequest;
 import com.qrpublic.apartment.repository.PricingRepository;
 import com.qrpublic.apartment.repository.SaleEnvironmentRepository;
 import com.qrpublic.apartment.requestmodel.Pagination;
@@ -90,6 +92,8 @@ public class SaleEnvironmentServiceImpl implements SaleEnvironmentService {
     @Autowired
     PricingRepository pricingRepository;
     @Autowired
+    private CoreProductService coreProductService;
+    @Autowired
     private NamedParameterJdbcOperations namedParameterJdbcOperations;
 
     @Override
@@ -127,6 +131,13 @@ public class SaleEnvironmentServiceImpl implements SaleEnvironmentService {
         SaleEnvironment environment = environmentFuture.join();
         SellerModel sellerModel = sellerFuture.join();
 
+        // Persist product data if present
+        CreateProductRequest productRequest = request.getProductRequest();
+        if (productRequest != null) {
+            Request requestEntity = environment.getRequest();
+            coreProductService.saveProduct(productRequest, requestEntity);
+        }
+
         final String authenToken = sellerModel.getSellerLinkModel() != null
                 ? sellerModel.getSellerLinkModel().getToken()
                 : CommonConstant.EMPTY;
@@ -161,7 +172,7 @@ public class SaleEnvironmentServiceImpl implements SaleEnvironmentService {
                 .flatMap(findUserAuthen -> {
                     boolean isExpiringSoon = findUserAuthen.getExpiredAt() != null
                             && findUserAuthen.getExpiredAt()
-                            .before(new java.util.Date(System.currentTimeMillis() + FIVE_MINUTES));
+                                    .before(new java.util.Date(System.currentTimeMillis() + FIVE_MINUTES));
                     if (isExpiringSoon) {
                         // expiry < 5 min => generate new token with 15 min validity, then update
                         String sellerName = sellerDTO != null ? sellerDTO.getName() : null;
@@ -207,7 +218,8 @@ public class SaleEnvironmentServiceImpl implements SaleEnvironmentService {
                                                     coreUserService.createNewUser(newSellerDTO);
                                                 }
                                                 // Update sellerName on Request if missing
-                                                coreRequestService.updateSellerNameIfMissing(requestDTO.getReqUUID(), username);
+                                                coreRequestService.updateSellerNameIfMissing(requestDTO.getReqUUID(),
+                                                        username);
                                                 log.info("Created new seller in internal DB: {}", username);
                                                 return Mono.just(toSellerModel(username, authLink));
                                             } catch (Exception e) {
@@ -307,8 +319,8 @@ public class SaleEnvironmentServiceImpl implements SaleEnvironmentService {
         return Mono.fromCallable(() -> {
             ListEnvironmentRequest filter = listEnvironmentRequestPagination.getListData() != null
                     && !listEnvironmentRequestPagination.getListData().isEmpty()
-                    ? listEnvironmentRequestPagination.getListData().get(0)
-                    : null;
+                            ? listEnvironmentRequestPagination.getListData().get(0)
+                            : null;
 
             PageRequest pageable = PageRequest.of(listEnvironmentRequestPagination.getPage() - 1,
                     listEnvironmentRequestPagination.getSize(), Sort.by(Sort.Order.desc("createdAt")));
@@ -362,7 +374,7 @@ public class SaleEnvironmentServiceImpl implements SaleEnvironmentService {
     }
 
     private Result<ListEnvironmentResponse> buildEnvironmentResult(List<SaleEnvironmentModel> models,
-                                                                   long totalElements) {
+            long totalElements) {
         ListEnvironmentResponse response = new ListEnvironmentResponse();
         response.setTotal((int) totalElements);
         response.setListSaleEnv(models.stream()

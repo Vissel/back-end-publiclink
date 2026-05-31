@@ -13,4 +13,6 @@ public class PictureDTO {
 	private String link;
 
 	private String title;
+
+	private String data;
 }

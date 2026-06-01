@@ -94,7 +94,7 @@ public class RequestServiceImpl implements RequestService {
             long reqId = saveRequest(request).getReqId();
             log.debug("Created new request:{}", reqId);
             // create sale_env and generate public link
-            publicToken = envService.createSaleEnvironment(request).getPublicLink();
+            publicToken = envService.generateSaleEnvironment(request).getPublicLink();
         }
         log.info("Generating public link for seller:{}{}", sellerDTO.getUsername(), CommonConstant.END);
         return publicToken;
@@ -122,7 +122,7 @@ public class RequestServiceImpl implements RequestService {
             long reqId = saveRequest(request).getReqId();
             log.debug("Created new request:{}", reqId);
             // create sale_env and generate public link
-            publicLink = envService.createSaleEnvironment(request).getPublicLink();
+            publicLink = envService.generateSaleEnvironment(request).getPublicLink();
         }
         log.info("Generating public link for seller:{}{}", requestDTO.getSeller().getUsername(), CommonConstant.END);
         return publicLink;

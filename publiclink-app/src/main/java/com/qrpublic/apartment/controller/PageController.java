@@ -100,7 +100,9 @@ public class PageController {
             @RequestParam String token,
             @RequestHeader Map<String, Object> headers
     ) {
-        return ResponseEntityConvertor.convertToMonoResponseEntity(saleSpaceService.getSaleSpace(token, headers));
+        return Mono.fromCallable(() -> saleSpaceService.getSaleSpace(token, headers))
+                .subscribeOn(Schedulers.boundedElastic())
+                .flatMap(ResponseEntityConvertor::convertToMonoResponseEntity);
     }
 
     @PostMapping("/order")

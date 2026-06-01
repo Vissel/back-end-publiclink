@@ -11,7 +11,7 @@ import com.qrpublic.apartment.template.model.Result;
 import reactor.core.publisher.Mono;
 
 public interface SaleEnvironmentService {
-    public SaleEnvironment createSaleEnvironment(Request request);
+    public SaleEnvironment generateSaleEnvironment(Request request);
 
     /**
      * Create a sale environment for a given request and return the public link and
@@ -20,7 +20,7 @@ public interface SaleEnvironmentService {
      * @param request
      * @return
      */
-    SaleEnvDTO createSaleEnvironment(CreateEnvironmentRequest request);
+    SaleEnvDTO generateSaleEnvironment(CreateEnvironmentRequest request);
 
     Mono<Result<ListEnvironmentResponse>> getEnvironments(
             Pagination<ListEnvironmentRequest> listEnvironmentRequestPagination);

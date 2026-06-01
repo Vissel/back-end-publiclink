@@ -28,7 +28,7 @@ public class ProductPictureMap {
 	@JoinColumn(name = "product_id")
 	private Product product;
 
-	@OneToOne(fetch = FetchType.LAZY, cascade = { CascadeType.PERSIST, CascadeType.MERGE, CascadeType.DETACH })
+	@OneToOne(fetch = FetchType.LAZY, cascade = { CascadeType.ALL }, orphanRemoval = true)
 	@JoinColumn(name = "pic_id")
 	private Picture picture;
 

@@ -40,6 +40,6 @@ public class Product {
 	@JoinColumn(name = "req_id")
 	private Request request;
 
-	@OneToMany(cascade = { CascadeType.PERSIST, CascadeType.MERGE, CascadeType.REMOVE })
+	@OneToMany(mappedBy = "product", cascade = { CascadeType.ALL }, orphanRemoval = true)
 	List<ProductPictureMap> listPicProMap;
 }

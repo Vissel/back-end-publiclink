@@ -8,9 +8,7 @@ import com.qrpublic.apartment.adapter.user.response.UserAuthTokenResponse;
 import com.qrpublic.apartment.constant.CommonConstant;
 import com.qrpublic.apartment.constant.LinkConstant;
 import com.qrpublic.apartment.core.linkBuilder.LinkBuilder;
-import com.qrpublic.apartment.core.model.LinkModel;
-import com.qrpublic.apartment.core.model.SaleEnvironmentModel;
-import com.qrpublic.apartment.core.model.SellerModel;
+import com.qrpublic.apartment.core.model.*;
 import com.qrpublic.apartment.core.service.CoreEnvironmentService;
 import com.qrpublic.apartment.core.service.CoreProductService;
 import com.qrpublic.apartment.core.service.CoreRequestService;
@@ -47,14 +45,17 @@ import org.springframework.data.domain.Sort;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcOperations;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.time.Duration;
+import java.util.Currency;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -97,7 +98,7 @@ public class SaleEnvironmentServiceImpl implements SaleEnvironmentService {
     private NamedParameterJdbcOperations namedParameterJdbcOperations;
 
     @Override
-    public SaleEnvironment createSaleEnvironment(Request request) {
+    public SaleEnvironment generateSaleEnvironment(Request request) {
         log.info("Creating sale environment.");
         SaleEnvironment env = repo.save(new SaleEnvironment(request));
         if (env.getEnvId() != null && !env.getEnvId().isBlank()) {
@@ -119,24 +120,18 @@ public class SaleEnvironmentServiceImpl implements SaleEnvironmentService {
      * @return Mono of CreateEnvironmentResponse with error handling
      */
     @Override
-    public SaleEnvDTO createSaleEnvironment(CreateEnvironmentRequest request) {
+    public SaleEnvDTO generateSaleEnvironment(CreateEnvironmentRequest request) {
         log.info("{} Creating sale environment for request ID: {}", CommonConstant.START, request.getRequestUuid());
         RequestDTO requestDTO = convertToRequestDTO(request);
 
         CompletableFuture<SaleEnvironment> environmentFuture = CompletableFuture
-                .supplyAsync(() -> createSaleEnvironment(requestDTO));
+                .supplyAsync(() -> createSaleEnvironment(request));
         CompletableFuture<SellerModel> sellerFuture = CompletableFuture
                 .supplyAsync(() -> createOrGetSeller(requestDTO));
 
         SaleEnvironment environment = environmentFuture.join();
         SellerModel sellerModel = sellerFuture.join();
 
-        // Persist product data if present
-        CreateProductRequest productRequest = request.getProductRequest();
-        if (productRequest != null) {
-            Request requestEntity = environment.getRequest();
-            coreProductService.saveProduct(productRequest, requestEntity);
-        }
 
         final String authenToken = sellerModel.getSellerLinkModel() != null
                 ? sellerModel.getSellerLinkModel().getToken()
@@ -148,19 +143,42 @@ public class SaleEnvironmentServiceImpl implements SaleEnvironmentService {
         return convertToSaleEnvDto(environment, sellerModel.getSellerLinkModel());
     }
 
-    private SaleEnvironment createSaleEnvironment(RequestDTO requestDTO) {
-        Request requestEntity = coreRequestService.getRequestByUuid(requestDTO.getReqUUID()).orElseThrow(
-                () -> new ResourceNotFoundException("Request not found with UUID: " + requestDTO.getReqUUID()));
+    @Transactional
+    public SaleEnvironment createSaleEnvironment(CreateEnvironmentRequest requestObject) {
+        Request requestEntity = coreRequestService.getRequestByUuid(requestObject.getRequestUuid()).orElseThrow(
+                () -> new ResourceNotFoundException("Request not found with UUID: " + requestObject.getRequestUuid()));
 
+        if (requestObject.getProductRequest() != null) {
+            log.info("Step 2: Validating business rules");
+            validateProductCreationRequest(requestObject.getProductRequest());
+            ProductModel productModel = convertToProductModel(requestObject.getProductRequest());
+            coreProductService.createProductProdImage(requestEntity.getReqId(), productModel);
+        }
         // Create SaleEnvironment
         SaleEnvironment env = new SaleEnvironment();
         env.setRequest(requestEntity);
         // Generate public link by username + requestID
-        final LinkModel linkModel = generatePublicLink(requestDTO);
+        final LinkModel linkModel = generatePublicLink(requestObject.getRequestUuid(), requestObject.getSellerRequest().getUsername());
         final String publicLink = linkModel.getToken();
         log.debug("Generated public link: {}", publicLink);
         env.setPublicLink(publicLink);
         return repo.save(env);
+    }
+
+    private ProductModel convertToProductModel(CreateProductRequest productRequest) {
+        ProductModel productModel = new ProductModel();
+        productModel.setProductName(productRequest.getName());
+        productModel.setQuantity(productRequest.getQuantity());
+        productModel.setUnit(Currency.getInstance("VND").getCurrencyCode());
+        productModel.setPrice(productRequest.getPrice());
+//        productModel.setTotalQuantity(productRequest.getQuantity() * productRequest.getPrice());
+        productModel.setPictureModels(productRequest.getImageDataList() != null && !productRequest.getImageDataList().isEmpty()
+                ? productRequest.getImageDataList().stream().map(imageData -> {
+            PictureModel pictureModel = new PictureModel();
+            pictureModel.setData(imageData);
+            return pictureModel;
+        }).collect(Collectors.toList()) : List.of());
+        return productModel;
     }
 
     private SellerModel createOrGetSeller(RequestDTO requestDTO) {
@@ -172,7 +190,7 @@ public class SaleEnvironmentServiceImpl implements SaleEnvironmentService {
                 .flatMap(findUserAuthen -> {
                     boolean isExpiringSoon = findUserAuthen.getExpiredAt() != null
                             && findUserAuthen.getExpiredAt()
-                                    .before(new java.util.Date(System.currentTimeMillis() + FIVE_MINUTES));
+                            .before(new java.util.Date(System.currentTimeMillis() + FIVE_MINUTES));
                     if (isExpiringSoon) {
                         // expiry < 5 min => generate new token with 15 min validity, then update
                         String sellerName = sellerDTO != null ? sellerDTO.getName() : null;
@@ -301,9 +319,9 @@ public class SaleEnvironmentServiceImpl implements SaleEnvironmentService {
         return requestDTO;
     }
 
-    private LinkModel generatePublicLink(RequestDTO requestDTO) {
-        return linkService.generateSecureUrl(requestDTO.getReqUUID(),
-                Map.of(LinkConstant.PARAM_USERNAME, requestDTO.getUsername()));
+    private LinkModel generatePublicLink(String uuid, String sellerName) {
+        return linkService.generateSecureUrl(uuid,
+                Map.of(LinkConstant.PARAM_USERNAME, sellerName));
     }
 
     private LinkModel generateReqAuthLink(RequestDTO requestDTO) {
@@ -319,8 +337,8 @@ public class SaleEnvironmentServiceImpl implements SaleEnvironmentService {
         return Mono.fromCallable(() -> {
             ListEnvironmentRequest filter = listEnvironmentRequestPagination.getListData() != null
                     && !listEnvironmentRequestPagination.getListData().isEmpty()
-                            ? listEnvironmentRequestPagination.getListData().get(0)
-                            : null;
+                    ? listEnvironmentRequestPagination.getListData().get(0)
+                    : null;
 
             PageRequest pageable = PageRequest.of(listEnvironmentRequestPagination.getPage() - 1,
                     listEnvironmentRequestPagination.getSize(), Sort.by(Sort.Order.desc("createdAt")));
@@ -374,7 +392,7 @@ public class SaleEnvironmentServiceImpl implements SaleEnvironmentService {
     }
 
     private Result<ListEnvironmentResponse> buildEnvironmentResult(List<SaleEnvironmentModel> models,
-            long totalElements) {
+                                                                   long totalElements) {
         ListEnvironmentResponse response = new ListEnvironmentResponse();
         response.setTotal((int) totalElements);
         response.setListSaleEnv(models.stream()
@@ -459,4 +477,23 @@ public class SaleEnvironmentServiceImpl implements SaleEnvironmentService {
                 .createdBy(DateUtils.dateToString(linkModel.getIssueAt()))
                 .build();
     }
+
+    /**
+     * Validate the product creation request data
+     */
+    private void validateProductCreationRequest(CreateProductRequest productRequest) {
+        if (productRequest == null) {
+            throw new IllegalArgumentException("Product request cannot be null");
+        }
+        if (productRequest.getName() == null || productRequest.getName().trim().isEmpty()) {
+            throw new IllegalArgumentException("Product name is required");
+        }
+        if (productRequest.getPrice() < 0) {
+            throw new IllegalArgumentException("Product price cannot be negative");
+        }
+        if (productRequest.getQuantity() < 0) {
+            throw new IllegalArgumentException("Product quantity cannot be negative");
+        }
+    }
+
 }

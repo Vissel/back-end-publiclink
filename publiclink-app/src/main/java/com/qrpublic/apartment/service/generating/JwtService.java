@@ -5,13 +5,14 @@ import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.SignatureAlgorithm;
 import io.jsonwebtoken.security.Keys;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Primary;
 import org.springframework.stereotype.Service;
 
-import java.util.Base64;
 import java.util.Date;
 
+@Slf4j
 @Primary
 @Service
 public class JwtService {
@@ -33,7 +34,7 @@ public class JwtService {
     public String generateToken(String username, String role) {
         return Jwts.builder().setSubject(username).claim("role", role).setIssuedAt(new Date())
                 .setExpiration(new Date(System.currentTimeMillis() + ACCESS_TOKEN_VALIDITY))
-                .signWith(Keys.hmacShaKeyFor(Base64.getDecoder().decode(secretKey.getBytes())),
+                .signWith(Keys.hmacShaKeyFor(secretKey.getBytes()),
                         SignatureAlgorithm.HS256)
                 .compact();
     }
@@ -49,7 +50,7 @@ public class JwtService {
     public String generateTokenByValidTime(String username, String role, long validTime) {
         return Jwts.builder().setSubject(username).claim("role", role).setIssuedAt(new Date())
                 .setExpiration(new Date(System.currentTimeMillis() + validTime))
-                .signWith(Keys.hmacShaKeyFor(Base64.getDecoder().decode(secretKey.getBytes())),
+                .signWith(Keys.hmacShaKeyFor(secretKey.getBytes()),
                         SignatureAlgorithm.HS256)
                 .compact();
     }
@@ -61,7 +62,7 @@ public class JwtService {
      * @return
      */
     public Claims extractClaims(String token) {
-        return Jwts.parserBuilder().setSigningKey(Keys.hmacShaKeyFor(Base64.getDecoder().decode(getKey()))).build()
+        return Jwts.parserBuilder().setSigningKey(Keys.hmacShaKeyFor(getKey())).build()
                 .parseClaimsJws(token).getBody();
     }
 
@@ -82,8 +83,23 @@ public class JwtService {
 
     public boolean isTokenValid(String token) {
         try {
-            return !extractClaims(token).getExpiration().before(new Date());
+            Claims claims = extractClaims(token);
+            Date expiration = claims.getExpiration();
+            Date now = new Date();
+            boolean isValid = !expiration.before(now);
+            
+            if (!isValid) {
+                log.warn("Token expired. Expiration: {}, Current time: {}", expiration, now);
+            } else {
+                log.debug("Token is valid. Expires at: {}", expiration);
+            }
+            
+            return isValid;
         } catch (JwtException e) {
+            log.error("Token validation failed: {}", e.getMessage());
+            return false;
+        } catch (Exception e) {
+            log.error("Unexpected error during token validation: {}", e.getMessage(), e);
             return false;
         }
     }
@@ -97,6 +113,8 @@ public class JwtService {
     }
 
     protected byte[] getKey() {
+        // Return raw bytes - subclasses can override for different keys
+        // Do NOT apply Base64 decoding here
         return this.secretKey.getBytes();
     }
 }

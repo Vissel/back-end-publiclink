@@ -15,7 +15,7 @@ public class GetSaleSpaceResponse extends BaseResponse {
     private String endedAt;
     private List<ProductDTO> listProduct;
     private List<OrderDTO> listOrder;
-    private String sellerName;
+    private String sellerFullName;
 
     private Boolean isSellerView;
 }

@@ -38,6 +38,8 @@ public class VietQrService extends JwtService implements LinkService {
 
     @Override
     protected byte[] getKey() {
+        // Return raw bytes - do NOT Base64 decode
+        // This ensures consistency between token generation and validation
         return this.secretKey.getBytes();
     }
 
@@ -62,9 +64,10 @@ public class VietQrService extends JwtService implements LinkService {
                 .setClaims(claims)
                 .setSubject(subject)
                 .setIssuedAt(issueAt)
-                .signWith(Keys.hmacShaKeyFor(Base64.getDecoder().decode(secretKey.getBytes())),
+                .signWith(Keys.hmacShaKeyFor(secretKey.getBytes()),
                         SignatureAlgorithm.HS256)
                 .setExpiration(validDate).compact();
+        log.info("Generated secure URL token with validity: {} ms (expires at: {})", ACCESS_TOKEN_VALIDITY, validDate);
         return new LinkModel(generatedToken, issueAt, validDate);
     }
 

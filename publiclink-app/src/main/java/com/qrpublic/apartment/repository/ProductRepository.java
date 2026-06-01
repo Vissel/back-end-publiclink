@@ -18,4 +18,10 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
     @Lock(LockModeType.PESSIMISTIC_READ)
     @Query("SELECT p FROM Product p WHERE p.request.reqId IN :requestIds")
     List<Product> findProductsByRequestIds(@Param("requestIds") List<Long> requestIds);
+
+    @Query("SELECT DISTINCT p FROM Product p " +
+            "LEFT JOIN FETCH p.listPicProMap ppm " +
+            "LEFT JOIN FETCH ppm.picture " +
+            "WHERE p.request.reqId = :requestId")
+    List<Product> findProductsWithPicturesByRequestId(@Param("requestId") Long requestId);
 }

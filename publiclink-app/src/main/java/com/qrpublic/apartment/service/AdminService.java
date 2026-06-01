@@ -34,7 +34,7 @@ public class AdminService {
      * @return
      */
     public Mono<ResponseEntity<CreateEnvironmentResponse>> createSaleEnvironment(CreateEnvironmentRequest createEnvironmentRequest) {
-        return Mono.fromCallable(() -> saleEnvironmentService.createSaleEnvironment(createEnvironmentRequest))
+        return Mono.fromCallable(() -> saleEnvironmentService.generateSaleEnvironment(createEnvironmentRequest))
                 .subscribeOn(Schedulers.boundedElastic())
                 .map(responseDTO -> {
                     CreateEnvironmentResponse response = new CreateEnvironmentResponse();

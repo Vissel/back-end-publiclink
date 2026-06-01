@@ -3,6 +3,7 @@ package com.qrpublic.apartment.saleenv.impl;
 import com.qrpublic.apartment.constant.CommonConstant;
 import com.qrpublic.apartment.constant.HeaderConstant;
 import com.qrpublic.apartment.constant.LinkConstant;
+import com.qrpublic.apartment.core.model.UserModel;
 import com.qrpublic.apartment.core.service.CoreRequestService;
 import com.qrpublic.apartment.core.service.CoreUserService;
 import com.qrpublic.apartment.entity.Order;
@@ -11,7 +12,7 @@ import com.qrpublic.apartment.entity.Request;
 import com.qrpublic.apartment.entity.SaleEnvironment;
 import com.qrpublic.apartment.exception.EnvironmentCreationException;
 import com.qrpublic.apartment.integration.SecurityCheckClient;
-import com.qrpublic.apartment.model.SellerDTO;
+import com.qrpublic.apartment.repository.ProductRepository;
 import com.qrpublic.apartment.repository.SaleEnvironmentRepository;
 import com.qrpublic.apartment.requestmodel.OrderDTO;
 import com.qrpublic.apartment.requestmodel.PictureDTO;
@@ -22,7 +23,6 @@ import com.qrpublic.apartment.service.LinkService;
 import com.qrpublic.apartment.template.model.Result;
 import com.qrpublic.apartment.template.service.ProcessCallback;
 import com.qrpublic.apartment.template.service.PublicLinkServiceTemplate;
-import io.jsonwebtoken.lang.Assert;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -48,6 +48,9 @@ public class SaleSpaceServiceImpl implements SaleSpaceService {
 
     @Autowired
     SaleEnvironmentRepository saleEnvironmentRepository;
+
+    @Autowired
+    ProductRepository productRepository;
 
     @Autowired
     SecurityCheckClient securityCheckClient;
@@ -77,8 +80,8 @@ public class SaleSpaceServiceImpl implements SaleSpaceService {
 
                 // 2. Extract usernameOfEnv claim, find Seller (empty if not found)
                 String usernameOfEnv = (String) linkService.extractClaimByKey(token, LinkConstant.PARAM_USERNAME);
-                String sellerName = findUserByUsername(usernameOfEnv);
-                boolean isValidSellerView = checkValidSellerView(sellerName, loggedInUsername, headers);
+                UserModel userModel = findUserByUsername(usernameOfEnv);
+                boolean isValidSellerView = checkValidSellerView(userModel, loggedInUsername, headers);
 
                 // 4. Get SaleEnvironment from Request, fetch list order and list product
                 SaleEnvironment saleEnvironment = requestOpt.flatMap(saleEnvironmentRepository::findByRequest)
@@ -88,31 +91,37 @@ public class SaleSpaceServiceImpl implements SaleSpaceService {
                 List<Order> orders = saleEnvironmentRepository.findWithOrdersById(envId)
                         .map(SaleEnvironment::getListOrder)
                         .orElse(Collections.emptyList());
-                List<Product> products = saleEnvironmentRepository.findWithProductsById(envId)
-                        .map(se -> se.getRequest().getProducts())
+
+                // Fetch products with pictures using separate query to avoid multi-bag fetch issue
+                List<Product> products = saleEnvironmentRepository.findWithRequestById(envId)
+                        .map(se -> se.getRequest().getReqId())
+                        .map(productRepository::findProductsWithPicturesByRequestId)
                         .orElse(Collections.emptyList());
 
-                return buildGetSaleSpaceResponse(saleEnvironment, orders, products, sellerName, isValidSellerView, requestUUID);
+                return buildGetSaleSpaceResponse(saleEnvironment, orders, products, userModel, isValidSellerView,
+                        requestUUID);
             }
 
-            private boolean checkValidSellerView(String sellerName, String loggedInUsername, Map<String, Object> headers) {
-                if (StringUtils.isNotBlank(sellerName) && sellerName.equals(loggedInUsername)) {
-                    String authHeader = (String) headers.get(HeaderConstant.AUTHORIZATION);
-                    Assert.isTrue(authHeader != null && authHeader.startsWith(HeaderConstant.BEARER_PREFIX));
-                    String authToken = authHeader.substring(HeaderConstant.BEARER_PREFIX.length());
-                    return securityCheckClient.checkToken(authToken).block();
+            private boolean checkValidSellerView(UserModel userModel, String loggedInUsername,
+                                                 Map<String, Object> headers) {
+                if (userModel != null) {
+                    final String sellerName = userModel.getUsername();
+                    if (StringUtils.isNotBlank(sellerName) && sellerName.equals(loggedInUsername)) {
+                        String authHeader = (String) headers.get(HeaderConstant.AUTHORIZATION);
+                        if (authHeader != null && authHeader.startsWith(HeaderConstant.BEARER_PREFIX)) {
+                            String authToken = authHeader.substring(HeaderConstant.BEARER_PREFIX.length());
+                            return securityCheckClient.checkToken(authToken).block();
+                        }
+                    }
                 }
                 return false;
             }
 
-            private String findUserByUsername(String username) {
+            private UserModel findUserByUsername(String username) {
                 return Stream.of(username).filter(Objects::nonNull)
                         .map(u -> {
-                            SellerDTO sellerDTO = new SellerDTO();
-                            sellerDTO.setUsername(u);
-                            return coreUserService.findSeller(sellerDTO);
+                            return coreUserService.findByUsername(u);
                         })
-                        .map(com.qrpublic.apartment.entity.User::getName)
                         .findFirst()
                         .orElse(null);
             }
@@ -122,14 +131,13 @@ public class SaleSpaceServiceImpl implements SaleSpaceService {
     private GetSaleSpaceResponse buildGetSaleSpaceResponse(SaleEnvironment saleEnvironment,
                                                            List<Order> orders,
                                                            List<Product> products,
-                                                           String sellerName,
+                                                           UserModel userModel,
                                                            boolean isValidSellerView,
-                                                           String requestUUID
-    ) {
+                                                           String requestUUID) {
         GetSaleSpaceResponse response = new GetSaleSpaceResponse();
         response.setReqUuid(requestUUID);
         if (isValidSellerView) {
-            response.setSellerName(sellerName);
+            response.setSellerFullName(userModel.getName());
             response.setIsSellerView(true);
         }
 
@@ -173,7 +181,8 @@ public class SaleSpaceServiceImpl implements SaleSpaceService {
             if (p.getListPicProMap() != null) {
                 pictures = p.getListPicProMap().stream()
                         .filter(map -> map.getPicture() != null)
-                        .map(map -> new PictureDTO(map.getPicture().getLink(), map.getPicture().getTitle(), map.getPicture().getData()))
+                        .map(map -> new PictureDTO(map.getPicture().getLink(), map.getPicture().getTitle(),
+                                map.getPicture().getData()))
                         .toList();
             }
             result.add(new ProductDTO(p.getProductName(), p.getAmount(), p.getUnit(),

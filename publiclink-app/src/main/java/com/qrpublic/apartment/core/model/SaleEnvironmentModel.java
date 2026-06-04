@@ -14,6 +14,8 @@ public class SaleEnvironmentModel {
     private String requestUUID;
 
     private String createdAt;
+    private String plannedEndedAt;
+
     private SellerModel seller;
     private List<ProductModel> products;
     private List<OrderModel> orders;

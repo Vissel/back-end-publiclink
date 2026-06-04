@@ -11,4 +11,6 @@ import java.util.Map;
  */
 public interface SaleSpaceService {
     Result<GetSaleSpaceResponse> getSaleSpace(String token, Map<String, Object> headers);
+
+    String getDBTimezone();
 }

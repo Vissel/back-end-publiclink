@@ -50,6 +50,11 @@ public class PageController {
         return Mono.just(ResponseEntity.ok("Home response"));
     }
 
+    @GetMapping("/getTimeZone")
+    public Mono<String> getTimeZone() {
+        return Mono.just("Timezone is: " + saleSpaceService.getDBTimezone());
+    }
+
     /**
      * Determine the direction of seller. Returns JSON with destination path:
      * - /api/v1/publish/saleUrl if the link is valid and not expired, username

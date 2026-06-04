@@ -11,6 +11,7 @@ import com.qrpublic.apartment.model.convertor.OrderConvertor;
 import com.qrpublic.apartment.requestmodel.OrderDTO;
 import com.qrpublic.apartment.requestmodel.PricingDTO;
 import com.qrpublic.apartment.requestmodel.SaleEnvDTO;
+import com.qrpublic.apartment.util.DateUtils;
 import com.qrpublic.apartment.util.Utils;
 
 import java.math.BigDecimal;
@@ -31,6 +32,7 @@ public class SaleEnvConvertor {
         final String publicLink = LinkBuilder.buildPublicLink(env.getPublicLink());
         return SaleEnvDTO.builder()
                 .createdAt(Utils.formatTimeStamp(env.getCreatedAt()))
+                .plannedEndedAt(DateUtils.dateToLocalTimeString(env.getWillEndedAt()))
                 .sellerName(req != null ? req.getSellerName() : null)
                 .productName(productName)
                 .publicLink(publicLink)
@@ -66,6 +68,7 @@ public class SaleEnvConvertor {
         return SaleEnvDTO.builder()
                 .requestUUID(model.getRequestUUID())
                 .createdAt(model.getCreatedAt())
+                .plannedEndedAt(model.getPlannedEndedAt())
                 .sellerName(model.getSeller() != null ? model.getSeller().getName() : null)
                 .createdBy("Jade")
                 .sellerAuthLink(sellerAuthLink)

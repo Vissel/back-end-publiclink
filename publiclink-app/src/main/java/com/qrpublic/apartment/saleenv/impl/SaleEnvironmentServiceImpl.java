@@ -64,6 +64,9 @@ public class SaleEnvironmentServiceImpl implements SaleEnvironmentService {
 
     private static final long FIFTEEN_MINUTES = 15 * 60 * 1000L;
     private static final long FIVE_MINUTES = 5 * 60 * 1000L;
+    private static final long ONE_MINUTE_SECONDS = 1 * 60 * 1000L;
+    private static final long ONE_SECOND_MILI = 1 * 1000L;
+    private static final long ONE_HOUR_MILI = 60 * 60 * ONE_SECOND_MILI;
     @Autowired
     private SaleEnvironmentRepository repo;
 
@@ -158,10 +161,11 @@ public class SaleEnvironmentServiceImpl implements SaleEnvironmentService {
         SaleEnvironment env = new SaleEnvironment();
         env.setRequest(requestEntity);
         // Generate public link by username + requestID
-        final LinkModel linkModel = generatePublicLink(requestObject.getRequestUuid(), requestObject.getSellerRequest().getUsername());
+        final LinkModel linkModel = generatePublicLink(requestObject);
         final String publicLink = linkModel.getToken();
         log.debug("Generated public link: {}", publicLink);
         env.setPublicLink(publicLink);
+        env.setWillEndedAt(linkModel.getExpire() != null ? new java.sql.Timestamp(linkModel.getExpire().getTime()) : null);
         return repo.save(env);
     }
 
@@ -319,9 +323,12 @@ public class SaleEnvironmentServiceImpl implements SaleEnvironmentService {
         return requestDTO;
     }
 
-    private LinkModel generatePublicLink(String uuid, String sellerName) {
+    private LinkModel generatePublicLink(CreateEnvironmentRequest requestObj) {
+        final String uuid = requestObj.getRequestUuid();
+        final String sellerName = requestObj.getSellerRequest().getName();
+        final long validTimeMillis = requestObj.getSellerRequest().getPrice().getDurationHours() * ONE_HOUR_MILI;
         return linkService.generateSecureUrl(uuid,
-                Map.of(LinkConstant.PARAM_USERNAME, sellerName));
+                Map.of(LinkConstant.PARAM_USERNAME, sellerName), validTimeMillis);
     }
 
     private LinkModel generateReqAuthLink(RequestDTO requestDTO) {
@@ -412,7 +419,7 @@ public class SaleEnvironmentServiceImpl implements SaleEnvironmentService {
 
     @Override
     public String getPublicLinkBy(Request request) {
-        return repo.findByRequest(request).get().getPublicLink();
+        return repo.findFirstByRequestOrderByCreatedAtDesc(request).get().getPublicLink();
     }
 
     @Override

@@ -4,6 +4,7 @@ import com.qrpublic.apartment.constant.CommonConstant;
 
 import java.sql.Timestamp;
 import java.text.SimpleDateFormat;
+import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.Date;
@@ -24,5 +25,14 @@ public class DateUtils {
             return CommonConstant.EMPTY; // Or return "" based on your preference
         }
         return simpleDateFormat.format(dateTime);
+    }
+
+    public static String dateToLocalTimeString(Date date) {
+        if (date == null) {
+            return CommonConstant.EMPTY;
+        }
+        return date.toInstant()
+                .atZone(ZoneId.systemDefault())
+                .format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
     }
 }

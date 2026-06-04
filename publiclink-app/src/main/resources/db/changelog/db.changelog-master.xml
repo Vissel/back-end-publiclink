@@ -39,4 +39,7 @@
     <changeSet id="015" author="thach">
         <sqlFile path="db/changelog/changeset-015-add-picture-data.sql"/>
     </changeSet>
+    <changeSet id="016" author="thach">
+        <sqlFile path="db/changelog/changeset-016-add-will-ended-at.sql"/>
+    </changeSet>
 </databaseChangeLog>

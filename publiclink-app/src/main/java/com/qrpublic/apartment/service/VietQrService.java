@@ -5,6 +5,7 @@ import com.google.zxing.MultiFormatWriter;
 import com.google.zxing.client.j2se.MatrixToImageWriter;
 import com.google.zxing.common.BitMatrix;
 import com.qrpublic.apartment.core.model.LinkModel;
+import com.qrpublic.apartment.core.service.CoreTimezoneService;
 import com.qrpublic.apartment.requestmodel.VietQrRequest;
 import com.qrpublic.apartment.service.generating.JwtService;
 import io.jsonwebtoken.Jwts;
@@ -16,13 +17,14 @@ import org.springframework.stereotype.Service;
 
 import java.io.ByteArrayOutputStream;
 import java.nio.charset.StandardCharsets;
-import java.util.Base64;
 import java.util.Date;
 import java.util.Map;
 
 @Slf4j
 @Service
 public class VietQrService extends JwtService implements LinkService {
+
+    private final CoreTimezoneService coreTimezoneService;
 
     @Value("${jwt.secret.url}")
     private String secretKey;
@@ -35,6 +37,10 @@ public class VietQrService extends JwtService implements LinkService {
 
     @Value("${spring.webflux.base-path}")
     private String contextPath;
+
+    public VietQrService(CoreTimezoneService coreTimezoneService) {
+        this.coreTimezoneService = coreTimezoneService;
+    }
 
     @Override
     protected byte[] getKey() {
@@ -49,17 +55,9 @@ public class VietQrService extends JwtService implements LinkService {
      * @return
      */
     @Override
-    public LinkModel generateSecureUrl(String subject, Map<String, String> claims) {
-        /*
-         * String hostBuild = CommonConstant.EMPTY; try { InetAddress inet =
-         * InetAddress.getLocalHost(); hostBuild += "http://" +
-         * inet.getCanonicalHostName() + ":8080" + contextPath;
-         * log.debug("Current host:{}", inet.getHostName()); hostBuild +=
-         * "/public/link?token=" + jwt; } catch (UnknownHostException e) {
-         * log.error("Unknowhost:{}", e.getMessage()); }
-         */
-        Date issueAt = new Date();
-        Date validDate = new Date(System.currentTimeMillis() + ACCESS_TOKEN_VALIDITY);
+    public LinkModel generateSecureUrl(String subject, Map<String, String> claims, long expirationMiliSeconds) {
+        Date issueAt = coreTimezoneService.getNow();
+        Date validDate = new Date(issueAt.getTime() + coreTimezoneService.nowToEndOfDateMili() + expirationMiliSeconds);
         String generatedToken = Jwts.builder()
                 .setClaims(claims)
                 .setSubject(subject)
@@ -67,7 +65,7 @@ public class VietQrService extends JwtService implements LinkService {
                 .signWith(Keys.hmacShaKeyFor(secretKey.getBytes()),
                         SignatureAlgorithm.HS256)
                 .setExpiration(validDate).compact();
-        log.info("Generated secure URL token with validity: {} ms (expires at: {})", ACCESS_TOKEN_VALIDITY, validDate);
+        log.info("Generated secure URL token with validity: {} ms (expires at: {})", expirationMiliSeconds, validDate);
         return new LinkModel(generatedToken, issueAt, validDate);
     }
 

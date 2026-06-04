@@ -6,7 +6,7 @@ import java.util.Map;
 
 public interface LinkService {
 
-    LinkModel generateSecureUrl(String subject, Map<String, String> claims);
+    LinkModel generateSecureUrl(String subject, Map<String, String> claims, long expirationMiliSeconds);
 
     boolean validateLink(String link);
 

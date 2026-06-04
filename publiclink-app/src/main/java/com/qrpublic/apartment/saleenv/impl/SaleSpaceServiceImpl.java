@@ -5,6 +5,7 @@ import com.qrpublic.apartment.constant.HeaderConstant;
 import com.qrpublic.apartment.constant.LinkConstant;
 import com.qrpublic.apartment.core.model.UserModel;
 import com.qrpublic.apartment.core.service.CoreRequestService;
+import com.qrpublic.apartment.core.service.CoreTimezoneService;
 import com.qrpublic.apartment.core.service.CoreUserService;
 import com.qrpublic.apartment.entity.Order;
 import com.qrpublic.apartment.entity.Product;
@@ -53,6 +54,9 @@ public class SaleSpaceServiceImpl implements SaleSpaceService {
     ProductRepository productRepository;
 
     @Autowired
+    CoreTimezoneService coreTimezoneService;
+
+    @Autowired
     SecurityCheckClient securityCheckClient;
 
     @Override
@@ -84,7 +88,7 @@ public class SaleSpaceServiceImpl implements SaleSpaceService {
                 boolean isValidSellerView = checkValidSellerView(userModel, loggedInUsername, headers);
 
                 // 4. Get SaleEnvironment from Request, fetch list order and list product
-                SaleEnvironment saleEnvironment = requestOpt.flatMap(saleEnvironmentRepository::findByRequest)
+                SaleEnvironment saleEnvironment = requestOpt.flatMap(saleEnvironmentRepository::findFirstByRequestOrderByCreatedAtDesc)
                         .orElseThrow(() -> new EnvironmentCreationException("Environment not found:" + requestUUID));
 
                 String envId = saleEnvironment.getEnvId();
@@ -122,10 +126,16 @@ public class SaleSpaceServiceImpl implements SaleSpaceService {
                         .map(u -> {
                             return coreUserService.findByUsername(u);
                         })
+                        .filter(Objects::nonNull)
                         .findFirst()
                         .orElse(null);
             }
         });
+    }
+
+    @Override
+    public String getDBTimezone() {
+        return coreTimezoneService.getDatabaseTimeZone().getDisplayName();
     }
 
     private GetSaleSpaceResponse buildGetSaleSpaceResponse(SaleEnvironment saleEnvironment,
@@ -149,6 +159,9 @@ public class SaleSpaceServiceImpl implements SaleSpaceService {
         if (saleEnvironment.getEndedAt() != null) {
             response.setEndedAt(saleEnvironment.getEndedAt().toString());
         }
+        response.setPlannedEndedAt(saleEnvironment.getWillEndedAt() != null
+                ? saleEnvironment.getWillEndedAt().toString()
+                : null);
         response.setListOrder(toOrderDTOs(orders, saleEnvironment.getPublicLink()));
         response.setListProduct(toProductDTOs(products));
         return response;

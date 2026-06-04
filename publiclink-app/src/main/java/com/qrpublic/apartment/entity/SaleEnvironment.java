@@ -35,6 +35,9 @@ public class SaleEnvironment {
     @Column(updatable = false, insertable = false)
     private Timestamp endedAt;
 
+    @Column(name = "will_ended_at")
+    private Timestamp willEndedAt;
+
     @OneToMany(mappedBy = "saleEnvironment", cascade = {CascadeType.REMOVE})
     @OrderBy(value = "DESC")
     private List<Order> listOrder;

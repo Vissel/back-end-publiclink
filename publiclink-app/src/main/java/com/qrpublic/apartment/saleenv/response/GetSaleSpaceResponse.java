@@ -13,6 +13,7 @@ public class GetSaleSpaceResponse extends BaseResponse {
     private String envState;
     private String createdAt;
     private String endedAt;
+    private String plannedEndedAt;
     private List<ProductDTO> listProduct;
     private List<OrderDTO> listOrder;
     private String sellerFullName;

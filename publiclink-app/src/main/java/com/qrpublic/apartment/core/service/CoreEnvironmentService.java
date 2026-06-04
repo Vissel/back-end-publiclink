@@ -81,6 +81,7 @@ public class CoreEnvironmentService {
         SaleEnvironmentModel model = new SaleEnvironmentModel();
         model.setRequestUUID(env.getRequest().getReqUUID());
         model.setCreatedAt(Utils.formatTimeStamp(env.getCreatedAt()));
+        model.setPlannedEndedAt(Utils.formatTimeStamp(env.getWillEndedAt()));
         model.setPublicLink(env.getPublicLink());
         model.setEnvState(env.isState()
                 ? com.qrpublic.apartment.core.model.EnvStateEnum.ACTIVE

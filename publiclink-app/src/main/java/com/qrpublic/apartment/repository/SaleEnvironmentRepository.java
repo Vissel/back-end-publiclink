@@ -17,7 +17,7 @@ public interface SaleEnvironmentRepository extends JpaRepository<SaleEnvironment
 
     Optional<SaleEnvironment> findByPublicLink(String publicLink);
 
-    Optional<SaleEnvironment> findByRequest(Request request);
+    Optional<SaleEnvironment> findFirstByRequestOrderByCreatedAtDesc(Request request);
 
     @Query("SELECT se FROM SaleEnvironment se LEFT JOIN FETCH se.request r WHERE r.sellerName = :sellerName")
     Page<SaleEnvironment> findBySellerName(@Param("sellerName") String sellerName, Pageable pageable);

@@ -1,19 +1,20 @@
 package com.qrpublic.apartment.controller;
 
 import com.qrpublic.apartment.core.model.EnvStateEnum;
-import com.qrpublic.apartment.entity.SaleEnvironment;
 import com.qrpublic.apartment.exception.ResourceNotFoundException;
-import com.qrpublic.apartment.requestmodel.OrderDTO;
+import com.qrpublic.apartment.order.OrderService;
 import com.qrpublic.apartment.requestmodel.SaleEnvDTO;
 import com.qrpublic.apartment.saleenv.SaleEnvironmentService;
 import com.qrpublic.apartment.saleenv.SaleSpaceService;
+import com.qrpublic.apartment.saleenv.request.AddOrderRequest;
+import com.qrpublic.apartment.saleenv.response.AddOrderResponse;
 import com.qrpublic.apartment.saleenv.response.GetSaleSpaceResponse;
 import com.qrpublic.apartment.saleenv.response.LinkRedirectResponse;
 import com.qrpublic.apartment.saleenv.response.SaleUrlResponse;
 import com.qrpublic.apartment.service.LinkService;
-import com.qrpublic.apartment.service.OrderService;
 import com.qrpublic.apartment.service.RedirectionService;
 import com.qrpublic.apartment.template.ResponseEntityConvertor;
+import com.qrpublic.apartment.template.model.Result;
 import com.qrpublic.apartment.user.PubUserService;
 import com.qrpublic.apartment.user.request.SellerRegisterRequest;
 import com.qrpublic.apartment.user.response.SellerRegisterResponse;
@@ -110,46 +111,9 @@ public class PageController {
     }
 
     @PostMapping("/order")
-    public ResponseEntity<?> addOrder(@RequestBody OrderDTO requestNewOrder) {
-        if (linkService.validateLink(requestNewOrder.getToken())) {
-            SaleEnvironment env = envService.getEnvironmentByPublicLink(requestNewOrder.getToken());
-            if (env != null) {
-                OrderDTO orderDTO = orderService.addNewOrder(env, requestNewOrder);
-                if (orderDTO != null) {
-                    return ResponseEntity.ok(orderDTO);
-                }
-            }
-        }
-        return ResponseEntity.badRequest().body("Cannot add new order.");
-    }
-
-    @PostMapping("/order/delivery")
-    public ResponseEntity<?> setDelivery(@RequestBody OrderDTO requestNewOrder, @RequestParam boolean delivered) {
-        if (linkService.validateLink(requestNewOrder.getToken())) {
-            boolean isDelivered = orderService.setDelivery(requestNewOrder.getOrderId(), delivered);
-            log.info("Isdelivered:{}", isDelivered);
-            return ResponseEntity.ok(isDelivered);
-        }
-        return ResponseEntity.badRequest().body("Update delivery failure");
-    }
-
-    @PostMapping("/order/getmoney")
-    public ResponseEntity<?> setGetMoney(@RequestBody OrderDTO requestNewOrder, @RequestParam boolean getMoney) {
-        if (linkService.validateLink(requestNewOrder.getToken())) {
-            boolean isGetMoney = orderService.setGetMoney(requestNewOrder.getOrderId(), getMoney);
-            log.info("Isgetmoney:{}", isGetMoney);
-            return ResponseEntity.ok(isGetMoney);
-        }
-        return ResponseEntity.badRequest().body("Update getMoney failure");
-    }
-
-    @PostMapping("/order/note")
-    public ResponseEntity<?> setGetMoney(@RequestBody OrderDTO requestNewOrder) {
-        if (linkService.validateLink(requestNewOrder.getToken())) {
-            boolean isUpdate = orderService.setSellerNote(requestNewOrder);
-            return ResponseEntity.ok(isUpdate);
-        }
-        return ResponseEntity.badRequest().body("Update note failure");
+    public Mono<Result<AddOrderResponse>> addOrder(@RequestBody AddOrderRequest request) {
+        return Mono.fromCallable(() -> orderService.addOrder(request))
+                .subscribeOn(Schedulers.boundedElastic());
     }
 
     /**

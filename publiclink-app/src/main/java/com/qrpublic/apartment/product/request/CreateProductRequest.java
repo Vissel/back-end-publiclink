@@ -7,9 +7,9 @@ import java.util.List;
 
 /**
  * Product data from the frontend's combined createSaleEnvironment payload.
- *
+ * <p>
  * JSON shape:
- * 
+ *
  * <pre>
  * "product": {
  *   "productName": "Widget",
@@ -28,7 +28,7 @@ public class CreateProductRequest {
 
     private String description;
 
-    @JsonProperty("amount")
+    @JsonProperty("totalAmount")
     private int quantity;
 
     private double price;

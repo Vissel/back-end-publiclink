@@ -143,7 +143,7 @@ public class CoreProductService {
     private Product buildProductEntityForNew(ProductModel productModel, Request requestEntity) {
         Product product = new Product();
         product.setProductName(productModel.getProductName());
-        product.setAmount(productModel.getQuantity());
+        product.setTotal_amount(productModel.getQuantity());
         product.setPrice(productModel.getPrice());
         product.setRequest(requestEntity);
 

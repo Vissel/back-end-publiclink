@@ -16,6 +16,10 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
     @Lock(LockModeType.PESSIMISTIC_READ)
     List<Product> findProductsByRequest(Request request);
 
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT p FROM Product p WHERE p.request = :request")
+    List<Product> findProductsByRequestWithWriteLock(@Param("request") Request request);
+
     @Lock(LockModeType.PESSIMISTIC_READ)
     @Query("SELECT p FROM Product p WHERE p.request.reqId IN :requestIds")
     List<Product> findProductsByRequestIds(@Param("requestIds") List<Long> requestIds);

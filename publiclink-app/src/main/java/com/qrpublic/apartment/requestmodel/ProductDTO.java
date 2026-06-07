@@ -13,6 +13,7 @@ import lombok.Setter;
 @AllArgsConstructor
 public class ProductDTO {
 
+	private Long productId;
 	private String productName;
 
 	private int amount;
@@ -24,4 +25,14 @@ public class ProductDTO {
 	private int total_amount;
 
 	List<PictureDTO> listPicProMap;
+
+	public ProductDTO(String productName, int amount, String unit, Double price, int total_amount,
+			List<PictureDTO> listPicProMap) {
+		this.productName = productName;
+		this.amount = amount;
+		this.unit = unit;
+		this.price = price;
+		this.total_amount = total_amount;
+		this.listPicProMap = listPicProMap;
+	}
 }

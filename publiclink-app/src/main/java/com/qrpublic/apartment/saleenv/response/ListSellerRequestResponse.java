@@ -9,4 +9,5 @@ import java.util.List;
 public class ListSellerRequestResponse {
     private int total;
     private List<SaleEnvDTO> listSaleEnv;
+
 }

@@ -21,13 +21,12 @@ public class Utils {
             return CommonConstant.EMPTY;
         }
         Instant instant = timestamp.toInstant();
-        ZoneId zoneId = ZoneId.of("UTC");
+        ZoneId zoneId = ZoneId.systemDefault();
         ZonedDateTime zonedDateTime = ZonedDateTime.ofInstant(instant, zoneId);
 
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
         return zonedDateTime.format(formatter);
     }
-
 
     public static boolean isValidStr(String string) {
         return string != null && !string.isBlank();

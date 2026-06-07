@@ -33,6 +33,14 @@ public class CoreProductService {
         return productRepository.findProductsByRequest(request);
     }
 
+    /**
+     * Get products with their pictures by request ID.
+     * Uses LEFT JOIN FETCH to eagerly load pictures.
+     */
+    public List<Product> getProductsWithPicturesByRequestId(Long requestId) {
+        return productRepository.findProductsWithPicturesByRequestId(requestId);
+    }
+
     public Map<Long, List<Product>> getProductsMapByRequestIds(List<Long> requestIds) {
         return productRepository.findProductsByRequestIds(requestIds).stream()
                 .collect(Collectors.groupingBy(p -> p.getRequest().getReqId()));
@@ -140,7 +148,8 @@ public class CoreProductService {
         product.setRequest(requestEntity);
 
         // Handle image relationships
-        List<String> imageDataList = productModel.getPictureModels().stream().map(PictureModel::getData).collect(Collectors.toList());
+        List<String> imageDataList = productModel.getPictureModels().stream().map(PictureModel::getData)
+                .collect(Collectors.toList());
         if (imageDataList != null && !imageDataList.isEmpty()) {
             List<ProductPictureMap> picMapList = new ArrayList<>();
             for (String imageData : imageDataList) {

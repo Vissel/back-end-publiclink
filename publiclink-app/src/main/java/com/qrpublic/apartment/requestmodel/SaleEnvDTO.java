@@ -15,6 +15,7 @@ import java.util.List;
 @AllArgsConstructor
 public class SaleEnvDTO {
     private String createdAt;
+    private String endedAt;
     private String plannedEndedAt;
     private String sellerName;
     private String sellerLink;
@@ -42,9 +43,13 @@ public class SaleEnvDTO {
     private String currency;
     private List<PricingDTO> pricings;
 
+    private int orderTotal;
+    private int totalProductQuantity;
+    private List<PictureDTO> productPictures;
+
     // dont have sellerAuthLink
     public SaleEnvDTO(String createdAt, String sellerName, String sellerLink, String productName, String publicLink,
-                      String createdBy, boolean envStatus, List<OrderDTO> orders) {
+            String createdBy, boolean envStatus, List<OrderDTO> orders) {
         super();
         this.createdAt = createdAt;
         this.sellerName = sellerName;

@@ -103,8 +103,7 @@ public class PageController {
     @PostMapping("/publink")
     public Mono<ResponseEntity<GetSaleSpaceResponse>> accessPublicLink(
             @RequestParam String token,
-            @RequestHeader Map<String, Object> headers
-    ) {
+            @RequestHeader Map<String, Object> headers) {
         return Mono.fromCallable(() -> saleSpaceService.getSaleSpace(token, headers))
                 .subscribeOn(Schedulers.boundedElastic())
                 .flatMap(ResponseEntityConvertor::convertToMonoResponseEntity);
@@ -163,4 +162,5 @@ public class PageController {
     Mono<ResponseEntity<SellerRegisterResponse>> register(@RequestBody SellerRegisterRequest request) {
         return pubUserService.registerNewSeller(request);
     }
+
 }

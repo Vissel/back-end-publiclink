@@ -18,91 +18,128 @@ import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
+import java.util.Map;
 
 public class SaleEnvConvertor {
-    public static SaleEnvDTO.SaleEnvDTOBuilder buildEnvDTO(SaleEnvironment env) {
-        Request req = org.hibernate.Hibernate.isInitialized(env.getRequest()) ? env.getRequest() : null;
-        String productName = CommonConstant.EMPTY;
-        if (req != null && org.hibernate.Hibernate.isInitialized(req.getProducts()) && !req.getProducts().isEmpty()) {
-            productName = req.getProducts().getFirst().getProductName();
+        public static SaleEnvDTO.SaleEnvDTOBuilder buildEnvDTO(SaleEnvironment env) {
+                Request req = org.hibernate.Hibernate.isInitialized(env.getRequest()) ? env.getRequest() : null;
+                String productName = CommonConstant.EMPTY;
+                if (req != null && org.hibernate.Hibernate.isInitialized(req.getProducts())
+                                && !req.getProducts().isEmpty()) {
+                        productName = req.getProducts().getFirst().getProductName();
+                }
+                List<OrderDTO> orders = org.hibernate.Hibernate.isInitialized(env.getListOrder())
+                                ? createListOrderDTO(env.getListOrder())
+                                : List.of();
+                final String publicLink = LinkBuilder.buildPublicLink(env.getPublicLink());
+                return SaleEnvDTO.builder()
+                                .createdAt(Utils.formatTimeStamp(env.getCreatedAt()))
+                                .endedAt(DateUtils.dateToLocalTimeString(env.getEndedAt()))
+                                .plannedEndedAt(DateUtils.dateToLocalTimeString(env.getWillEndedAt()))
+                                .sellerName(req != null ? req.getSellerName() : null)
+                                .productName(productName)
+                                .publicLink(publicLink)
+                                .createdBy(req != null && req.getCreatedBy() != null ? req.getCreatedBy().getName()
+                                                : null)
+                                .envStatus(env.isState())
+                                .orders(orders)
+                                .requestUUID(req != null ? req.getReqUUID() : null);
         }
-        List<OrderDTO> orders = org.hibernate.Hibernate.isInitialized(env.getListOrder())
-                ? createListOrderDTO(env.getListOrder())
-                : List.of();
-        final String publicLink = LinkBuilder.buildPublicLink(env.getPublicLink());
-        return SaleEnvDTO.builder()
-                .createdAt(Utils.formatTimeStamp(env.getCreatedAt()))
-                .plannedEndedAt(DateUtils.dateToLocalTimeString(env.getWillEndedAt()))
-                .sellerName(req != null ? req.getSellerName() : null)
-                .productName(productName)
-                .publicLink(publicLink)
-                .createdBy(req != null && req.getCreatedBy() != null ? req.getCreatedBy().getName() : null)
-                .envStatus(env.isState())
-                .orders(orders)
-                .requestUUID(req != null ? req.getReqUUID() : null);
-    }
 
-    private static List<OrderDTO> createListOrderDTO(List<com.qrpublic.apartment.entity.Order> listOrder) {
-        List<OrderDTO> orderDTOs = new ArrayList<>();
-        if (listOrder != null && !listOrder.isEmpty()) {
-            String publicLink = listOrder.get(0).getSaleEnvironment().getPublicLink();
-            listOrder.stream().forEach(
-                    o -> orderDTOs.add(OrderConvertor.createOrderDTO(o, o.getOrderedAt().getTime(), publicLink)));
+        public static SaleEnvDTO.SaleEnvDTOBuilder buildEnvDTO(SaleEnvironment env,
+                                                               List<com.qrpublic.apartment.entity.Product> products,
+                                                               List<com.qrpublic.apartment.entity.Order> orders,
+                                                               int orderTotal,
+                                                               int totalProductQuantity) {
+                Request req = env.getRequest();
+                String productName = CommonConstant.EMPTY;
+                if (products != null && !products.isEmpty()) {
+                        productName = products.getFirst().getProductName();
+                }
+                List<OrderDTO> orderDTOs = (orders != null && !orders.isEmpty())
+                                ? createListOrderDTO(orders)
+                                : List.of();
+                final String publicLink = LinkBuilder.buildPublicLink(env.getPublicLink());
+                return SaleEnvDTO.builder()
+                                .createdAt(Utils.formatTimeStamp(env.getCreatedAt()))
+                                .endedAt(DateUtils.dateToLocalTimeString(env.getEndedAt()))
+                                .plannedEndedAt(DateUtils.dateToLocalTimeString(env.getWillEndedAt()))
+                                .sellerName(req != null ? req.getSellerName() : null)
+                                .productName(productName)
+                                .publicLink(publicLink)
+                                .createdBy(req != null && req.getCreatedBy() != null ? req.getCreatedBy().getName()
+                                                : null)
+                                .envStatus(env.isState())
+                                .orders(orderDTOs)
+                                .requestUUID(req != null ? req.getReqUUID() : null)
+                                .orderTotal(orderTotal)
+                                .totalProductQuantity(totalProductQuantity);
         }
-        return orderDTOs;
-    }
 
-    public static SaleEnvDTO buildSaleEnvDTOFromModel(SaleEnvironmentModel model) {
-        List<OrderDTO> orders = model.getOrders() == null ? List.of()
-                : model.getOrders().stream()
-                  .map(o -> new OrderDTO(0, null, o.getBuyerName(), null, false, false, null, 0, null, null))
-                  .toList();
-        final String authenToken = model.getSeller().getSellerLinkModel() != null
-                ? model.getSeller().getSellerLinkModel().getToken()
-                : CommonConstant.EMPTY;
-        final String sellerAuthLink = LinkBuilder.buildAuthenticationLink(model.getRequestUUID(), authenToken);
-        final Date sellerAutheLinkExpire = model.getSeller().getSellerLinkModel() != null
-                ? model.getSeller().getSellerLinkModel().getExpire()
-                : null;
-        final String publicLink = LinkBuilder.buildPublicLink(model.getPublicLink());
-        return SaleEnvDTO.builder()
-                .requestUUID(model.getRequestUUID())
-                .createdAt(model.getCreatedAt())
-                .plannedEndedAt(model.getPlannedEndedAt())
-                .sellerName(model.getSeller() != null ? model.getSeller().getName() : null)
-                .createdBy("Jade")
-                .sellerAuthLink(sellerAuthLink)
-                .sellerAuthLinkExpire(sellerAutheLinkExpire)
-                .publicLink(publicLink)
-                .envStatus(model.getEnvState() == EnvStateEnum.ACTIVE)
-                .productName(model.getProducts() != null && !model.getProducts().isEmpty()
-                        ? model.getProducts().getFirst().getProductName()
-                        : null)
-                .orders(orders)
-                .totalPrice(model.getTotalPrice())
-                .currency(model.getCurrency())
-                .build();
-    }
-
-    public static List<PricingDTO> toPricingDTOList(List<Pricing> pricings) {
-        if (pricings == null || pricings.isEmpty()) {
-            return List.of();
+        private static List<OrderDTO> createListOrderDTO(List<com.qrpublic.apartment.entity.Order> listOrder) {
+                List<OrderDTO> orderDTOs = new ArrayList<>();
+                if (listOrder != null && !listOrder.isEmpty()) {
+                        String publicLink = listOrder.get(0).getSaleEnvironment().getPublicLink();
+                        listOrder.stream().forEach(
+                                        o -> orderDTOs.add(OrderConvertor.createOrderDTO(o, o.getOrderedAt().getTime(),
+                                                        publicLink)));
+                }
+                return orderDTOs;
         }
-        return pricings.stream()
-                .map(p -> new PricingDTO(
-                        p.getDurationHours(),
-                        p.getAmount(),
-                        p.getCurrency(),
-                        Utils.formatTimeStamp(p.getCreatedAt())))
-                .toList();
-    }
 
-    public static BigDecimal calculateTotalPrice(List<Pricing> pricings) {
-        if (pricings == null || pricings.isEmpty()) {
-            return BigDecimal.ZERO;
+        public static SaleEnvDTO buildSaleEnvDTOFromModel(SaleEnvironmentModel model) {
+                List<OrderDTO> orders = model.getOrders() == null ? List.of()
+                                : model.getOrders().stream()
+                                                .map(o -> new OrderDTO(0, null, o.getBuyerName(), null, false, false,
+                                                                null, 0, null, null))
+                                                .toList();
+                final String authenToken = model.getSeller().getSellerLinkModel() != null
+                                ? model.getSeller().getSellerLinkModel().getToken()
+                                : CommonConstant.EMPTY;
+                final String sellerAuthLink = LinkBuilder.buildAuthenticationLink(model.getRequestUUID(), authenToken);
+                final Date sellerAutheLinkExpire = model.getSeller().getSellerLinkModel() != null
+                                ? model.getSeller().getSellerLinkModel().getExpire()
+                                : null;
+                final String publicLink = LinkBuilder.buildPublicLink(model.getPublicLink());
+                return SaleEnvDTO.builder()
+                                .requestUUID(model.getRequestUUID())
+                                .createdAt(model.getCreatedAt())
+                                .endedAt(model.getLinkEndedAt() != null ? model.getLinkEndedAt().toString() : null)
+                                .plannedEndedAt(model.getPlannedEndedAt())
+                                .sellerName(model.getSeller() != null ? model.getSeller().getName() : null)
+                                .createdBy("Jade")
+                                .sellerAuthLink(sellerAuthLink)
+                                .sellerAuthLinkExpire(sellerAutheLinkExpire)
+                                .publicLink(publicLink)
+                                .envStatus(model.getEnvState() == EnvStateEnum.ACTIVE)
+                                .productName(model.getProducts() != null && !model.getProducts().isEmpty()
+                                                ? model.getProducts().getFirst().getProductName()
+                                                : null)
+                                .orders(orders)
+                                .totalPrice(model.getTotalPrice())
+                                .currency(model.getCurrency())
+                                .build();
         }
-        return pricings.stream()
-                .map(Pricing::getAmount)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-    }
+
+        public static List<PricingDTO> toPricingDTOList(List<Pricing> pricings) {
+                if (pricings == null || pricings.isEmpty()) {
+                        return List.of();
+                }
+                return pricings.stream()
+                                .map(p -> new PricingDTO(
+                                                p.getDurationHours(),
+                                                p.getAmount(),
+                                                p.getCurrency(),
+                                                Utils.formatTimeStamp(p.getCreatedAt())))
+                                .toList();
+        }
+
+        public static BigDecimal calculateTotalPrice(List<Pricing> pricings) {
+                if (pricings == null || pricings.isEmpty()) {
+                        return BigDecimal.ZERO;
+                }
+                return pricings.stream()
+                                .map(Pricing::getAmount)
+                                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        }
 }

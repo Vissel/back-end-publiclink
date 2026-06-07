@@ -26,6 +26,7 @@ import com.qrpublic.apartment.product.request.CreateProductRequest;
 import com.qrpublic.apartment.repository.PricingRepository;
 import com.qrpublic.apartment.repository.SaleEnvironmentRepository;
 import com.qrpublic.apartment.requestmodel.Pagination;
+import com.qrpublic.apartment.requestmodel.PictureDTO;
 import com.qrpublic.apartment.requestmodel.RequestDTO;
 import com.qrpublic.apartment.requestmodel.SaleEnvDTO;
 import com.qrpublic.apartment.saleenv.SaleEnvironmentService;
@@ -135,7 +136,6 @@ public class SaleEnvironmentServiceImpl implements SaleEnvironmentService {
         SaleEnvironment environment = environmentFuture.join();
         SellerModel sellerModel = sellerFuture.join();
 
-
         final String authenToken = sellerModel.getSellerLinkModel() != null
                 ? sellerModel.getSellerLinkModel().getToken()
                 : CommonConstant.EMPTY;
@@ -165,7 +165,8 @@ public class SaleEnvironmentServiceImpl implements SaleEnvironmentService {
         final String publicLink = linkModel.getToken();
         log.debug("Generated public link: {}", publicLink);
         env.setPublicLink(publicLink);
-        env.setWillEndedAt(linkModel.getExpire() != null ? new java.sql.Timestamp(linkModel.getExpire().getTime()) : null);
+        env.setWillEndedAt(
+                linkModel.getExpire() != null ? new java.sql.Timestamp(linkModel.getExpire().getTime()) : null);
         return repo.save(env);
     }
 
@@ -175,13 +176,16 @@ public class SaleEnvironmentServiceImpl implements SaleEnvironmentService {
         productModel.setQuantity(productRequest.getQuantity());
         productModel.setUnit(Currency.getInstance("VND").getCurrencyCode());
         productModel.setPrice(productRequest.getPrice());
-//        productModel.setTotalQuantity(productRequest.getQuantity() * productRequest.getPrice());
-        productModel.setPictureModels(productRequest.getImageDataList() != null && !productRequest.getImageDataList().isEmpty()
-                ? productRequest.getImageDataList().stream().map(imageData -> {
-            PictureModel pictureModel = new PictureModel();
-            pictureModel.setData(imageData);
-            return pictureModel;
-        }).collect(Collectors.toList()) : List.of());
+        // productModel.setTotalQuantity(productRequest.getQuantity() *
+        // productRequest.getPrice());
+        productModel.setPictureModels(
+                productRequest.getImageDataList() != null && !productRequest.getImageDataList().isEmpty()
+                        ? productRequest.getImageDataList().stream().map(imageData -> {
+                            PictureModel pictureModel = new PictureModel();
+                            pictureModel.setData(imageData);
+                            return pictureModel;
+                        }).collect(Collectors.toList())
+                        : List.of());
         return productModel;
     }
 
@@ -194,7 +198,7 @@ public class SaleEnvironmentServiceImpl implements SaleEnvironmentService {
                 .flatMap(findUserAuthen -> {
                     boolean isExpiringSoon = findUserAuthen.getExpiredAt() != null
                             && findUserAuthen.getExpiredAt()
-                            .before(new java.util.Date(System.currentTimeMillis() + FIVE_MINUTES));
+                                    .before(new java.util.Date(System.currentTimeMillis() + FIVE_MINUTES));
                     if (isExpiringSoon) {
                         // expiry < 5 min => generate new token with 15 min validity, then update
                         String sellerName = sellerDTO != null ? sellerDTO.getName() : null;
@@ -325,10 +329,10 @@ public class SaleEnvironmentServiceImpl implements SaleEnvironmentService {
 
     private LinkModel generatePublicLink(CreateEnvironmentRequest requestObj) {
         final String uuid = requestObj.getRequestUuid();
-        final String sellerName = requestObj.getSellerRequest().getName();
+        final String sellerUsername = requestObj.getSellerRequest().getUsername();
         final long validTimeMillis = requestObj.getSellerRequest().getPrice().getDurationHours() * ONE_HOUR_MILI;
         return linkService.generateSecureUrl(uuid,
-                Map.of(LinkConstant.PARAM_USERNAME, sellerName), validTimeMillis);
+                Map.of(LinkConstant.PARAM_USERNAME, sellerUsername), validTimeMillis);
     }
 
     private LinkModel generateReqAuthLink(RequestDTO requestDTO) {
@@ -344,8 +348,8 @@ public class SaleEnvironmentServiceImpl implements SaleEnvironmentService {
         return Mono.fromCallable(() -> {
             ListEnvironmentRequest filter = listEnvironmentRequestPagination.getListData() != null
                     && !listEnvironmentRequestPagination.getListData().isEmpty()
-                    ? listEnvironmentRequestPagination.getListData().get(0)
-                    : null;
+                            ? listEnvironmentRequestPagination.getListData().get(0)
+                            : null;
 
             PageRequest pageable = PageRequest.of(listEnvironmentRequestPagination.getPage() - 1,
                     listEnvironmentRequestPagination.getSize(), Sort.by(Sort.Order.desc("createdAt")));
@@ -399,7 +403,7 @@ public class SaleEnvironmentServiceImpl implements SaleEnvironmentService {
     }
 
     private Result<ListEnvironmentResponse> buildEnvironmentResult(List<SaleEnvironmentModel> models,
-                                                                   long totalElements) {
+            long totalElements) {
         ListEnvironmentResponse response = new ListEnvironmentResponse();
         response.setTotal((int) totalElements);
         response.setListSaleEnv(models.stream()
@@ -443,6 +447,22 @@ public class SaleEnvironmentServiceImpl implements SaleEnvironmentService {
         environmentDetailResponse.setPricings(SaleEnvConvertor.toPricingDTOList(pricings));
         environmentDetailResponse.setTotalPrice(SaleEnvConvertor.calculateTotalPrice(pricings));
         environmentDetailResponse.setCurrency(!pricings.isEmpty() ? pricings.get(0).getCurrency() : "VND");
+
+        // Fetch products with pictures
+        if (env.getRequest() != null && env.getRequest().getReqId() != null) {
+            List<com.qrpublic.apartment.entity.Product> products = coreProductService
+                    .getProductsWithPicturesByRequestId(env.getRequest().getReqId());
+            List<PictureDTO> pictures = products.stream()
+                    .filter(p -> p.getListPicProMap() != null)
+                    .flatMap(p -> p.getListPicProMap().stream())
+                    .filter(ppm -> ppm.getPicture() != null)
+                    .map(ppm -> new PictureDTO(
+                            ppm.getPicture().getLink(),
+                            ppm.getPicture().getTitle(),
+                            ppm.getPicture().getData()))
+                    .toList();
+            environmentDetailResponse.setProductPictures(pictures);
+        }
 
         // Fetch seller auth data from OperatedSellerClient
         String sellerName = env.getRequest() != null ? env.getRequest().getSellerName() : null;

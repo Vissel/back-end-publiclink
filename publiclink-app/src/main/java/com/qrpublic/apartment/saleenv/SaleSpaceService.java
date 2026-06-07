@@ -1,5 +1,6 @@
 package com.qrpublic.apartment.saleenv;
 
+import com.qrpublic.apartment.requestmodel.UpdateProductRequest;
 import com.qrpublic.apartment.saleenv.response.GetSaleSpaceResponse;
 import com.qrpublic.apartment.template.model.Result;
 
@@ -13,4 +14,6 @@ public interface SaleSpaceService {
     Result<GetSaleSpaceResponse> getSaleSpace(String token, Map<String, Object> headers);
 
     String getDBTimezone();
+
+    boolean updateProduct(UpdateProductRequest request);
 }

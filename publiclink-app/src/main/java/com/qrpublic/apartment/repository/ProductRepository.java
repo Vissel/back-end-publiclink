@@ -9,6 +9,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.util.List;
+import java.util.Optional;
 
 public interface ProductRepository extends JpaRepository<Product, Long> {
 
@@ -24,4 +25,7 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
             "LEFT JOIN FETCH ppm.picture " +
             "WHERE p.request.reqId = :requestId")
     List<Product> findProductsWithPicturesByRequestId(@Param("requestId") Long requestId);
+
+    @Query("SELECT DISTINCT p FROM Product p LEFT JOIN FETCH p.listPicProMap WHERE p.productId = :productId")
+    Optional<Product> findByIdWithPicMaps(@Param("productId") Long productId);
 }

@@ -96,4 +96,21 @@ public interface SaleEnvironmentRepository extends JpaRepository<SaleEnvironment
         @Query("SELECT se.envId, COALESCE(SUM(p.total_amount), 0) FROM SaleEnvironment se JOIN se.request r JOIN r.products p WHERE se.envId IN :ids GROUP BY se.envId")
         List<Object[]> sumProductQuantityByEnvIds(@Param("ids") List<String> ids);
 
+        @Query("SELECT DISTINCT se FROM SaleEnvironment se " +
+                        "LEFT JOIN FETCH se.request r " +
+                        "LEFT JOIN FETCH r.createdBy " +
+                        "LEFT JOIN FETCH r.products")
+        List<SaleEnvironment> findAllWithRequestAndProducts();
+
+        @Query("SELECT r.sellerName, COUNT(se) FROM SaleEnvironment se " +
+                        "JOIN se.request r WHERE r.sellerName IN :usernames " +
+                        "GROUP BY r.sellerName")
+        List<Object[]> countEnvironmentsBySellerUsernames(@Param("usernames") List<String> usernames);
+
+        @Query("SELECT DISTINCT se FROM SaleEnvironment se " +
+                        "LEFT JOIN FETCH se.request r " +
+                        "LEFT JOIN FETCH r.products " +
+                        "WHERE r.sellerName = :sellerUsername")
+        List<SaleEnvironment> findBySellerUsername(@Param("sellerUsername") String sellerUsername);
+
 }

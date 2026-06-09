@@ -42,4 +42,7 @@
     <changeSet id="016" author="thach">
         <sqlFile path="db/changelog/changeset-016-add-will-ended-at.sql"/>
     </changeSet>
+    <changeSet id="017" author="thach">
+        <sqlFile path="db/changelog/changeset-017-create-notification.sql"/>
+    </changeSet>
 </databaseChangeLog>

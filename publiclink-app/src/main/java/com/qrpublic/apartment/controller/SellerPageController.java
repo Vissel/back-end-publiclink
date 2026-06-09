@@ -2,6 +2,8 @@ package com.qrpublic.apartment.controller;
 
 import com.qrpublic.apartment.export.ExportCache;
 import com.qrpublic.apartment.export.ExportService;
+import com.qrpublic.apartment.model.notification.NotificationCountResponse;
+import com.qrpublic.apartment.model.notification.NotificationDTO;
 import com.qrpublic.apartment.order.OrderService;
 import com.qrpublic.apartment.order.request.GetMoneyRequest;
 import com.qrpublic.apartment.order.request.SellerNoteRequest;
@@ -15,6 +17,7 @@ import com.qrpublic.apartment.saleenv.request.ExportReportRequest;
 import com.qrpublic.apartment.saleenv.request.ListSellerRequestsRequest;
 import com.qrpublic.apartment.saleenv.response.ListSellerRequestResponse;
 import com.qrpublic.apartment.service.LinkService;
+import com.qrpublic.apartment.service.NotificationService;
 import com.qrpublic.apartment.template.ResponseEntityConvertor;
 import com.qrpublic.apartment.user.request.GetSellerRequest;
 import com.qrpublic.apartment.user.response.GetUserResponse;
@@ -28,6 +31,7 @@ import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
 
+import java.util.List;
 import java.util.Map;
 
 @Slf4j
@@ -47,6 +51,8 @@ public class SellerPageController {
     LinkService linkService;
     @Autowired
     OrderService orderService;
+    @Autowired
+    NotificationService notificationService;
 
     @PostMapping("/getInfo")
     public Mono<ResponseEntity<GetUserResponse>> getInfo(@RequestBody GetSellerRequest getSellerRequest) {
@@ -139,5 +145,61 @@ public class SellerPageController {
         return Mono.fromCallable(() -> {
             return orderService.setSellerNote(request);
         }).subscribeOn(Schedulers.boundedElastic());
+    }
+
+    // ─── Notification Endpoints ────────────────────────────────────────────────
+
+    /**
+     * Get unread notification count for seller (bell badge).
+     */
+    @GetMapping("/notifications/unread-count")
+    public Mono<ResponseEntity<NotificationCountResponse>> getUnreadCount(
+            @RequestHeader(value = "X-User-ID", defaultValue = "") String sellerUsername) {
+        return ResponseEntityConvertor.convertToMonoResponseEntity(
+                notificationService.getUnreadCount(sellerUsername));
+    }
+
+    /**
+     * Get paginated notifications for seller.
+     */
+    @GetMapping("/notifications")
+    public Mono<ResponseEntity<List<NotificationDTO>>> getNotifications(
+            @RequestHeader(value = "X-User-ID", defaultValue = "") String sellerUsername,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        return ResponseEntityConvertor.convertToMonoResponseEntity(
+                notificationService.getNotifications(sellerUsername, page, size));
+    }
+
+    /**
+     * Get notification detail (auto marks as read).
+     */
+    @GetMapping("/notifications/{id}")
+    public Mono<ResponseEntity<NotificationDTO>> getNotificationDetail(
+            @RequestHeader(value = "X-User-ID", defaultValue = "") String sellerUsername,
+            @PathVariable Long id) {
+        return ResponseEntityConvertor.convertToMonoResponseEntity(
+                notificationService.getNotificationDetail(sellerUsername, id));
+    }
+
+    /**
+     * Mark a single notification as read.
+     */
+    @PostMapping("/notifications/{id}/read")
+    public Mono<ResponseEntity<Void>> markAsRead(
+            @RequestHeader(value = "X-User-ID", defaultValue = "") String sellerUsername,
+            @PathVariable Long id) {
+        return ResponseEntityConvertor.convertToMonoResponseEntity(
+                notificationService.markAsRead(sellerUsername, id));
+    }
+
+    /**
+     * Mark all notifications as read for the seller.
+     */
+    @PostMapping("/notifications/read-all")
+    public Mono<ResponseEntity<Void>> markAllAsRead(
+            @RequestHeader(value = "X-User-ID", defaultValue = "") String sellerUsername) {
+        return ResponseEntityConvertor.convertToMonoResponseEntity(
+                notificationService.markAllAsRead(sellerUsername));
     }
 }

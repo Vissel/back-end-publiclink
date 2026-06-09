@@ -14,6 +14,7 @@ import com.qrpublic.apartment.util.Utils;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.poi.ss.usermodel.*;
+import org.apache.poi.xssf.streaming.SXSSFSheet;
 import org.apache.poi.xssf.streaming.SXSSFWorkbook;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -71,7 +72,8 @@ public class ExportService {
     }
 
     private byte[] generateExcel(Request req, SaleEnvironment env,
-            List<Product> products, List<com.qrpublic.apartment.entity.Order> orders) {
+            List<Product> products,
+            List<com.qrpublic.apartment.entity.Order> orders) {
         SXSSFWorkbook workbook = new SXSSFWorkbook();
         try (ByteArrayOutputStream baos = new ByteArrayOutputStream()) {
             // Create cell styles
@@ -92,15 +94,15 @@ public class ExportService {
             cellStyle.setBorderLeft(BorderStyle.THIN);
             cellStyle.setBorderRight(BorderStyle.THIN);
 
-            // ---- Sheet 1: Request Information ----
-            Sheet reqSheet = workbook.createSheet("Request Info");
-            String[] reqHeaders = { "Field", "Value" };
-            Row headerRow = reqSheet.createRow(0);
-            for (int i = 0; i < reqHeaders.length; i++) {
-                Cell cell = headerRow.createCell(i);
-                cell.setCellValue(reqHeaders[i]);
-                cell.setCellStyle(headerStyle);
-            }
+            // ---- Single Sheet: All Data ----
+            Sheet sheet = workbook.createSheet("Report");
+            int rowIdx = 0;
+
+            // Section 1: Request Information
+            Row sectionRow = sheet.createRow(rowIdx++);
+            Cell sectionCell = sectionRow.createCell(0);
+            sectionCell.setCellValue("Request Information");
+            sectionCell.setCellStyle(headerStyle);
 
             String[][] reqData = {
                     { "Request UUID", req.getReqUUID() },
@@ -111,27 +113,22 @@ public class ExportService {
                     { "Auth Link", req.getReqAuthLink() != null ? req.getReqAuthLink() : "" },
                     { "Created By", req.getCreatedBy() != null ? req.getCreatedBy().getName() : "" }
             };
-
             for (int i = 0; i < reqData.length; i++) {
-                Row row = reqSheet.createRow(i + 1);
-                for (int j = 0; j < reqData[i].length; j++) {
-                    Cell cell = row.createCell(j);
-                    cell.setCellValue(reqData[i][j]);
-                    cell.setCellStyle(cellStyle);
-                }
+                Row row = sheet.createRow(rowIdx++);
+                Cell keyCell = row.createCell(0);
+                keyCell.setCellValue(reqData[i][0]);
+                keyCell.setCellStyle(cellStyle);
+                Cell valCell = row.createCell(1);
+                valCell.setCellValue(reqData[i][1]);
+                valCell.setCellStyle(cellStyle);
             }
-            reqSheet.autoSizeColumn(0);
-            reqSheet.autoSizeColumn(1);
 
-            // ---- Sheet 2: Sale Environment ----
-            Sheet envSheet = workbook.createSheet("Environment");
-            String[] envHeaders = { "Field", "Value" };
-            headerRow = envSheet.createRow(0);
-            for (int i = 0; i < envHeaders.length; i++) {
-                Cell cell = headerRow.createCell(i);
-                cell.setCellValue(envHeaders[i]);
-                cell.setCellStyle(headerStyle);
-            }
+            // Section 2: Sale Environment Information
+            rowIdx++;
+            sectionRow = sheet.createRow(rowIdx++);
+            sectionCell = sectionRow.createCell(0);
+            sectionCell.setCellValue("Sale Environment Information");
+            sectionCell.setCellStyle(headerStyle);
 
             String[][] envData = {
                     { "Env ID", env != null ? env.getEnvId() : "N/A" },
@@ -141,32 +138,33 @@ public class ExportService {
                     { "Ended At", env != null ? DateUtils.dateToLocalTimeString(env.getEndedAt()) : "N/A" },
                     { "Will End At", env != null ? DateUtils.dateToLocalTimeString(env.getWillEndedAt()) : "N/A" }
             };
-
             for (int i = 0; i < envData.length; i++) {
-                Row row = envSheet.createRow(i + 1);
-                for (int j = 0; j < envData[i].length; j++) {
-                    Cell cell = row.createCell(j);
-                    cell.setCellValue(envData[i][j]);
-                    cell.setCellStyle(cellStyle);
-                }
+                Row row = sheet.createRow(rowIdx++);
+                Cell keyCell = row.createCell(0);
+                keyCell.setCellValue(envData[i][0]);
+                keyCell.setCellStyle(cellStyle);
+                Cell valCell = row.createCell(1);
+                valCell.setCellValue(envData[i][1]);
+                valCell.setCellStyle(cellStyle);
             }
-            envSheet.autoSizeColumn(0);
-            envSheet.autoSizeColumn(1);
 
-            // ---- Sheet 3: Products ----
-            Sheet prodSheet = workbook.createSheet("Products");
+            // Section 3: Products
+            rowIdx++;
+            sectionRow = sheet.createRow(rowIdx++);
+            sectionCell = sectionRow.createCell(0);
+            sectionCell.setCellValue("Products");
+            sectionCell.setCellStyle(headerStyle);
+
             String[] prodHeaders = { "Product Name", "Amount", "Unit", "Price", "Total Amount" };
-            headerRow = prodSheet.createRow(0);
+            Row prodHeaderRow = sheet.createRow(rowIdx++);
             for (int i = 0; i < prodHeaders.length; i++) {
-                Cell cell = headerRow.createCell(i);
+                Cell cell = prodHeaderRow.createCell(i);
                 cell.setCellValue(prodHeaders[i]);
                 cell.setCellStyle(headerStyle);
             }
-
             if (products != null && !products.isEmpty()) {
-                for (int i = 0; i < products.size(); i++) {
-                    Product p = products.get(i);
-                    Row row = prodSheet.createRow(i + 1);
+                for (Product p : products) {
+                    Row row = sheet.createRow(rowIdx++);
                     createCell(row, 0, p.getProductName() != null ? p.getProductName() : "", cellStyle);
                     createCell(row, 1, p.getAmount(), cellStyle);
                     createCell(row, 2, p.getUnit() != null ? p.getUnit() : "", cellStyle);
@@ -174,27 +172,27 @@ public class ExportService {
                     createCell(row, 4, p.getTotal_amount(), cellStyle);
                 }
             }
-            for (int i = 0; i < prodHeaders.length; i++) {
-                prodSheet.autoSizeColumn(i);
-            }
 
-            // ---- Sheet 4: Orders ----
-            Sheet orderSheet = workbook.createSheet("Orders");
+            // Section 4: Orders
+            rowIdx++;
+            sectionRow = sheet.createRow(rowIdx++);
+            sectionCell = sectionRow.createCell(0);
+            sectionCell.setCellValue("Orders");
+            sectionCell.setCellStyle(headerStyle);
+
             String[] orderHeaders = { "Buyer Name", "Ordered At", "Amount", "Unit", "Note", "Seller Note", "Delivered",
                     "Get Money" };
-            headerRow = orderSheet.createRow(0);
+            Row orderHeaderRow = sheet.createRow(rowIdx++);
             for (int i = 0; i < orderHeaders.length; i++) {
-                Cell cell = headerRow.createCell(i);
+                Cell cell = orderHeaderRow.createCell(i);
                 cell.setCellValue(orderHeaders[i]);
                 cell.setCellStyle(headerStyle);
             }
-
             if (orders != null && !orders.isEmpty()) {
                 SimpleDateFormat formatter = new SimpleDateFormat(CommonConstant.DATETIME_PATTERN);
                 formatter.setTimeZone(TimeZone.getTimeZone("UTC"));
-                for (int i = 0; i < orders.size(); i++) {
-                    com.qrpublic.apartment.entity.Order o = orders.get(i);
-                    Row row = orderSheet.createRow(i + 1);
+                for (com.qrpublic.apartment.entity.Order o : orders) {
+                    Row row = sheet.createRow(rowIdx++);
                     createCell(row, 0, o.getBuyerName() != null ? o.getBuyerName() : "", cellStyle);
                     String orderTime = o.getOrderedAt() != null
                             ? formatter.format(new Date(o.getOrderedAt().getTime()))
@@ -208,8 +206,11 @@ public class ExportService {
                     createCell(row, 7, o.isGetMoney() ? "Yes" : "No", cellStyle);
                 }
             }
-            for (int i = 0; i < orderHeaders.length; i++) {
-                orderSheet.autoSizeColumn(i);
+
+            // Auto-size columns (max columns used: 8 for orders)
+            ((SXSSFSheet) sheet).trackAllColumnsForAutoSizing();
+            for (int i = 0; i < 8; i++) {
+                sheet.autoSizeColumn(i);
             }
 
             workbook.write(baos);
@@ -345,7 +346,8 @@ public class ExportService {
     }
 
     private void writeEnvironmentSheet(Sheet sheet, Request req, SaleEnvironment env,
-            List<Product> products, List<com.qrpublic.apartment.entity.Order> orders,
+            List<Product> products,
+            List<com.qrpublic.apartment.entity.Order> orders,
             CellStyle headerStyle, CellStyle cellStyle) {
         // Section 1: Request Info
         int rowIdx = 0;
@@ -354,6 +356,11 @@ public class ExportService {
         rowIdx = writeKeyValueRow(sheet, rowIdx, "Seller Name", req.getSellerName(), cellStyle);
         rowIdx = writeKeyValueRow(sheet, rowIdx, "Description", req.getDescription(), cellStyle);
         rowIdx = writeKeyValueRow(sheet, rowIdx, "Created At", Utils.formatTimeStamp(req.getCreatedAt()), cellStyle);
+        rowIdx = writeKeyValueRow(sheet, rowIdx, "Authenticated", String.valueOf(req.isAuthenticated()), cellStyle);
+        rowIdx = writeKeyValueRow(sheet, rowIdx, "Auth Link", req.getReqAuthLink() != null ? req.getReqAuthLink() : "",
+                cellStyle);
+        rowIdx = writeKeyValueRow(sheet, rowIdx, "Created By",
+                req.getCreatedBy() != null ? req.getCreatedBy().getName() : "", cellStyle);
 
         // Section 2: Environment Info
         rowIdx++;
@@ -361,7 +368,10 @@ public class ExportService {
         rowIdx = writeKeyValueRow(sheet, rowIdx, "Env ID", env.getEnvId(), cellStyle);
         rowIdx = writeKeyValueRow(sheet, rowIdx, "Public Link", env.getPublicLink(), cellStyle);
         rowIdx = writeKeyValueRow(sheet, rowIdx, "State", String.valueOf(env.isState()), cellStyle);
+        rowIdx = writeKeyValueRow(sheet, rowIdx, "Created At", Utils.formatTimeStamp(env.getCreatedAt()), cellStyle);
         rowIdx = writeKeyValueRow(sheet, rowIdx, "Ended At", DateUtils.dateToLocalTimeString(env.getEndedAt()),
+                cellStyle);
+        rowIdx = writeKeyValueRow(sheet, rowIdx, "Will End At", DateUtils.dateToLocalTimeString(env.getWillEndedAt()),
                 cellStyle);
 
         // Section 3: Products
@@ -414,7 +424,8 @@ public class ExportService {
             }
         }
 
-        // Auto-size columns
+        // Auto-size columns (max columns used: 8 for orders)
+        ((SXSSFSheet) sheet).trackAllColumnsForAutoSizing();
         for (int i = 0; i < 8; i++) {
             sheet.autoSizeColumn(i);
         }
@@ -447,6 +458,7 @@ public class ExportService {
             createCell(row, 6, env.getCreatedAt() != null ? Utils.formatTimeStamp(env.getCreatedAt()) : "", cellStyle);
         }
 
+        ((SXSSFSheet) summarySheet).trackAllColumnsForAutoSizing();
         for (int i = 0; i < headers.length; i++) {
             summarySheet.autoSizeColumn(i);
         }

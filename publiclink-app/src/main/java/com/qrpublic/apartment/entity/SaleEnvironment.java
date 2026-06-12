@@ -27,7 +27,7 @@ public class SaleEnvironment {
     @Column(nullable = false)
     private String publicLink;
 
-    private boolean state = true;
+    private boolean state;
 
     @Column(updatable = false, insertable = false)
     private Timestamp createdAt;

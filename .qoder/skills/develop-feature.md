@@ -205,6 +205,109 @@ When converting a blocking method to reactive:
 
 ---
 
+## Streaming Export Pattern (Two-Step)
+
+For large file exports, use a two-step streaming pattern to avoid:
+- Sending large request bodies in GET requests
+- Buffering entire file in memory before sending
+- Timeout issues with long-running exports
+
+### Backend Implementation
+
+**Step 1: Token Endpoint (POST)**
+```java
+// Store export parameters in cache, return single-use token
+@PostMapping("/exportAllToken")
+public ResponseEntity<Map<String, String>> prepareExportAll(@RequestBody ExportAllRequest request) {
+    String token = exportCache.store(request);
+    return ResponseEntity.ok(Map.of("downloadToken", token));
+}
+```
+
+**Step 2: Stream Endpoint (GET)**
+```java
+// Retrieve cached request, stream file using StreamingResponseBody
+@GetMapping("/stream/exportAll/{token}")
+public ResponseEntity<StreamingResponseBody> streamExportAll(@PathVariable String token) {
+    ExportAllRequest request = exportCache.consume(token); // removes from cache
+    if (request == null) return ResponseEntity.notFound().build();
+
+    String fileName = exportService.buildFileName(request);
+    StreamingResponseBody responseBody = outputStream -> {
+        exportService.streamingExport(request, outputStream);
+    };
+
+    return ResponseEntity.ok()
+            .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + fileName + "\"")
+            .contentType(MediaType.APPLICATION_OCTET_STREAM)
+            .body(responseBody);
+}
+```
+
+**ExportCache Component:**
+```java
+@Component
+public class ExportCache {
+    private final ConcurrentHashMap<String, ExportAllRequest> cache = new ConcurrentHashMap<>();
+    
+    public String store(ExportAllRequest request) {
+        String token = UUID.randomUUID().toString();
+        cache.put(token, request);
+        return token;
+    }
+    
+    public ExportAllRequest consume(String token) {
+        return cache.remove(token); // single-use
+    }
+}
+```
+
+**Streaming Service Method:**
+```java
+@Transactional(readOnly = true)
+public void streamingExportAllReports(ExportAllRequest request, OutputStream outputStream) throws IOException {
+    SXSSFWorkbook workbook = new SXSSFWorkbook(100); // keep 100 rows in memory
+    try {
+        // ... write sheets ...
+        workbook.write(outputStream); // streams directly to HTTP output
+        workbook.dispose();
+    } finally {
+        workbook.close();
+    }
+}
+```
+
+### Frontend Implementation
+
+```javascript
+const handleExportAll = async () => {
+  // Step 1: Get download token
+  const tokenResponse = await pubApi.post("/api/v1/seller/exportAllToken", {
+    sellerName: username,
+  });
+  const downloadToken = tokenResponse.data?.downloadToken;
+  if (!downloadToken) return;
+
+  // Step 2: Trigger streaming download via anchor click
+  const streamUrl = `${config.baseURL}/publiclink/api/v1/seller/stream/exportAll/${downloadToken}`;
+  const a = document.createElement("a");
+  a.href = streamUrl;
+  a.download = ""; // Let server determine filename from Content-Disposition
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+};
+```
+
+### Key Points
+- Token is **single-use** — removed from cache after first retrieval
+- `SXSSFWorkbook` enables memory-efficient streaming (keeps only N rows in memory)
+- `StreamingResponseBody` writes directly to HTTP output without buffering
+- Frontend uses anchor click for native browser download handling
+- Filename determined by server via `Content-Disposition` header
+
+---
+
 ## Common Error Messages and Fixes
 
 | Error | Cause | Fix |

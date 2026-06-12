@@ -45,4 +45,9 @@
     <changeSet id="017" author="thach">
         <sqlFile path="db/changelog/changeset-017-create-notification.sql"/>
     </changeSet>
+    <!-- changeset-018 is managed by data-backup module's own Liquibase config
+    <changeSet id="018" author="data-backup">
+        <sqlFile path="db/changelog/changeset-018-create-backup-otp.sql"/>
+    </changeSet>
+    -->
 </databaseChangeLog>

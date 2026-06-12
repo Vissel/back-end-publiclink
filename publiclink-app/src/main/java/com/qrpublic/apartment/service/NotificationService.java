@@ -1,10 +1,7 @@
 package com.qrpublic.apartment.service;
 
-import com.qrpublic.apartment.entity.Notification;
-import com.qrpublic.apartment.entity.NotificationRecipient;
-import com.qrpublic.apartment.entity.Request;
-import com.qrpublic.apartment.entity.SaleEnvironment;
-import com.qrpublic.apartment.entity.User;
+import com.qrpublic.apartment.constant.CommonConstant;
+import com.qrpublic.apartment.entity.*;
 import com.qrpublic.apartment.model.notification.NotificationCountResponse;
 import com.qrpublic.apartment.model.notification.NotificationDTO;
 import com.qrpublic.apartment.model.notification.SellerEnvironmentListResponse;
@@ -12,11 +9,7 @@ import com.qrpublic.apartment.model.notification.SellerEnvironmentListResponse.E
 import com.qrpublic.apartment.model.notification.SellerEnvironmentListResponse.SellerEnvironments;
 import com.qrpublic.apartment.model.notification.SellerListResponse;
 import com.qrpublic.apartment.model.notification.SellerListResponse.SellerItem;
-import com.qrpublic.apartment.repository.NotificationRecipientRepository;
-import com.qrpublic.apartment.repository.NotificationRepository;
-import com.qrpublic.apartment.repository.RequestRepository;
-import com.qrpublic.apartment.repository.SaleEnvironmentRepository;
-import com.qrpublic.apartment.repository.UserRepository;
+import com.qrpublic.apartment.repository.*;
 import com.qrpublic.apartment.requestmodel.SendNotificationRequest;
 import com.qrpublic.apartment.template.model.Result;
 import com.qrpublic.apartment.template.service.ProcessCallback;
@@ -27,6 +20,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.Assert;
 
 import java.sql.Timestamp;
@@ -350,6 +344,7 @@ public class NotificationService {
     /**
      * Get environments for a specific seller (on-demand loading).
      */
+    @Transactional(readOnly = true)
     public Result<SellerEnvironmentListResponse> getSellerEnvironments(String sellerUsername) {
         return publicLinkServiceTemplate.execute(new ProcessCallback<Void, SellerEnvironmentListResponse>() {
             @Override
@@ -366,17 +361,12 @@ public class NotificationService {
             public SellerEnvironmentListResponse process() {
                 List<SaleEnvironment> envs = saleEnvironmentRepository.findBySellerUsername(sellerUsername);
 
-                // Get seller name from User table
-                String sellerName = userRepository.findByUserName(sellerUsername)
-                        .map(User::getName)
-                        .orElse(sellerUsername);
-
                 List<EnvironmentItem> envItems = envs.stream()
                         .map(se -> {
                             String productName = se.getRequest().getProducts() != null
                                     && !se.getRequest().getProducts().isEmpty()
-                                            ? se.getRequest().getProducts().get(0).getProductName()
-                                            : "";
+                                    ? se.getRequest().getProducts().get(0).getProductName()
+                                    : CommonConstant.EMPTY;
                             return new EnvironmentItem(
                                     se.getRequest().getReqUUID(),
                                     productName,
@@ -386,7 +376,7 @@ public class NotificationService {
                         })
                         .collect(Collectors.toList());
 
-                SellerEnvironments sellerEnv = new SellerEnvironments(sellerUsername, sellerName, envItems);
+                SellerEnvironments sellerEnv = new SellerEnvironments(sellerUsername, sellerUsername, envItems);
                 return new SellerEnvironmentListResponse(List.of(sellerEnv));
             }
         });

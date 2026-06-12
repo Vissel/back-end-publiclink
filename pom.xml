@@ -19,6 +19,7 @@
         <module>apiGateway</module>
         <module>adapter</module>
         <module>user</module>
+        <module>data-backup</module>
     </modules>
     <packaging>pom</packaging>
     <description>Demo project for Spring Boot</description>

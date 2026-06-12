@@ -127,7 +127,11 @@
             <artifactId>poi-ooxml</artifactId>
             <version>5.4.0</version>
         </dependency>
-    </dependencies>
+        <!-- Spring Mail (for backup OTP) -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-mail</artifactId>
+        </dependency>    </dependencies>
     <profiles>
         <profile>
             <id>dev</id>

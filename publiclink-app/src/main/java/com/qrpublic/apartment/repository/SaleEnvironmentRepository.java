@@ -21,8 +21,8 @@ public interface SaleEnvironmentRepository extends JpaRepository<SaleEnvironment
         Optional<SaleEnvironment> findByPublicLink(String publicLink);
 
         @Lock(LockModeType.PESSIMISTIC_WRITE)
-        @Query("SELECT se FROM SaleEnvironment se LEFT JOIN FETCH se.request r WHERE se.publicLink = :publicLink")
-        Optional<SaleEnvironment> findByPublicLinkWithWriteLock(@Param("publicLink") String publicLink);
+        @Query("SELECT se FROM SaleEnvironment se LEFT JOIN FETCH se.request r WHERE r.reqUUID = :reqUUID")
+        Optional<SaleEnvironment> findByPublicLinkWithWriteLock(@Param("reqUUID") String reqUUID);
 
         Optional<SaleEnvironment> findFirstByRequestOrderByCreatedAtDesc(Request request);
 

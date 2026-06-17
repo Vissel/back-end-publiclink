@@ -114,9 +114,14 @@ public class JwtAuthenticationWebFilter implements WebFilter, Ordered {
         try {
             var claims = jwtTokenProducer.extractClaims(token);
             Object rolesObj = claims.get(FilterConstant.ROLES_CLAIM);
-            if (rolesObj instanceof List<?>) {
-                @SuppressWarnings("unchecked") List<String> roles = (List<String>) rolesObj;
-                return roles;
+            if (rolesObj instanceof List<?> roles && !roles.isEmpty()) {
+                @SuppressWarnings("unchecked")
+                List<String> roleList = (List<String>) roles;
+                return roleList;
+            }
+            String role = claims.get("role", String.class);
+            if (role != null && !role.isBlank()) {
+                return List.of(role);
             }
         } catch (Exception e) {
             log.debug("Failed to extract roles from token: {}", e.getMessage());

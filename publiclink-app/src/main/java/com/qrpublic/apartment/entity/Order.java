@@ -33,7 +33,6 @@ public class Order {
 	private SaleEnvironment saleEnvironment;
 
 	@Column(updatable = false, insertable = false)
-	@OrderBy(value = "DESC")
 	private Timestamp orderedAt;
 
 	private boolean delivered;

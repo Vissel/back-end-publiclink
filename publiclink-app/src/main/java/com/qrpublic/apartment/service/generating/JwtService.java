@@ -1,6 +1,7 @@
 package com.qrpublic.apartment.service.generating;
 
 import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.ExpiredJwtException;
 import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.SignatureAlgorithm;
@@ -102,6 +103,23 @@ public class JwtService {
             log.error("Unexpected error during token validation: {}", e.getMessage(), e);
             return false;
         }
+    }
+
+    public boolean isTokenValidButMayExpired(String token) {
+        try {
+            Jwts.parserBuilder().setSigningKey(Keys.hmacShaKeyFor(getKey())).build()
+            .parseClaimsJws(token);
+            return true;
+        } catch (ExpiredJwtException e) {
+            // Signature/structure are valid; only expiration check failed.
+            log.debug("Token is structurally valid but expired at: {}", e.getClaims().getExpiration());
+            return true;
+        } catch (JwtException e) {
+            log.error("Token validation failed: {}", e.getMessage());
+        } catch (Exception e) {
+            log.error("Unexpected error during token validation: {}", e.getMessage(), e);
+        }
+        return false;
     }
 
     public boolean isHeaderTokenValid(String headerAuthorization) throws JwtException {

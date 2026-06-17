@@ -29,6 +29,9 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
+
 import java.text.SimpleDateFormat;
 import java.util.*;
 import java.util.stream.Stream;
@@ -55,6 +58,9 @@ public class SaleSpaceServiceImpl implements SaleSpaceService {
     @Autowired
     ProductRepository productRepository;
 
+    @PersistenceContext
+    private EntityManager entityManager;
+
     @Autowired
     CoreTimezoneService coreTimezoneService;
 
@@ -72,8 +78,8 @@ public class SaleSpaceServiceImpl implements SaleSpaceService {
 
             @Override
             public void preProcess(Void request) {
-                if (!linkService.validateLink(token)) {
-                    throw new IllegalArgumentException("Invalid or expired token.");
+                if (!linkService.validateLinkButNotExpiredValidation(token)) {
+                    throw new IllegalArgumentException("Invalid token.");
                 }
             }
 
@@ -111,7 +117,7 @@ public class SaleSpaceServiceImpl implements SaleSpaceService {
             }
 
             private boolean checkValidSellerView(UserModel userModel, String loggedInUsername,
-                                                 Map<String, Object> headers) {
+                    Map<String, Object> headers) {
                 if (userModel != null) {
                     final String sellerName = userModel.getUsername();
                     if (StringUtils.isNotBlank(sellerName) && sellerName.equals(loggedInUsername)) {
@@ -167,11 +173,11 @@ public class SaleSpaceServiceImpl implements SaleSpaceService {
     }
 
     private GetSaleSpaceResponse buildGetSaleSpaceResponse(SaleEnvironment saleEnvironment,
-                                                           List<Order> orders,
-                                                           List<Product> products,
-                                                           UserModel userModel,
-                                                           boolean isValidSellerView,
-                                                           String requestUUID) {
+            List<Order> orders,
+            List<Product> products,
+            UserModel userModel,
+            boolean isValidSellerView,
+            String requestUUID) {
         GetSaleSpaceResponse response = new GetSaleSpaceResponse();
         response.setReqUuid(requestUUID);
         response.setSellerFullName(userModel.getName());
@@ -227,17 +233,17 @@ public class SaleSpaceServiceImpl implements SaleSpaceService {
         product.setAmount(req.getAmount());
         product.setUnit(req.getUnit());
         product.setPrice(req.getPrice());
-//        product.setTotal_amount(req.getTotalAmount());
+        // product.setTotal_amount(req.getTotalAmount());
 
-        // Replace images: manually remove old mappings, then add new ones
+        // Replace images: explicitly delete old mappings, then add new ones.
+        // Must use entityManager.remove() instead of ppm.setProduct(null)
+        // because ProductPictureMap.product is @ManyToOne(optional = false),
+        // making product_id non-nullable — nullifying it violates the constraint.
         if (req.getListPicProMap() != null) {
-            // Remove existing mappings — must break bidirectional link
-            // because product_id is non-nullable (optional = false)
             if (product.getListPicProMap() != null) {
-                for (ProductPictureMap ppm : new ArrayList<>(product.getListPicProMap())) {
-                    ppm.setProduct(null);
-                    product.getListPicProMap().remove(ppm);
-                }
+                List<ProductPictureMap> toRemove = new ArrayList<>(product.getListPicProMap());
+                product.getListPicProMap().clear();
+                toRemove.forEach(entityManager::remove);
             }
             // Add new mappings with proper bidirectional links
             List<ProductPictureMap> newPics = new ArrayList<>();

@@ -20,7 +20,7 @@ public class SaleEnvironment {
     @Column(name = "env_id")
     private String envId;
 
-    @OneToOne(optional = false, fetch = FetchType.LAZY, cascade = {CascadeType.REMOVE})
+    @OneToOne(optional = false, fetch = FetchType.LAZY, cascade = { CascadeType.REMOVE })
     @JoinColumn(name = "req_id")
     private Request request;
 
@@ -38,8 +38,8 @@ public class SaleEnvironment {
     @Column(name = "will_ended_at")
     private Timestamp willEndedAt;
 
-    @OneToMany(mappedBy = "saleEnvironment", cascade = {CascadeType.REMOVE})
-    @OrderBy(value = "DESC")
+    @OneToMany(mappedBy = "saleEnvironment", cascade = CascadeType.ALL)
+    @OrderBy(value = "orderedAt DESC")
     private List<Order> listOrder;
 
     public SaleEnvironment(Request req) {

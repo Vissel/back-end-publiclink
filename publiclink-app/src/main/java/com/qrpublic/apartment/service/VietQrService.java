@@ -147,6 +147,9 @@ public class VietQrService extends JwtService implements LinkService {
     public boolean validateLink(String publicToken) {
         return isTokenValid(publicToken);
     }
-
+    @Override
+    public boolean validateLinkButNotExpiredValidation(String publicToken) {
+        return isTokenValidButMayExpired(publicToken);
+    }   
 
 }

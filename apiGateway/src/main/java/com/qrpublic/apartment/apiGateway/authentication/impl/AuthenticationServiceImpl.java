@@ -1,5 +1,7 @@
 package com.qrpublic.apartment.apiGateway.authentication.impl;
 
+import com.qrpublic.apartment.adapter.authentication.request.FindUserRequest;
+import com.qrpublic.apartment.adapter.authentication.response.FindUserResponse;
 import com.qrpublic.apartment.apiGateway.authentication.AuthenticationService;
 import com.qrpublic.apartment.apiGateway.authentication.JwtTokenProducer;
 import com.qrpublic.apartment.apiGateway.authentication.RefreshTokenService;
@@ -10,6 +12,7 @@ import com.qrpublic.apartment.apiGateway.authentication.response.BasicLoginRespo
 import com.qrpublic.apartment.apiGateway.authentication.response.RefreshTokenResponse;
 import com.qrpublic.apartment.apiGateway.exception.BusinessException;
 import com.qrpublic.apartment.apiGateway.exception.ErrorCode;
+import com.qrpublic.apartment.apiGateway.integration.UserClient;
 import jakarta.validation.Validator;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -42,6 +45,9 @@ public class AuthenticationServiceImpl implements AuthenticationService {
     @Autowired
     RefreshTokenService refreshTokenService;
 
+    @Autowired
+    UserClient userClient;
+
     @Override
     public ByteArrayResource getPublicKey() throws IOException {
         return new ByteArrayResource(rsaService.loadPublicKey());
@@ -65,16 +71,20 @@ public class AuthenticationServiceImpl implements AuthenticationService {
                 authenticationManager.authenticate(
                                 new UsernamePasswordAuthenticationToken(request.getUsername(),
                                         rsaService.decrypt(request.getEncryptedPassword())))
-                        .flatMap(authentication -> generateTokenAndResponse(authentication, reqUuid))
+                        .flatMap(authentication -> userClient
+                                .findUserByUsername(new FindUserRequest(authentication.getName()))
+                                .defaultIfEmpty(new FindUserResponse())
+                                .flatMap(user -> generateTokenAndResponse(authentication, reqUuid, user.getName())))
                         .onErrorMap(this::handleAuthenticationFailure);
 
     }
 
-    private Mono<BasicLoginResponse> generateTokenAndResponse(Authentication authentication, String reqUuid) {
+    private Mono<BasicLoginResponse> generateTokenAndResponse(Authentication authentication, String reqUuid,
+            String name) {
         String username = authentication.getName();
         List<String> roles = authentication.getAuthorities().stream().map(authority -> authority.getAuthority()).toList();
 
-        String accessToken = tokenProvider.generateToken(username, roles);
+        String accessToken = tokenProvider.generateToken(username, roles, name);
         String refreshToken = tokenProvider.generateRefreshToken(username);
 
         // Store refresh token in Redis for banking-grade security

@@ -1,5 +1,6 @@
 package com.qrpublic.apartment.order;
 
+import com.qrpublic.apartment.constant.LinkConstant;
 import com.qrpublic.apartment.entity.Order;
 import com.qrpublic.apartment.entity.Product;
 import com.qrpublic.apartment.entity.SaleEnvironment;
@@ -118,6 +119,9 @@ public class OrderImpl implements OrderService {
             public void preProcess(AddOrderRequest req) {
                 Assert.notNull(req, "Request cannot be null");
                 Assert.hasText(req.getToken(), "Token is required");
+                // 3. Validate the link/token
+                Assert.isTrue(linkService.validateLink(req.getToken()), "Invalid or expired link");
+
                 Assert.hasText(req.getBuyerName(), "Buyer name is required");
                 Assert.isTrue(req.getAmount() > 0, "Order amount must be positive");
             }
@@ -126,9 +130,10 @@ public class OrderImpl implements OrderService {
             public AddOrderResponse process() {
                 return transactionTemplate.execute(status -> {
                     AddOrderRequest req = getRequest();
-
+                    String requestUUID = (String) linkService.extractClaimByKey(req.getToken(),
+                            LinkConstant.CLAIM_SUBJECT);
                     // 1. Find environment by public link with pessimistic write lock
-                    SaleEnvironment env = saleEnvironmentRepo.findByPublicLinkWithWriteLock(req.getToken())
+                    SaleEnvironment env = saleEnvironmentRepo.findByPublicLinkWithWriteLock(requestUUID)
                             .orElseThrow(() -> new ApplicationException("Environment not found", 404));
 
                     // 2. Check environment is active
@@ -136,12 +141,8 @@ public class OrderImpl implements OrderService {
                         throw new ApplicationException("Environment is inactive", 400);
                     }
 
-                    // 3. Validate the link/token
-                    if (!linkService.validateLink(req.getToken())) {
-                        throw new ApplicationException("Invalid or expired link", 400);
-                    }
-
-                    // 4. Check product stock with write lock — ensure at least one product has remaining qty
+                    // 4. Check product stock with write lock — ensure at least one product has
+                    // remaining qty
                     List<Product> products = productRepo.findProductsByRequestWithWriteLock(env.getRequest());
                     boolean hasStock = products.stream()
                             .anyMatch(p -> p.getAmount() < p.getTotal_amount());
@@ -150,7 +151,6 @@ public class OrderImpl implements OrderService {
                     }
 
                     // 5. Create the order
-                    long orderedTime = System.currentTimeMillis();
                     Order order = new Order();
                     order.setBuyerName(req.getBuyerName());
                     order.setAmount(req.getAmount());
@@ -161,7 +161,8 @@ public class OrderImpl implements OrderService {
                     order.setGetMoney(false);
                     order = orderRepo.save(order);
 
-                    // 6. Decrement stock: increment Product.amount by ordered quantity on first available product
+                    // 6. Decrement stock: increment Product.amount by ordered quantity on first
+                    // available product
                     for (Product p : products) {
                         if (p.getAmount() < p.getTotal_amount()) {
                             p.setAmount(p.getAmount() + req.getAmount());

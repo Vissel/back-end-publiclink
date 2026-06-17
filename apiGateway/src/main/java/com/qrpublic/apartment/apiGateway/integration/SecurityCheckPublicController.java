@@ -1,6 +1,7 @@
 package com.qrpublic.apartment.apiGateway.integration;
 
 import com.qrpublic.apartment.adapter.authentication.response.TokenClaimsResponse;
+import com.qrpublic.apartment.adapter.user.request.ExtendAuthenTokenRequest;
 import com.qrpublic.apartment.adapter.user.request.UserAuthenTokenRequest;
 import com.qrpublic.apartment.adapter.user.response.UserAuthTokenResponse;
 import com.qrpublic.apartment.apiGateway.authentication.request.AuthenticatedTokenRequest;
@@ -37,7 +38,8 @@ public class SecurityCheckPublicController {
         return convertToUserAuthLinkResponse(securityCheckService.generateAuthenticationLink(request));
     }
 
-    private Mono<UserAuthTokenResponse> convertToUserAuthLinkResponse(Mono<AuthenticatedTokenResponse> authenticatedLinkResponseMono) {
+    private Mono<UserAuthTokenResponse> convertToUserAuthLinkResponse(
+            Mono<AuthenticatedTokenResponse> authenticatedLinkResponseMono) {
         return authenticatedLinkResponseMono.map(src -> {
             UserAuthTokenResponse res = new UserAuthTokenResponse();
             res.setAuthenticationToken(src.getAuthenticatedToken());
@@ -47,9 +49,9 @@ public class SecurityCheckPublicController {
         });
     }
 
-
     private AuthenticatedTokenRequest convertToAuthenticatedLinkRequest(UserAuthenTokenRequest userAuthenTokenRequest) {
-        // Convert UserAuthenLinkRequest properties to AuthenticatedLinkRequest properties
+        // Convert UserAuthenLinkRequest properties to AuthenticatedLinkRequest
+        // properties
         AuthenticatedTokenRequest request = new AuthenticatedTokenRequest();
         request.setUsername(userAuthenTokenRequest.getUsername());
         request.setValidTime(userAuthenTokenRequest.getValidTime());
@@ -58,5 +60,9 @@ public class SecurityCheckPublicController {
         return request;
     }
 
+    @PostMapping("/extendAuthenToken")
+    public Mono<UserAuthTokenResponse> extendAuthenToken(@RequestBody ExtendAuthenTokenRequest request) {
+        return securityCheckService.extendAuthenticationLink(request);
+    }
 
 }

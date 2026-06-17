@@ -1,9 +1,12 @@
 package com.qrpublic.apartment.apiGateway.authentication;
 
+import com.qrpublic.apartment.adapter.authentication.request.FindUserRequest;
+import com.qrpublic.apartment.adapter.authentication.response.FindUserResponse;
 import com.qrpublic.apartment.apiGateway.authentication.request.RefreshTokenRequest;
 import com.qrpublic.apartment.apiGateway.authentication.response.RefreshTokenResponse;
 import com.qrpublic.apartment.apiGateway.exception.BusinessException;
 import com.qrpublic.apartment.apiGateway.exception.ErrorCode;
+import com.qrpublic.apartment.apiGateway.integration.UserClient;
 import jakarta.validation.Validator;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -38,6 +41,9 @@ public class RefreshTokenService {
 
     @Autowired
     private Validator validator;
+
+    @Autowired
+    private UserClient userClient;
 
     @Value("${jwt.expiration}")
     private long accessExpiration;
@@ -116,35 +122,44 @@ public class RefreshTokenService {
                             }
                             return Mono.just(tokenData);
                         }))
-                // Step 7: Generate new tokens
+                // Step 7: Generate new tokens (re-fetch profile so seller roles/name stay current)
                 .flatMap(tokenData -> {
                     String username = tokenData.getUsername();
-                    List<String> roles = parseRoles(tokenData.getRoles());
+                    List<String> cachedRoles = parseRoles(tokenData.getRoles());
 
-                    // Generate new access token
-                    String newAccessToken = jwtTokenProducer.generateToken(username, roles);
-                    
-                    // Generate new refresh token
-                    String newRefreshToken = jwtTokenProducer.generateRefreshToken(username);
+                    return userClient.findUserByUsername(new FindUserRequest(username))
+                            .map(user -> resolveUserContext(username, user, cachedRoles))
+                            .defaultIfEmpty(new UserTokenContext(username, cachedRoles, null))
+                            .flatMap(context -> {
+                                if (context.roles().isEmpty()) {
+                                    log.error("No roles resolved during token refresh | User: {} | TraceID: {}",
+                                            username, traceId);
+                                    return Mono.error(new BusinessException(ErrorCode.INVALID_REFRESH_TOKEN));
+                                }
 
-                    // Store new refresh token
-                    return storageService.storeRefreshToken(
-                                    newRefreshToken, 
-                                    username, 
-                                    tokenData.getRoles(),
-                                    refreshExpiration / 1000)
-                            .map(stored -> RefreshTokenResponse.builder()
-                                    .accessToken(newAccessToken)
-                                    .refreshToken(newRefreshToken)
-                                    .username(username)
-                                    .roles(roles)
-                                    .expiresAt(new Date(System.currentTimeMillis() + accessExpiration))
-                                    .message("Token refreshed successfully")
-                                    .build())
-                            .onErrorResume(e -> {
-                                log.error("Failed to store new refresh token | TraceID: {} | Error: {}", 
-                                        traceId, e.getMessage());
-                                return Mono.error(new BusinessException(ErrorCode.REFRESH_TOKEN_FAILED));
+                                String newAccessToken = jwtTokenProducer.generateToken(
+                                        context.username(), context.roles(), context.name());
+                                String newRefreshToken = jwtTokenProducer.generateRefreshToken(context.username());
+                                String rolesString = String.join(",", context.roles());
+
+                                return storageService.storeRefreshToken(
+                                                newRefreshToken,
+                                                context.username(),
+                                                rolesString,
+                                                refreshExpiration / 1000)
+                                        .map(stored -> RefreshTokenResponse.builder()
+                                                .accessToken(newAccessToken)
+                                                .refreshToken(newRefreshToken)
+                                                .username(context.username())
+                                                .roles(context.roles())
+                                                .expiresAt(new Date(System.currentTimeMillis() + accessExpiration))
+                                                .message("Token refreshed successfully")
+                                                .build())
+                                        .onErrorResume(e -> {
+                                            log.error("Failed to store new refresh token | TraceID: {} | Error: {}",
+                                                    traceId, e.getMessage());
+                                            return Mono.error(new BusinessException(ErrorCode.REFRESH_TOKEN_FAILED));
+                                        });
                             });
                 })
                 .doOnSuccess(response -> 
@@ -220,6 +235,17 @@ public class RefreshTokenService {
             return List.of();
         }
         return Arrays.asList(rolesString.split(","));
+    }
+
+    private UserTokenContext resolveUserContext(String username, FindUserResponse user, List<String> cachedRoles) {
+        List<String> roles = cachedRoles;
+        if (user.getRole() != null && !user.getRole().isBlank()) {
+            roles = List.of(user.getRole());
+        }
+        return new UserTokenContext(username, roles, user.getName());
+    }
+
+    private record UserTokenContext(String username, List<String> roles, String name) {
     }
 
     /**

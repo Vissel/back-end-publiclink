@@ -1,6 +1,7 @@
 package com.qrpublic.apartment.integration;
 
 import com.qrpublic.apartment.adapter.authentication.response.TokenClaimsResponse;
+import com.qrpublic.apartment.adapter.user.request.ExtendAuthenTokenRequest;
 import com.qrpublic.apartment.adapter.user.request.UserAuthenTokenRequest;
 import com.qrpublic.apartment.adapter.user.response.UserAuthTokenResponse;
 import org.springframework.beans.factory.annotation.Value;
@@ -36,6 +37,14 @@ public class SecurityCheckClient {
     public Mono<UserAuthTokenResponse> generateAuthenToken(UserAuthenTokenRequest request) {
         return webClient.post()
                 .uri("/security/v1/public/generateAuthenToken")
+                .bodyValue(request)
+                .retrieve()
+                .bodyToMono(UserAuthTokenResponse.class);
+    }
+
+    public Mono<UserAuthTokenResponse> extendAuthenToken(ExtendAuthenTokenRequest request) {
+        return webClient.post()
+                .uri("/security/v1/public/extendAuthenToken")
                 .bodyValue(request)
                 .retrieve()
                 .bodyToMono(UserAuthTokenResponse.class);

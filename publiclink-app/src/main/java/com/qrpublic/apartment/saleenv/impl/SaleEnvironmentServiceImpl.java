@@ -2,6 +2,7 @@ package com.qrpublic.apartment.saleenv.impl;
 
 import com.qrpublic.apartment.adapter.authentication.request.FindUserAuthenRequest;
 import com.qrpublic.apartment.adapter.authentication.response.FindUserAuthenResponse;
+import com.qrpublic.apartment.adapter.user.request.ExtendAuthenTokenRequest;
 import com.qrpublic.apartment.adapter.user.request.UserAuthenTokenRequest;
 import com.qrpublic.apartment.adapter.user.request.UserUserAuthRequest;
 import com.qrpublic.apartment.adapter.user.response.UserAuthTokenResponse;
@@ -41,6 +42,7 @@ import com.qrpublic.apartment.util.DateUtils;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcOperations;
@@ -63,11 +65,13 @@ import java.util.stream.Collectors;
 @PreAuthorize("hasRole('Admin')")
 public class SaleEnvironmentServiceImpl implements SaleEnvironmentService {
 
-    private static final long FIFTEEN_MINUTES = 15 * 60 * 1000L;
     private static final long FIVE_MINUTES = 5 * 60 * 1000L;
     private static final long ONE_MINUTE_SECONDS = 1 * 60 * 1000L;
     private static final long ONE_SECOND_MILI = 1 * 1000L;
     private static final long ONE_HOUR_MILI = 60 * 60 * ONE_SECOND_MILI;
+
+    @Value("${link.auth.expired}")
+    private long linkAuthExpiredMillis;
     @Autowired
     private SaleEnvironmentRepository repo;
 
@@ -167,6 +171,7 @@ public class SaleEnvironmentServiceImpl implements SaleEnvironmentService {
         env.setPublicLink(publicLink);
         env.setWillEndedAt(
                 linkModel.getExpire() != null ? new java.sql.Timestamp(linkModel.getExpire().getTime()) : null);
+        env.setState(true);
         return repo.save(env);
     }
 
@@ -200,9 +205,9 @@ public class SaleEnvironmentServiceImpl implements SaleEnvironmentService {
                             && findUserAuthen.getExpiredAt()
                                     .before(new java.util.Date(System.currentTimeMillis() + FIVE_MINUTES));
                     if (isExpiringSoon) {
-                        // expiry < 5 min => generate new token with 15 min validity, then update
+                        // expiry < 5 min => generate new token, then update
                         String sellerName = sellerDTO != null ? sellerDTO.getName() : null;
-                        return generateToken(username, sellerName, FIFTEEN_MINUTES)
+                        return generateToken(username, sellerName, linkAuthExpiredMillis)
                                 .flatMap(authLink -> operatedSellerClient
                                         .updateUserAuth(toUserAuthRequest(username, authLink))
                                         .flatMap(result -> {
@@ -223,7 +228,7 @@ public class SaleEnvironmentServiceImpl implements SaleEnvironmentService {
                 })
                 .switchIfEmpty(Mono.defer(() -> {
                     String name = sellerDTO != null ? sellerDTO.getName() : null;
-                    return generateToken(username, name, FIFTEEN_MINUTES)
+                    return generateToken(username, name, linkAuthExpiredMillis)
                             .flatMap(authLink -> {
                                 // Step 1: Create user auth
                                 return operatedUserClient.createUserAuth(toUserAuthRequest(username, authLink))
@@ -521,6 +526,54 @@ public class SaleEnvironmentServiceImpl implements SaleEnvironmentService {
         if (productRequest.getQuantity() < 0) {
             throw new IllegalArgumentException("Product quantity cannot be negative");
         }
+    }
+
+    @Override
+    public Mono<SaleEnvDTO> extendAuthLink(String requestUuid) {
+        SaleEnvironment env = repo.findByRequestReqUuid(requestUuid)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Sale environment not found for request UUID: " + requestUuid));
+
+        String sellerUsername = env.getRequest() != null ? env.getRequest().getSellerName() : null;
+        if (StringUtils.isBlank(sellerUsername)) {
+            return Mono.error(new RuntimeException("No seller associated with request UUID: " + requestUuid));
+        }
+
+        return operatedSellerClient.findUserByUsername(new FindUserAuthenRequest(sellerUsername))
+                .switchIfEmpty(Mono.error(new RuntimeException("No auth data found for seller: " + sellerUsername)))
+                .flatMap(authData -> {
+                    String existingToken = authData.getAuthenticationToken();
+                    if (StringUtils.isBlank(existingToken)) {
+                        return Mono.error(new RuntimeException("No existing auth token for seller: " + sellerUsername));
+                    }
+
+                    ExtendAuthenTokenRequest extendReq = new ExtendAuthenTokenRequest();
+                    extendReq.setExistingToken(existingToken);
+                    extendReq.setExtensionMillis(15 * 60 * 1000); // 15 minutes
+
+                    return securityCheckClient.extendAuthenToken(extendReq)
+                            .flatMap(newTokenResp -> {
+                                UserUserAuthRequest updateReq = new UserUserAuthRequest();
+                                updateReq.setUserName(sellerUsername);
+                                updateReq.setAuthToken(newTokenResp.getAuthenticationToken());
+                                updateReq.setExpire(newTokenResp.getExpire());
+
+                                return operatedSellerClient.updateUserAuth(updateReq)
+                                        .flatMap(result -> {
+                                            if (!result.isSuccess()) {
+                                                return Mono.error(new RuntimeException(
+                                                        "Failed to update user auth: " + result.getErrorMessage()));
+                                            }
+                                            String newAuthLink = LinkBuilder.buildAuthenticationLink(
+                                                    requestUuid, newTokenResp.getAuthenticationToken());
+                                            SaleEnvDTO dto = new SaleEnvDTO();
+                                            dto.setSellerAuthLink(newAuthLink);
+                                            dto.setSellerAuthLinkExpire(newTokenResp.getExpire());
+                                            dto.setRequestUUID(requestUuid);
+                                            return Mono.just(dto);
+                                        });
+                            });
+                });
     }
 
 }

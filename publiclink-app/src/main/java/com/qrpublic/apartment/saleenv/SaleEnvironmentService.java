@@ -37,4 +37,10 @@ public interface SaleEnvironmentService {
      */
     Mono<SaleEnvDTO> getEnvironmentDetailByRequestUuid(String requestUuid);
 
+    /**
+     * Extend the seller authentication link by generating a new token with extended
+     * expiry.
+     */
+    Mono<SaleEnvDTO> extendAuthLink(String requestUuid);
+
 }

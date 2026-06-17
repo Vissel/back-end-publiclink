@@ -22,6 +22,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Mono;
 
+import java.util.Map;
+
 @RestController
 @RequestMapping("/admin/v1")
 public class AdminController {
@@ -116,5 +118,17 @@ public class AdminController {
             @PathVariable String username) {
         return ResponseEntityConvertor.convertToMonoResponseEntity(
                 notificationService.getSellerEnvironments(username));
+    }
+
+    /**
+     * Extend the seller authentication link by generating a new token with +15
+     * minutes expiry.
+     */
+    @PostMapping("/extendAuthLink")
+    public Mono<ResponseEntity<SaleEnvDTO>> extendAuthLink(@RequestBody Map<String, String> body) {
+        String requestUuid = body.get("requestUuid");
+        return envService.extendAuthLink(requestUuid)
+                .map(ResponseEntity::ok)
+                .defaultIfEmpty(ResponseEntity.notFound().build());
     }
 }

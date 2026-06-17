@@ -45,15 +45,16 @@ public class SecurityConfig {
 
     @Bean
     ReactiveAuthenticationManager reactiveAuthenticationManager(ReactiveUserDetailsService userDetailsService,
-                                                                PasswordEncoder passwordEncoder) {
-        UserDetailsRepositoryReactiveAuthenticationManager authenticationManager
-                = new UserDetailsRepositoryReactiveAuthenticationManager(userDetailsService);
+            PasswordEncoder passwordEncoder) {
+        UserDetailsRepositoryReactiveAuthenticationManager authenticationManager = new UserDetailsRepositoryReactiveAuthenticationManager(
+                userDetailsService);
         authenticationManager.setPasswordEncoder(passwordEncoder);
         return authenticationManager;
     }
 
     @Bean
-    SecurityWebFilterChain securityWebFilterChain(ServerHttpSecurity http, CorsConfigurationSource corsConfigurationSource) {
+    SecurityWebFilterChain securityWebFilterChain(ServerHttpSecurity http,
+            CorsConfigurationSource corsConfigurationSource) {
         http
                 .csrf(ServerHttpSecurity.CsrfSpec::disable)
                 .cors(corsSpec -> corsSpec.configurationSource(corsConfigurationSource))
@@ -63,10 +64,10 @@ public class SecurityConfig {
                                 "/actuator/**",
                                 "/security/v1/public/**",
                                 "/api/v1/user/**",
-                                "publiclink/api/v1/publish/**")// temporary allow user creation without auth for testing
+                                "/publiclink/api/v1/publish/**")// temporary allow user creation without auth for
+                                                                // testing
                         .permitAll()
-                        .anyExchange().authenticated()
-                )
+                        .anyExchange().authenticated())
                 .addFilterAt(rateLimitingWebFilter, SecurityWebFiltersOrder.FIRST)
                 .addFilterAt(jwtAuthenticationWebFilter, SecurityWebFiltersOrder.AUTHENTICATION)
                 .httpBasic(ServerHttpSecurity.HttpBasicSpec::disable)
@@ -87,8 +88,7 @@ public class SecurityConfig {
                 FilterConstant.AUTH_TIMESTAMP_HEADER,
                 FilterConstant.CONTENT_TYPE_OPTIONS_HEADER,
                 FilterConstant.FRAME_OPTIONS_HEADER,
-                FilterConstant.XSS_PROTECTION_HEADER
-        ));
+                FilterConstant.XSS_PROTECTION_HEADER));
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", configuration);
         return source;

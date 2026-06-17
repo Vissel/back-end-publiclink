@@ -10,6 +10,8 @@ public interface LinkService {
 
     boolean validateLink(String link);
 
+    boolean validateLinkButNotExpiredValidation(String publicToken);
+
     LinkModel generateAuthLink(Map<String, String> claims);
 
     Object extractClaimByKey(String token, String key);

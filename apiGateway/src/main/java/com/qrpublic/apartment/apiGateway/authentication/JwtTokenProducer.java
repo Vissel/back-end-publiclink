@@ -40,9 +40,24 @@ public class JwtTokenProducer {
      * @return
      */
     public String generateToken(String username, List<String> roles) {
+        return generateToken(username, roles, null);
+    }
+
+    /**
+     * Standard access token with optional seller profile claims.
+     * Sellers need singular {@code role} and {@code name} claims for downstream
+     * token-claim extraction (e.g. publish/seller flows).
+     */
+    public String generateToken(String username, List<String> roles, String name) {
         Map<String, Object> claims = new HashMap<>();
         claims.put(FilterConstant.ROLES_CLAIM, roles);
         claims.put(FilterConstant.TOKEN_TYPE_CLAIM, FilterConstant.ACCESS_TOKEN_TYPE);
+        if (roles != null && !roles.isEmpty()) {
+            claims.put("role", roles.get(0));
+        }
+        if (name != null && !name.isBlank()) {
+            claims.put("name", name);
+        }
         return Jwts.builder()
                 .setClaims(claims)
                 .setSubject(username)

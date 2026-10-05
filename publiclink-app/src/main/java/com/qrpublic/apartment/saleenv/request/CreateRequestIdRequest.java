@@ -7,5 +7,6 @@ import lombok.Data;
 public class CreateRequestIdRequest {
     private PubUserRequest sellerRequest;
 
+    @Deprecated
     private String productName;
 }

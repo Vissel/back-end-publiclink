@@ -68,12 +68,13 @@ public class ExportService {
                     .orElse(List.of());
         }
 
-        return generateExcel(req, env, products, orders);
+        return generateExcel(req, env, products, orders, ExportLabels.forLocale(request.getLocale()));
     }
 
     private byte[] generateExcel(Request req, SaleEnvironment env,
             List<Product> products,
-            List<com.qrpublic.apartment.entity.Order> orders) {
+            List<com.qrpublic.apartment.entity.Order> orders,
+            ExportLabels labels) {
         SXSSFWorkbook workbook = new SXSSFWorkbook();
         try (ByteArrayOutputStream baos = new ByteArrayOutputStream()) {
             // Create cell styles
@@ -95,23 +96,23 @@ public class ExportService {
             cellStyle.setBorderRight(BorderStyle.THIN);
 
             // ---- Single Sheet: All Data ----
-            Sheet sheet = workbook.createSheet("Report");
+            Sheet sheet = workbook.createSheet(labels.getSheetReport());
             int rowIdx = 0;
 
             // Section 1: Request Information
             Row sectionRow = sheet.createRow(rowIdx++);
             Cell sectionCell = sectionRow.createCell(0);
-            sectionCell.setCellValue("Request Information");
+            sectionCell.setCellValue(labels.getSectionRequestInfo());
             sectionCell.setCellStyle(headerStyle);
 
             String[][] reqData = {
-                    { "Request UUID", req.getReqUUID() },
-                    { "Seller Name", req.getSellerName() != null ? req.getSellerName() : "" },
-                    { "Description", req.getDescription() != null ? req.getDescription() : "" },
-                    { "Created At", Utils.formatTimeStamp(req.getCreatedAt()) },
-                    { "Authenticated", String.valueOf(req.isAuthenticated()) },
-                    { "Auth Link", req.getReqAuthLink() != null ? req.getReqAuthLink() : "" },
-                    { "Created By", req.getCreatedBy() != null ? req.getCreatedBy().getName() : "" }
+                    { labels.getRequestUuid(), req.getReqUUID() },
+                    { labels.getSellerName(), req.getSellerName() != null ? req.getSellerName() : "" },
+                    { labels.getDescription(), req.getDescription() != null ? req.getDescription() : "" },
+                    { labels.getCreatedAt(), Utils.formatTimeStamp(req.getCreatedAt()) },
+                    { labels.getAuthenticated(), String.valueOf(req.isAuthenticated()) },
+                    { labels.getAuthLink(), req.getReqAuthLink() != null ? req.getReqAuthLink() : "" },
+                    { labels.getCreatedBy(), req.getCreatedBy() != null ? req.getCreatedBy().getName() : "" }
             };
             for (int i = 0; i < reqData.length; i++) {
                 Row row = sheet.createRow(rowIdx++);
@@ -127,16 +128,19 @@ public class ExportService {
             rowIdx++;
             sectionRow = sheet.createRow(rowIdx++);
             sectionCell = sectionRow.createCell(0);
-            sectionCell.setCellValue("Sale Environment Information");
+            sectionCell.setCellValue(labels.getSectionEnvironmentInfo());
             sectionCell.setCellStyle(headerStyle);
 
             String[][] envData = {
-                    { "Env ID", env != null ? env.getEnvId() : "N/A" },
-                    { "Public Link", env != null ? env.getPublicLink() : "N/A" },
-                    { "State", env != null ? String.valueOf(env.isState()) : "N/A" },
-                    { "Created At", env != null ? Utils.formatTimeStamp(env.getCreatedAt()) : "N/A" },
-                    { "Ended At", env != null ? DateUtils.dateToLocalTimeString(env.getEndedAt()) : "N/A" },
-                    { "Will End At", env != null ? DateUtils.dateToLocalTimeString(env.getWillEndedAt()) : "N/A" }
+                    { labels.getEnvId(), env != null ? env.getEnvId() : labels.getNotAvailable() },
+                    { labels.getPublicLink(), env != null ? env.getPublicLink() : labels.getNotAvailable() },
+                    { labels.getState(), env != null ? String.valueOf(env.isState()) : labels.getNotAvailable() },
+                    { labels.getCreatedAt(),
+                            env != null ? Utils.formatTimeStamp(env.getCreatedAt()) : labels.getNotAvailable() },
+                    { labels.getEndedAt(),
+                            env != null ? DateUtils.dateToLocalTimeString(env.getEndedAt()) : labels.getNotAvailable() },
+                    { labels.getWillEndAt(),
+                            env != null ? DateUtils.dateToLocalTimeString(env.getWillEndedAt()) : labels.getNotAvailable() }
             };
             for (int i = 0; i < envData.length; i++) {
                 Row row = sheet.createRow(rowIdx++);
@@ -152,10 +156,16 @@ public class ExportService {
             rowIdx++;
             sectionRow = sheet.createRow(rowIdx++);
             sectionCell = sectionRow.createCell(0);
-            sectionCell.setCellValue("Products");
+            sectionCell.setCellValue(labels.getSectionProducts());
             sectionCell.setCellStyle(headerStyle);
 
-            String[] prodHeaders = { "Product Name", "Amount", "Unit", "Price", "Total Amount" };
+            String[] prodHeaders = {
+                    labels.getProductName(),
+                    labels.getAmount(),
+                    labels.getUnit(),
+                    labels.getPrice(),
+                    labels.getTotalAmount()
+            };
             Row prodHeaderRow = sheet.createRow(rowIdx++);
             for (int i = 0; i < prodHeaders.length; i++) {
                 Cell cell = prodHeaderRow.createCell(i);
@@ -177,11 +187,19 @@ public class ExportService {
             rowIdx++;
             sectionRow = sheet.createRow(rowIdx++);
             sectionCell = sectionRow.createCell(0);
-            sectionCell.setCellValue("Orders");
+            sectionCell.setCellValue(labels.getSectionOrders());
             sectionCell.setCellStyle(headerStyle);
 
-            String[] orderHeaders = { "Buyer Name", "Ordered At", "Amount", "Unit", "Note", "Seller Note", "Delivered",
-                    "Get Money" };
+            String[] orderHeaders = {
+                    labels.getBuyerName(),
+                    labels.getOrderedAt(),
+                    labels.getAmount(),
+                    labels.getUnit(),
+                    labels.getNote(),
+                    labels.getSellerNote(),
+                    labels.getDelivered(),
+                    labels.getPaid()
+            };
             Row orderHeaderRow = sheet.createRow(rowIdx++);
             for (int i = 0; i < orderHeaders.length; i++) {
                 Cell cell = orderHeaderRow.createCell(i);
@@ -202,8 +220,8 @@ public class ExportService {
                     createCell(row, 3, o.getUnit() != null ? o.getUnit() : "", cellStyle);
                     createCell(row, 4, o.getNote() != null ? o.getNote() : "", cellStyle);
                     createCell(row, 5, o.getSellerNote() != null ? o.getSellerNote() : "", cellStyle);
-                    createCell(row, 6, o.isDelivered() ? "Yes" : "No", cellStyle);
-                    createCell(row, 7, o.isGetMoney() ? "Yes" : "No", cellStyle);
+                    createCell(row, 6, labels.yesNo(o.isDelivered()), cellStyle);
+                    createCell(row, 7, labels.yesNo(o.isGetMoney()), cellStyle);
                 }
             }
 
@@ -247,7 +265,10 @@ public class ExportService {
     public String buildAllReportsFileName(ExportAllRequest request) {
         String sellerName = request.getSellerName() != null ? request.getSellerName() : "unknown";
         String timestamp = new SimpleDateFormat("yyyyMMdd-HHmmss").format(new Date());
-        return "seller-report-" + sellerName + "-" + timestamp + ".xlsx";
+        String prefix = ExportLocale.VIETNAMESE.equals(ExportLocale.resolve(request.getLocale()))
+                ? "bao-cao"
+                : "seller-report";
+        return prefix + "-" + sellerName + "-" + timestamp + ".xlsx";
     }
 
     /**
@@ -285,6 +306,8 @@ public class ExportService {
             throw new EntityNotFoundException("No environments found for seller: " + sellerName);
         }
 
+        ExportLabels labels = ExportLabels.forLocale(request.getLocale());
+
         SXSSFWorkbook workbook = new SXSSFWorkbook(100); // keep 100 rows in memory at a time
         try {
             // Create shared styles once
@@ -299,7 +322,7 @@ public class ExportService {
                     continue;
 
                 // Sheet name must be ≤31 chars and unique
-                String sheetName = "Env-" + (envIdx + 1);
+                String sheetName = labels.envSheetName(envIdx + 1);
                 Sheet sheet = workbook.createSheet(sheetName);
 
                 // Load products and orders for this environment
@@ -309,11 +332,11 @@ public class ExportService {
                         .map(SaleEnvironment::getListOrder)
                         .orElse(List.of());
 
-                writeEnvironmentSheet(sheet, req, env, products, orders, headerStyle, cellStyle);
+                writeEnvironmentSheet(sheet, req, env, products, orders, headerStyle, cellStyle, labels);
             }
 
             // Summary sheet at the end
-            writeSummarySheet(workbook, environments, headerStyle, cellStyle);
+            writeSummarySheet(workbook, environments, headerStyle, cellStyle, labels);
 
             workbook.write(outputStream);
             workbook.dispose();
@@ -348,36 +371,45 @@ public class ExportService {
     private void writeEnvironmentSheet(Sheet sheet, Request req, SaleEnvironment env,
             List<Product> products,
             List<com.qrpublic.apartment.entity.Order> orders,
-            CellStyle headerStyle, CellStyle cellStyle) {
+            CellStyle headerStyle, CellStyle cellStyle, ExportLabels labels) {
         // Section 1: Request Info
         int rowIdx = 0;
-        rowIdx = writeSectionHeader(sheet, rowIdx, "Request Information", headerStyle);
-        rowIdx = writeKeyValueRow(sheet, rowIdx, "Request UUID", req.getReqUUID(), cellStyle);
-        rowIdx = writeKeyValueRow(sheet, rowIdx, "Seller Name", req.getSellerName(), cellStyle);
-        rowIdx = writeKeyValueRow(sheet, rowIdx, "Description", req.getDescription(), cellStyle);
-        rowIdx = writeKeyValueRow(sheet, rowIdx, "Created At", Utils.formatTimeStamp(req.getCreatedAt()), cellStyle);
-        rowIdx = writeKeyValueRow(sheet, rowIdx, "Authenticated", String.valueOf(req.isAuthenticated()), cellStyle);
-        rowIdx = writeKeyValueRow(sheet, rowIdx, "Auth Link", req.getReqAuthLink() != null ? req.getReqAuthLink() : "",
+        rowIdx = writeSectionHeader(sheet, rowIdx, labels.getSectionRequestInfo(), headerStyle);
+        rowIdx = writeKeyValueRow(sheet, rowIdx, labels.getRequestUuid(), req.getReqUUID(), cellStyle);
+        rowIdx = writeKeyValueRow(sheet, rowIdx, labels.getSellerName(), req.getSellerName(), cellStyle);
+        rowIdx = writeKeyValueRow(sheet, rowIdx, labels.getDescription(), req.getDescription(), cellStyle);
+        rowIdx = writeKeyValueRow(sheet, rowIdx, labels.getCreatedAt(), Utils.formatTimeStamp(req.getCreatedAt()),
                 cellStyle);
-        rowIdx = writeKeyValueRow(sheet, rowIdx, "Created By",
+        rowIdx = writeKeyValueRow(sheet, rowIdx, labels.getAuthenticated(), String.valueOf(req.isAuthenticated()),
+                cellStyle);
+        rowIdx = writeKeyValueRow(sheet, rowIdx, labels.getAuthLink(),
+                req.getReqAuthLink() != null ? req.getReqAuthLink() : "", cellStyle);
+        rowIdx = writeKeyValueRow(sheet, rowIdx, labels.getCreatedBy(),
                 req.getCreatedBy() != null ? req.getCreatedBy().getName() : "", cellStyle);
 
         // Section 2: Environment Info
         rowIdx++;
-        rowIdx = writeSectionHeader(sheet, rowIdx, "Environment Information", headerStyle);
-        rowIdx = writeKeyValueRow(sheet, rowIdx, "Env ID", env.getEnvId(), cellStyle);
-        rowIdx = writeKeyValueRow(sheet, rowIdx, "Public Link", env.getPublicLink(), cellStyle);
-        rowIdx = writeKeyValueRow(sheet, rowIdx, "State", String.valueOf(env.isState()), cellStyle);
-        rowIdx = writeKeyValueRow(sheet, rowIdx, "Created At", Utils.formatTimeStamp(env.getCreatedAt()), cellStyle);
-        rowIdx = writeKeyValueRow(sheet, rowIdx, "Ended At", DateUtils.dateToLocalTimeString(env.getEndedAt()),
+        rowIdx = writeSectionHeader(sheet, rowIdx, labels.getSectionEnvironmentInfo(), headerStyle);
+        rowIdx = writeKeyValueRow(sheet, rowIdx, labels.getEnvId(), env.getEnvId(), cellStyle);
+        rowIdx = writeKeyValueRow(sheet, rowIdx, labels.getPublicLink(), env.getPublicLink(), cellStyle);
+        rowIdx = writeKeyValueRow(sheet, rowIdx, labels.getState(), String.valueOf(env.isState()), cellStyle);
+        rowIdx = writeKeyValueRow(sheet, rowIdx, labels.getCreatedAt(), Utils.formatTimeStamp(env.getCreatedAt()),
                 cellStyle);
-        rowIdx = writeKeyValueRow(sheet, rowIdx, "Will End At", DateUtils.dateToLocalTimeString(env.getWillEndedAt()),
+        rowIdx = writeKeyValueRow(sheet, rowIdx, labels.getEndedAt(), DateUtils.dateToLocalTimeString(env.getEndedAt()),
                 cellStyle);
+        rowIdx = writeKeyValueRow(sheet, rowIdx, labels.getWillEndAt(),
+                DateUtils.dateToLocalTimeString(env.getWillEndedAt()), cellStyle);
 
         // Section 3: Products
         rowIdx++;
-        rowIdx = writeSectionHeader(sheet, rowIdx, "Products", headerStyle);
-        String[] prodHeaders = { "Product Name", "Amount", "Unit", "Price", "Total Amount" };
+        rowIdx = writeSectionHeader(sheet, rowIdx, labels.getSectionProducts(), headerStyle);
+        String[] prodHeaders = {
+                labels.getProductName(),
+                labels.getAmount(),
+                labels.getUnit(),
+                labels.getPrice(),
+                labels.getTotalAmount()
+        };
         Row prodHeaderRow = sheet.createRow(rowIdx++);
         for (int i = 0; i < prodHeaders.length; i++) {
             Cell cell = prodHeaderRow.createCell(i);
@@ -397,9 +429,17 @@ public class ExportService {
 
         // Section 4: Orders
         rowIdx++;
-        rowIdx = writeSectionHeader(sheet, rowIdx, "Orders", headerStyle);
-        String[] orderHeaders = { "Buyer Name", "Ordered At", "Amount", "Unit", "Note", "Seller Note", "Delivered",
-                "Paid" };
+        rowIdx = writeSectionHeader(sheet, rowIdx, labels.getSectionOrders(), headerStyle);
+        String[] orderHeaders = {
+                labels.getBuyerName(),
+                labels.getOrderedAt(),
+                labels.getAmount(),
+                labels.getUnit(),
+                labels.getNote(),
+                labels.getSellerNote(),
+                labels.getDelivered(),
+                labels.getPaid()
+        };
         Row orderHeaderRow = sheet.createRow(rowIdx++);
         for (int i = 0; i < orderHeaders.length; i++) {
             Cell cell = orderHeaderRow.createCell(i);
@@ -419,8 +459,8 @@ public class ExportService {
                 createCell(row, 3, o.getUnit() != null ? o.getUnit() : "", cellStyle);
                 createCell(row, 4, o.getNote() != null ? o.getNote() : "", cellStyle);
                 createCell(row, 5, o.getSellerNote() != null ? o.getSellerNote() : "", cellStyle);
-                createCell(row, 6, o.isDelivered() ? "Yes" : "No", cellStyle);
-                createCell(row, 7, o.isGetMoney() ? "Yes" : "No", cellStyle);
+                createCell(row, 6, labels.yesNo(o.isDelivered()), cellStyle);
+                createCell(row, 7, labels.yesNo(o.isGetMoney()), cellStyle);
             }
         }
 
@@ -432,9 +472,17 @@ public class ExportService {
     }
 
     private void writeSummarySheet(SXSSFWorkbook workbook, List<SaleEnvironment> environments,
-            CellStyle headerStyle, CellStyle cellStyle) {
-        Sheet summarySheet = workbook.createSheet("Summary");
-        String[] headers = { "#", "Request UUID", "Seller Name", "Public Link", "Products", "Orders", "Created At" };
+            CellStyle headerStyle, CellStyle cellStyle, ExportLabels labels) {
+        Sheet summarySheet = workbook.createSheet(labels.getSheetSummary());
+        String[] headers = {
+                labels.getSummaryIndex(),
+                labels.getRequestUuid(),
+                labels.getSellerName(),
+                labels.getPublicLink(),
+                labels.getSummaryProducts(),
+                labels.getSummaryOrders(),
+                labels.getCreatedAt()
+        };
         Row headerRow = summarySheet.createRow(0);
         for (int i = 0; i < headers.length; i++) {
             Cell cell = headerRow.createCell(i);

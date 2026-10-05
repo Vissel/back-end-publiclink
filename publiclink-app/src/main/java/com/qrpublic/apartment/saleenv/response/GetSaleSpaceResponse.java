@@ -19,4 +19,5 @@ public class GetSaleSpaceResponse extends BaseResponse {
     private String sellerFullName;
 
     private Boolean isSellerView;
+    private int availableAmount;
 }

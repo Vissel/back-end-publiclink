@@ -20,7 +20,7 @@ public class SaleEnvironment {
     @Column(name = "env_id")
     private String envId;
 
-    @OneToOne(optional = false, fetch = FetchType.LAZY, cascade = { CascadeType.REMOVE })
+    @ManyToOne(optional = false, fetch = FetchType.LAZY)
     @JoinColumn(name = "req_id")
     private Request request;
 

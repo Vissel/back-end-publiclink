@@ -45,6 +45,12 @@
     <changeSet id="017" author="thach">
         <sqlFile path="db/changelog/changeset-017-create-notification.sql"/>
     </changeSet>
+    <changeSet id="019" author="thach">
+        <sqlFile path="db/changelog/changeset-019-create-business-rule.sql"/>
+    </changeSet>
+    <changeSet id="020" author="thach">
+        <sqlFile path="db/changelog/changeset-020-add-start-end-time.sql"/>
+    </changeSet>
     <!-- changeset-018 is managed by data-backup module's own Liquibase config
     <changeSet id="018" author="data-backup">
         <sqlFile path="db/changelog/changeset-018-create-backup-otp.sql"/>

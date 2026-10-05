@@ -3,6 +3,7 @@ package com.qrpublic.apartment.controller;
 import com.qrpublic.apartment.model.SellerDTO;
 import com.qrpublic.apartment.model.notification.SellerEnvironmentListResponse;
 import com.qrpublic.apartment.model.notification.SellerListResponse;
+import com.qrpublic.apartment.plan.request.CreatePlanRequest;
 import com.qrpublic.apartment.requestmodel.Pagination;
 import com.qrpublic.apartment.requestmodel.RequestDTO;
 import com.qrpublic.apartment.requestmodel.SaleEnvDTO;
@@ -22,8 +23,14 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Mono;
 
+import jakarta.validation.Valid;
+import lombok.extern.slf4j.Slf4j;
+
+import com.qrpublic.apartment.plan.response.CreatePlanResponse;
+
 import java.util.Map;
 
+@Slf4j
 @RestController
 @RequestMapping("/admin/v1")
 public class AdminController {
@@ -130,5 +137,19 @@ public class AdminController {
         return envService.extendAuthLink(requestUuid)
                 .map(ResponseEntity::ok)
                 .defaultIfEmpty(ResponseEntity.notFound().build());
+    }
+
+    /**
+     * Create seller plan with seller details, request UUID, start time and
+     * description
+     */
+    @PostMapping("/createSellerPlan")
+    public Mono<ResponseEntity<CreatePlanResponse>> createSellerPlan(
+            @Valid @RequestBody CreatePlanRequest request) {
+        return adminService.createSellerPlan(request)
+                .map(response -> {
+                    log.info("Seller plan created successfully");
+                    return ResponseEntity.ok(response);
+                });
     }
 }

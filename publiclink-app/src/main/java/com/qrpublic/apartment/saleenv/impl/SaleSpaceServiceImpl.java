@@ -198,7 +198,13 @@ public class SaleSpaceServiceImpl implements SaleSpaceService {
                 : null);
         response.setListOrder(toOrderDTOs(orders, saleEnvironment.getPublicLink()));
         response.setListProduct(toProductDTOs(products));
+        response.setAvailableAmount(calculateAvailableAmount(products, orders));
         return response;
+    }
+
+    private int calculateAvailableAmount(List<Product> products, List<Order> orders) {
+        int orderedAmount = orders.stream().mapToInt(Order::getAmount).sum();
+        return products.getFirst().getTotal_amount() - orderedAmount;
     }
 
     private List<OrderDTO> toOrderDTOs(List<Order> orders, String publicLink) {

@@ -1,11 +1,16 @@
 package com.qrpublic.apartment.service;
 
 import com.qrpublic.apartment.exception.EnvironmentCreationException;
+import com.qrpublic.apartment.plan.PlanService;
+import com.qrpublic.apartment.plan.request.CreatePlanRequest;
+import com.qrpublic.apartment.plan.response.CreatePlanResponse;
+
 import com.qrpublic.apartment.requestmodel.Pagination;
 import com.qrpublic.apartment.saleenv.SaleEnvironmentService;
 import com.qrpublic.apartment.saleenv.request.CreateEnvironmentRequest;
 import com.qrpublic.apartment.saleenv.request.ListEnvironmentRequest;
 import com.qrpublic.apartment.saleenv.response.CreateEnvironmentResponse;
+
 import com.qrpublic.apartment.saleenv.response.ListEnvironmentResponse;
 import com.qrpublic.apartment.template.model.Result;
 import com.qrpublic.apartment.user.PubUserService;
@@ -18,6 +23,8 @@ import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
 
+import java.sql.Timestamp;
+
 @Service
 @PreAuthorize("hasRole('Admin')")
 public class AdminService {
@@ -27,6 +34,9 @@ public class AdminService {
     @Autowired
     PubUserService pubUserService;
 
+    @Autowired
+    PlanService planService;
+    
     /**
      * 2026 - create sale environment with public link
      *
@@ -47,6 +57,19 @@ public class AdminService {
                 })
                 .onErrorMap(throwable ->
                         new EnvironmentCreationException("Failed to create sale environment. Please try again later."));
+    }
+
+    /**
+     * Create seller plan with seller details, request UUID, start time and description
+     *
+     * @param createSellerPlanRequest
+     * @return
+     */
+    public Mono<CreatePlanResponse> createSellerPlan(CreatePlanRequest createSellerPlanRequest) {
+        return Mono.fromCallable(() -> planService.createPricingPlanForSeller(createSellerPlanRequest))
+                .subscribeOn(Schedulers.boundedElastic())
+                .onErrorMap(throwable ->
+                        new EnvironmentCreationException("Failed to create seller plan. Please try again later."));
     }
 
     public Mono<ListUserResponse> listInnerUsers(Pagination<ListUserRequest> listUserRequestPagination) {

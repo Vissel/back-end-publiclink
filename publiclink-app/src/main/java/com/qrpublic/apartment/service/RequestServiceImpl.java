@@ -4,6 +4,7 @@ import com.qrpublic.apartment.constant.CommonConstant;
 import com.qrpublic.apartment.core.model.RequestModel;
 import com.qrpublic.apartment.core.service.CoreRequestService;
 import com.qrpublic.apartment.entity.*;
+import com.qrpublic.apartment.model.PriceModel;
 import com.qrpublic.apartment.model.SellerDTO;
 import com.qrpublic.apartment.repository.RequestRepository;
 import com.qrpublic.apartment.requestmodel.PictureDTO;
@@ -21,7 +22,11 @@ import reactor.core.publisher.Mono;
 import java.util.Arrays;
 import java.util.Base64;
 import java.util.List;
+import java.util.UUID;
 import java.util.stream.Collectors;
+import com.qrpublic.apartment.core.model.AuthenticationEnum;
+import com.qrpublic.apartment.core.model.UserModel;
+import com.qrpublic.apartment.util.DateUtils;
 
 @Slf4j
 @Service
@@ -132,6 +137,48 @@ public class RequestServiceImpl implements RequestService {
     public Request saveRequest(Request request) {
         // taking care for update cases.
         return requestRepo.save(request);
+    }
+    @Override
+    public RequestModel saveRequest(RequestDTO requestDTO, PriceModel priceModel) {
+        Request request = new Request();
+        if (requestDTO.getSeller() != null) {
+            User seller = userService.createSeller(requestDTO.getSeller());
+            if (seller != null) {
+                request.setSellerName(seller.getUserName());
+            }
+        }
+        request.setDescription(requestDTO.getDescription());
+        request.setCreatedBy(requestDTO.getCreatedBy());
+        request.setAuthenticated(requestDTO.isAuthenticated());
+        
+        if (requestDTO.getReqUUID() != null) {
+            request.setReqUUID(requestDTO.getReqUUID());
+        } else {
+            request.setReqUUID(UUID.randomUUID().toString());
+        }
+
+        if (requestDTO.getProducts() != null) {
+            List<Product> products = requestDTO.getProducts().stream()
+                    .map(p -> createProduct(p, request))
+                    .collect(Collectors.toList());
+            request.setProducts(products);
+        }
+        
+        Request savedRequest = saveRequest(request);
+
+        RequestModel model = new RequestModel();
+        model.setRequestUuid(savedRequest.getReqUUID());
+        
+        UserModel sellerModel = UserModel.builder().build();
+        if (savedRequest.getSellerName() != null) {
+            sellerModel.setUsername(savedRequest.getSellerName());
+        }
+        model.setSeller(sellerModel);
+        model.setCreatedAt(DateUtils.dateToString(savedRequest.getCreatedAt()));
+        model.setAuthentication(
+                savedRequest.isAuthenticated() ? AuthenticationEnum.BASIC : AuthenticationEnum.UNAUTHENTICATED);
+        
+        return model;
     }
 
     private Product createProduct(ProductDTO p, Request request) {

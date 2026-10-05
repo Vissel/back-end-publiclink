@@ -1,7 +1,9 @@
 package com.qrpublic.apartment.service;
 
+import com.qrpublic.apartment.core.model.RequestModel;
 import com.qrpublic.apartment.entity.Request;
 import com.qrpublic.apartment.entity.User;
+import com.qrpublic.apartment.model.PriceModel;
 import com.qrpublic.apartment.model.SellerDTO;
 import com.qrpublic.apartment.requestmodel.RequestDTO;
 import com.qrpublic.apartment.saleenv.request.CreateRequestIdRequest;
@@ -16,6 +18,8 @@ public interface RequestService {
     public String generateSellerAuthLink(User seller, long reqId);
 
     public Request saveRequest(Request request);
+
+    public RequestModel saveRequest(RequestDTO requestDTO, PriceModel priceModel);
 
     public Request saveAuthenticatedRequest(long requestId);
 

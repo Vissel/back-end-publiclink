@@ -17,4 +17,7 @@ public class ExportAllRequest {
 
     private String sellerName;
 
+    /** Frontend i18n language code, e.g. {@code en} or {@code vi}. */
+    private String locale;
+
 }

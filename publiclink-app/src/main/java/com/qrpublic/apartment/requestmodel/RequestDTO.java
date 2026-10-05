@@ -26,4 +26,5 @@ public class RequestDTO extends AuthToken {
 
     private String reqUUID;
 
+    private String startTime;
 }

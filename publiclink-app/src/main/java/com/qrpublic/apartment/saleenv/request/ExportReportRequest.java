@@ -11,4 +11,7 @@ public class ExportReportRequest {
 
     private String requestUUID;
 
+    /** Frontend i18n language code, e.g. {@code en} or {@code vi}. */
+    private String locale;
+
 }

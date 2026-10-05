@@ -37,8 +37,15 @@ public class Request {
     @OneToMany(mappedBy = "request", cascade = { CascadeType.PERSIST, CascadeType.MERGE })
     private List<Pricing> pricings;
 
+    @OneToMany(mappedBy = "request", cascade = { CascadeType.REMOVE })
+    private List<SaleEnvironment> saleEnvironments;
+
     @Column(name = "req_uuid", unique = true, nullable = false)
     private String reqUUID;
 
     private String reqAuthLink;
+
+    private Timestamp startTime;
+
+    private Timestamp endTime;
 }

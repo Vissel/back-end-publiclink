@@ -177,6 +177,27 @@
                 <activeProfile>qa</activeProfile>
             </properties>
         </profile>
+        <profile>
+            <id>prod</id>
+            <activation>
+                <activeByDefault>false</activeByDefault>
+            </activation>
+            <build>
+                <finalName>publiclink</finalName>
+                <plugins>
+                    <plugin>
+                        <groupId>org.springframework.boot</groupId>
+                        <artifactId>spring-boot-maven-plugin</artifactId>
+                        <configuration>
+                            <classifier>exec</classifier>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+            <properties>
+                <activeProfile>prod</activeProfile>
+            </properties>
+        </profile>
     </profiles>
 
 </project>

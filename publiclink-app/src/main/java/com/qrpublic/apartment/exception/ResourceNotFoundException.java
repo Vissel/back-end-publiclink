@@ -10,8 +10,9 @@ import org.springframework.http.HttpStatus;
 public class ResourceNotFoundException extends ApplicationException {
 
     public ResourceNotFoundException(String message) {
-        log.error("ResourceNotFoundException: errorCode:{}, message:{}", HttpStatus.NOT_FOUND, message);
+        // super(...) must be the first statement in a constructor.
         super(message, HttpStatus.NOT_FOUND.value());
+        log.error("ResourceNotFoundException: errorCode:{}, message:{}", HttpStatus.NOT_FOUND, message);
     }
 
     public ResourceNotFoundException(String message, Throwable cause) {

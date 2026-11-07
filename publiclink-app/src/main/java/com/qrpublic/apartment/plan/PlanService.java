@@ -87,7 +87,6 @@ public class PlanService {
             );
             requestDTO.setProducts(List.of(productDTO));
         }
-        if ()
         return requestDTO;
     }
 }

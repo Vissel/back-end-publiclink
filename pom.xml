@@ -36,6 +36,10 @@
         <url/>
     </scm>
     <properties>
+        <!-- Requires a JDK 25 toolchain. Compilation is verified against JDK 25
+             and produces bytecode that will not run on an older JRE, so the
+             server must also run JDK 25. Set JAVA_HOME to your JDK 25 install
+             before running Maven, e.g. D:\software\jdk-25.0.5.0.2 -->
         <java.version>25</java.version>
         <spring-cloud.version>2025.0.2</spring-cloud.version>
         <lombok.version>1.18.40</lombok.version>

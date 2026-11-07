@@ -1,33 +1,61 @@
 #!/bin/bash
 #
-# Build backend (4 modules) + frontend, and deploy to Tomcat webapps.
+# Build backend (4 modules) + frontend, then stage them for deployment.
+#
+# Target topology (see deploy/nginx/share-link.top.conf):
+#   nginx :443
+#     /apiGateway/  -> apiGateway  127.0.0.1:8080  (standalone: java -jar)
+#     /             -> Tomcat      127.0.0.1:8081  (webapps/ROOT = React build)
 #
 # Usage:
 #   ./build-and-deploy.sh <TOMCAT_WEBAPPS_DIR> [maven-profile]
 #
 # Examples:
 #   ./build-and-deploy.sh /opt/tomcat/webapps
-#   ./build-and-deploy.sh /opt/tomcat/webapps qa
+#   ./build-and-deploy.sh /opt/tomcat/webapps dev
 #
 set -euo pipefail
 
 # ── Arguments ──────────────────────────────────────────────────────────────────
 TOMCAT_DIR="${1:?Usage: $0 <TOMCAT_WEBAPPS_DIR> [maven-profile]}"
-PROFILE="${2:-}"
+PROFILE="${2:-prod}"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-FRONTEND_DIR="$(cd "$SCRIPT_DIR/../frontend/frontend-publiclink" && pwd)"
+# frontend-public-link and back-end-publiclink are sibling directories.
+FRONTEND_DIR="$(cd "$SCRIPT_DIR/../frontend-public-link" && pwd)"
+# Runnable service artifacts are collected here, ready to ship to the server.
+ARTIFACTS_DIR="$SCRIPT_DIR/target/deploy"
 
 if [[ ! -d "$TOMCAT_DIR" ]]; then
   echo "✗ Target directory does not exist: ${TOMCAT_DIR}"
   exit 1
 fi
 
-# ── Resolve Maven profile flag ────────────────────────────────────────────────
-PROFILE_FLAG=""
-if [[ -n "$PROFILE" ]]; then
-  PROFILE_FLAG="-P${PROFILE}"
-  echo "▶ Using Maven profile: ${PROFILE}"
+# ── Resolve Maven profile ─────────────────────────────────────────────────────
+echo "▶ Using Maven profile: ${PROFILE}"
+
+# ── Step 0: Pre-flight ────────────────────────────────────────────────────────
+# The POMs target Java 25 (root pom <java.version>). A JDK 21 or 17 fails with
+# the opaque "invalid target release: 25", so check up front. Resolve the
+# interpreter from JAVA_HOME first: Maven compiles with JAVA_HOME, so a stale
+# `java` left on PATH must not be what this check reports.
+REQUIRED_JAVA="$(sed -n 's:.*<java.version>\(.*\)</java.version>.*:\1:p' "$SCRIPT_DIR/pom.xml" | head -1)"
+JAVA_BIN="java"
+if [[ -n "${JAVA_HOME:-}" && -x "$JAVA_HOME/bin/java" ]]; then
+  JAVA_BIN="$JAVA_HOME/bin/java"
 fi
+JAVA_MAJOR="$("$JAVA_BIN" -version 2>&1 | sed -n 's/.*version "\([0-9]*\).*/\1/p' | head -1)"
+if [[ -z "$JAVA_MAJOR" ]]; then
+  echo "✗ Could not read a Java version from: ${JAVA_BIN} -version"
+  exit 1
+fi
+if [[ -n "$REQUIRED_JAVA" && "$JAVA_MAJOR" -lt "$REQUIRED_JAVA" ]]; then
+  echo "✗ JDK ${JAVA_MAJOR} found at ${JAVA_BIN}, but this project targets Java ${REQUIRED_JAVA}."
+  echo "  Fix: export JAVA_HOME=/path/to/jdk-${REQUIRED_JAVA}"
+  echo "       export PATH=\"\$JAVA_HOME/bin:\$PATH\""
+  echo "  Then re-run: Maven compiles with JAVA_HOME, not with the java on PATH."
+  exit 1
+fi
+echo "▶ Building with JDK ${JAVA_MAJOR} (${JAVA_BIN}; project target: ${REQUIRED_JAVA})"
 
 # ── Step 1: Build backend (4 modules) ─────────────────────────────────────────
 echo ""
@@ -38,7 +66,7 @@ echo "════════════════════════�
 echo ""
 
 cd "$SCRIPT_DIR"
-mvn clean package -DskipTests $PROFILE_FLAG
+mvn clean package -DskipTests -P"$PROFILE"
 
 echo ""
 echo "▶ Backend build completed."
@@ -51,6 +79,14 @@ echo "════════════════════════�
 echo ""
 
 cd "$FRONTEND_DIR"
+# react-scripts is often missing after a partial install; npm run build then
+# fails with "'react-scripts' is not recognized".
+if [[ ! -d node_modules/react-scripts ]]; then
+  echo "  node_modules incomplete — installing dependencies"
+  # npm ci is reproducible but hard-fails when package-lock.json has drifted
+  # from package.json; fall back to npm install rather than blocking the deploy.
+  npm ci || npm install
+fi
 npm run build
 
 # Copy SPA fallback web.xml for BrowserRouter
@@ -61,58 +97,60 @@ cp -f "$FRONTEND_DIR/tomcat-config/WEB-INF/web.xml" "$FRONTEND_DIR/build/WEB-INF
 echo ""
 echo "▶ Frontend build completed."
 
-# ── Step 3: Deploy to Tomcat webapps ──────────────────────────────────────────
+# ── Step 3: Deploy frontend to the ROOT context ───────────────────────────────
 echo ""
 echo "══════════════════════════════════════════════════"
-echo "  Deploying to: ${TOMCAT_DIR}"
+echo "  Deploying frontend to: ${TOMCAT_DIR}/ROOT"
 echo "══════════════════════════════════════════════════"
 echo ""
 
-deployed=0
-
-# 3a. Deploy frontend as exploded directory → webapps/publiclink/
-FRONTEND_DEST="${TOMCAT_DIR}/publiclink"
+# 3a. The frontend must live at webapps/ROOT so that https://share-link.top/
+#     serves index.html directly. Deploying it under /publiclink would make the
+#     login page live at https://share-link.top/publiclink/ instead.
+FRONTEND_DEST="${TOMCAT_DIR}/ROOT"
 if [[ -d "$FRONTEND_DEST" ]]; then
   echo "  Removing old frontend: ${FRONTEND_DEST}"
   rm -rf "$FRONTEND_DEST"
 fi
+# A leftover ROOT.war would be re-expanded by Tomcat and overwrite the build.
+if [[ -f "${TOMCAT_DIR}/ROOT.war" ]]; then
+  echo "  Removing stock Tomcat ROOT.war: ${TOMCAT_DIR}/ROOT.war"
+  rm -f "${TOMCAT_DIR}/ROOT.war"
+fi
 echo "  Deploying frontend → ${FRONTEND_DEST}"
 cp -r "$FRONTEND_DIR/build" "$FRONTEND_DEST"
-deployed=$((deployed + 1))
 
-# 3b. Deploy backend WAR(s) → webapps/
-for war_file in "$SCRIPT_DIR"/apiGateway/target/apiGateway-*.war; do
-  if [[ -f "$war_file" ]]; then
-    war_name="$(basename "$war_file")"
-    app_name="${war_name%%-*}"          # e.g. apiGateway
-    dest="${TOMCAT_DIR}/${app_name}.war"
+# ── Step 4: Stage the standalone services ─────────────────────────────────────
+# apiGateway, publiclink-app and user all run as executable Spring Boot
+# archives on a JVM. None of them can be dropped into webapps/:
+# Spring Cloud Gateway is not supported in a servlet container, and the other
+# two are plain WebFlux apps. Nginx fronts them (see deploy/nginx/).
+rm -rf "$ARTIFACTS_DIR"
+mkdir -p "$ARTIFACTS_DIR"
 
-    # Remove old exploded directory if present
-    if [[ -d "${TOMCAT_DIR}/${app_name}" ]]; then
-      echo "  Removing old exploded dir: ${TOMCAT_DIR}/${app_name}"
-      rm -rf "${TOMCAT_DIR}/${app_name}"
-    fi
-
-    echo "  Deploying ${war_name} → ${dest}"
-    cp -f "$war_file" "$dest"
-    deployed=$((deployed + 1))
-  fi
-done
-
-# ── Step 4: Summary ───────────────────────────────────────────────────────────
-echo ""
-echo "▶ Deployed ${deployed} artifact(s) to ${TOMCAT_DIR}"
-
-echo ""
-echo "── Standalone JARs (run separately, not in webapps) ──"
-for jar_pattern in \
+for artifact in \
+  "apiGateway/target/apiGateway.war" \
   "publiclink-app/target/publiclink-exec.jar" \
   "user/target/user-0.0.1-SNAPSHOT.jar"; do
-  jar_file="$SCRIPT_DIR/$jar_pattern"
-  if [[ -f "$jar_file" ]]; then
-    echo "  $(basename "$jar_file")  →  java -jar $jar_file"
+  src="$SCRIPT_DIR/$artifact"
+  if [[ -f "$src" ]]; then
+    cp -f "$src" "$ARTIFACTS_DIR/"
+    echo "  Staged $(basename "$src")"
+  else
+    echo "  ⚠ Missing: ${artifact}" >&2
   fi
 done
 
+# ── Step 5: Summary ───────────────────────────────────────────────────────────
+echo ""
+echo "▶ Frontend  → ${FRONTEND_DEST}"
+echo "▶ Services  → ${ARTIFACTS_DIR}"
+echo ""
+echo "── Start each service (systemd templates in deploy/systemd/) ──"
+echo "  java -jar apiGateway.war                  # :8080"
+echo "  java -jar publiclink-exec.jar             # :9080"
+echo "  java -jar user-0.0.1-SNAPSHOT.jar         # :8082"
+echo ""
+echo "Remember: copy the RSA PEMs to /opt/publiclink/keys/ and restart Tomcat."
 echo ""
 echo "Done."

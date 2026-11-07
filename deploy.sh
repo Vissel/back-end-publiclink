@@ -53,26 +53,72 @@ fi
 log_done "git: $(git --version)"
 
 # Check SSH key for GitHub
-if ! ssh -o StrictHostKeyChecking=no -o BatchMode=yes -T git@github.com 2>&1 | grep -q "successfully authenticated"; then
-  log_error "SSH key not configured for git@github.com"
+# Get the actual user's home directory (handle sudo correctly)
+if [[ -n "${SUDO_USER:-}" ]]; then
+  ACTUAL_HOME=$(eval echo ~$SUDO_USER)
+else
+  ACTUAL_HOME="$HOME"
+fi
+
+SSH_DIR="$ACTUAL_HOME/.ssh"
+if [[ ! -d "$SSH_DIR" ]]; then
+  log_error "SSH directory does not exist: $SSH_DIR"
   log_error "Run: ssh-keygen -t ed25519 -C \"your_email@example.com\""
-  log_error "Then: ssh-copy-id git@github.com"
   exit 1
 fi
-log_done "SSH key: authenticated to GitHub"
+
+# Check for any private key (id_* or *.pem, excluding .pub files)
+SSH_KEY_COUNT=$(find "$SSH_DIR" -maxdepth 1 -type f \( -name "id_*" -o -name "*.pem" \) ! -name "*.pub" 2>/dev/null | wc -l)
+if [[ "$SSH_KEY_COUNT" -eq 0 ]]; then
+  log_error "No SSH private keys found in $SSH_DIR"
+  log_error "Run: ssh-keygen -t ed25519 -C \"your_email@example.com\""
+  log_error "Then add the public key to GitHub: https://github.com/settings/keys"
+  exit 1
+fi
+log_done "SSH key: found $SSH_KEY_COUNT private key(s) in $SSH_DIR"
+
+# Optional: check if ssh-agent has keys loaded (non-fatal warning)
+if command -v ssh-add &> /dev/null; then
+  if ssh-add -l &> /dev/null; then
+    LOADED_KEYS=$(ssh-add -l 2>/dev/null | wc -l)
+    log_done "SSH agent: $LOADED_KEYS key(s) loaded"
+  else
+    log_warn "SSH agent: no keys loaded (run: ssh-add $SSH_DIR/id_ed25519)"
+  fi
+fi
 
 # Check JDK 25
+# Try to auto-detect JDK 25 if JAVA_HOME is not set or points to an older JDK
+if [[ -z "${JAVA_HOME:-}" || ! -x "$JAVA_HOME/bin/java" ]]; then
+  log_warn "JAVA_HOME not set or invalid — searching for JDK 25..."
+  for jdk_path in /usr/lib/jvm/java-25-* /usr/lib/jvm/java-25 /opt/jdk-25* /usr/java/jdk-25*; do
+    if [[ -x "$jdk_path/bin/java" ]]; then
+      JAVA_HOME="$jdk_path"
+      export JAVA_HOME
+      export PATH="$JAVA_HOME/bin:$PATH"
+      log_done "Auto-detected JDK 25: $JAVA_HOME"
+      break
+    fi
+  done
+fi
+
 if [[ -z "${JAVA_HOME:-}" ]]; then
-  log_error "JAVA_HOME is not set"
+  log_error "JAVA_HOME is not set and JDK 25 could not be auto-detected"
+  log_error "Set it manually: export JAVA_HOME=/path/to/jdk-25"
+  log_error "Common locations: /usr/lib/jvm/java-25-openjdk-amd64, /opt/jdk-25*"
   exit 1
 fi
+
 if [[ ! -x "$JAVA_HOME/bin/java" ]]; then
   log_error "JAVA_HOME/bin/java is not executable: $JAVA_HOME"
   exit 1
 fi
+
 JAVA_VERSION="$("$JAVA_HOME/bin/java" -version 2>&1 | head -1 | cut -d'"' -f2 | cut -d'.' -f1)"
 if [[ "$JAVA_VERSION" -lt 25 ]]; then
-  log_error "JDK ${JAVA_VERSION} found, but JDK 25+ is required (JAVA_HOME=$JAVA_HOME)"
+  log_error "JDK ${JAVA_VERSION} found at $JAVA_HOME, but JDK 25+ is required"
+  log_error "Install JDK 25 or update JAVA_HOME to point to a JDK 25 installation"
+  log_error "Common locations: /usr/lib/jvm/java-25-openjdk-amd64, /opt/jdk-25*"
   exit 1
 fi
 log_done "JDK: ${JAVA_VERSION} (JAVA_HOME=$JAVA_HOME)"

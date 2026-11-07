@@ -35,14 +35,34 @@ echo "▶ Using Maven profile: ${PROFILE}"
 
 # ── Step 0: Pre-flight ────────────────────────────────────────────────────────
 # The POMs target Java 25 (root pom <java.version>). A JDK 21 or 17 fails with
-# the opaque "invalid target release: 25", so check up front. Resolve the
-# interpreter from JAVA_HOME first: Maven compiles with JAVA_HOME, so a stale
-# `java` left on PATH must not be what this check reports.
+# the opaque "invalid target release: 25", so check up front. Try to auto-detect
+# JDK 25 if JAVA_HOME is not set or points to an older JDK.
 REQUIRED_JAVA="$(sed -n 's:.*<java.version>\(.*\)</java.version>.*:\1:p' "$SCRIPT_DIR/pom.xml" | head -1)"
+
+if [[ -z "${JAVA_HOME:-}" || ! -x "$JAVA_HOME/bin/java" ]]; then
+  echo "⚠ JAVA_HOME not set or invalid — searching for JDK ${REQUIRED_JAVA}..."
+  for jdk_path in /usr/lib/jvm/java-${REQUIRED_JAVA}-* /usr/lib/jvm/java-${REQUIRED_JAVA} /opt/jdk-${REQUIRED_JAVA}* /usr/java/jdk-${REQUIRED_JAVA}*; do
+    if [[ -x "$jdk_path/bin/java" ]]; then
+      JAVA_HOME="$jdk_path"
+      export JAVA_HOME
+      export PATH="$JAVA_HOME/bin:$PATH"
+      echo "  ✓ Auto-detected JDK ${REQUIRED_JAVA}: $JAVA_HOME"
+      break
+    fi
+  done
+fi
+
 JAVA_BIN="java"
 if [[ -n "${JAVA_HOME:-}" && -x "$JAVA_HOME/bin/java" ]]; then
   JAVA_BIN="$JAVA_HOME/bin/java"
+else
+  echo "✗ JAVA_HOME is not set and JDK ${REQUIRED_JAVA} could not be auto-detected"
+  echo "  Fix: export JAVA_HOME=/path/to/jdk-${REQUIRED_JAVA}"
+  echo "       export PATH=\"\$JAVA_HOME/bin:\$PATH\""
+  echo "  Common locations: /usr/lib/jvm/java-${REQUIRED_JAVA}-openjdk-amd64, /opt/jdk-${REQUIRED_JAVA}*"
+  exit 1
 fi
+
 JAVA_MAJOR="$("$JAVA_BIN" -version 2>&1 | sed -n 's/.*version "\([0-9]*\).*/\1/p' | head -1)"
 if [[ -z "$JAVA_MAJOR" ]]; then
   echo "✗ Could not read a Java version from: ${JAVA_BIN} -version"
@@ -52,7 +72,7 @@ if [[ -n "$REQUIRED_JAVA" && "$JAVA_MAJOR" -lt "$REQUIRED_JAVA" ]]; then
   echo "✗ JDK ${JAVA_MAJOR} found at ${JAVA_BIN}, but this project targets Java ${REQUIRED_JAVA}."
   echo "  Fix: export JAVA_HOME=/path/to/jdk-${REQUIRED_JAVA}"
   echo "       export PATH=\"\$JAVA_HOME/bin:\$PATH\""
-  echo "  Then re-run: Maven compiles with JAVA_HOME, not with the java on PATH."
+  echo "  Common locations: /usr/lib/jvm/java-${REQUIRED_JAVA}-openjdk-amd64, /opt/jdk-${REQUIRED_JAVA}*"
   exit 1
 fi
 echo "▶ Building with JDK ${JAVA_MAJOR} (${JAVA_BIN}; project target: ${REQUIRED_JAVA})"

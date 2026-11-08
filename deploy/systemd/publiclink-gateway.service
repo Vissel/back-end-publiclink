@@ -2,7 +2,10 @@
 Description=PublicLink API Gateway (Spring Cloud Gateway)
 Documentation=file:///opt/publiclink/deploy/nginx/share-link.top.conf
 After=network-online.target redis-server.service rabbitmq-server.service
-Wants=network-online.target
+# Wants (not After) is what STARTS Redis/RabbitMQ with the gateway: the rate
+# limiter executes a Lua script in Redis on every request, and login events
+# are published to RabbitMQ. After= alone only orders — it never starts a unit.
+Wants=network-online.target redis-server.service rabbitmq-server.service
 
 [Service]
 Type=simple

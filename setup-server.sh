@@ -71,15 +71,110 @@ fi
 cp -f "$SERVER_XML" "${SERVER_XML}.bak.$(date +%Y%m%d_%H%M%S)"
 echo "  Backed up server.xml"
 
-# Change the HTTP connector port from 8080 to 8081 and bind to localhost
+# Change the HTTP connector port from 8080 to 8081 and bind to localhost.
 # This is a destructive edit: the old 8080 connector is replaced.
-sed -i 's/<Connector port="8080"/<Connector port="8081" address="127.0.0.1"/' "$SERVER_XML"
+# Perl slurp mode (-0) matches the Connector element even when it spans
+# several lines, and drops EVERY pre-existing address="..." attribute first
+# so the XML can never end up with a duplicate (Tomcat then refuses to start
+# with "Attribute address was already specified").
+perl -0pi -e '
+    s{ <Connector \s+ port="8080" (?=[\s>]) ([^>]*?) > }{
+        my $attrs = $1;
+        $attrs =~ s/\s+address\s*=\s*"[^"]*"//g;
+        qq{<Connector port="8081" address="127.0.0.1"$attrs>};
+    }xse' "$SERVER_XML"
 echo "  Updated connector: port 8081, address 127.0.0.1"
 
 # Restart Tomcat to apply
 systemctl restart tomcat 2>/dev/null || systemctl restart tomcat@* 2>/dev/null || {
   echo "  ⚠ Could not restart Tomcat via systemctl. Restart it manually."
 }
+
+# Verify the connector actually changed and carries exactly one address
+# attribute (perl exit codes: 0 = clean, 1 = missing or duplicate).
+if perl -0ne 'my ($c) = /<Connector\b[^>]*port="8081"[^>]*>/; if (defined $c && (() = $c =~ /\baddress\s*=/g) == 1) { exit 0 } exit 1' "$SERVER_XML"; then
+  echo "  ✓ Verified: connector 8081 with a single address attribute"
+else
+  echo "  ✗ ERROR: connector is NOT clean on 8081 — server.xml format was unexpected"
+  echo "    Open $SERVER_XML and change the HTTP connector manually:"
+  echo "    <Connector port=\"8081\" address=\"127.0.0.1\" ... />"
+fi
+
+# ── Step 1c: SPA fallback valve (RewriteValve) ───────────────────────────────
+# Without it, /login and other deep routes answer 404 (the web.xml error page
+# serves index.html but KEEPS the 404 status, failing health checks). The
+# RewriteValve rewrites them to /index.html with a real 200 before the error
+# page kicks in.
+echo ""
+echo "══════════════════════════════════════════════════"
+echo "  Installing RewriteValve (SPA deep-routes → 200)"
+echo "══════════════════════════════════════════════════"
+
+if grep -q 'RewriteValve' "$SERVER_XML"; then
+  echo "  ✓ RewriteValve already present in server.xml"
+else
+  sed -i '/<\/Host>/i\      <Valve className="org.apache.catalina.valves.rewrite.RewriteValve" />' "$SERVER_XML"
+  echo "  Added RewriteValve to <Host>"
+fi
+
+REWRITE_CONF="$TOMCAT_HOME/conf/Catalina/localhost/rewrite.config"
+mkdir -p "$(dirname "$REWRITE_CONF")"
+cat > "$REWRITE_CONF" <<'EOF'
+# SPA fallback: rewrite deep routes to /index.html with a 200 status.
+# /static/ and real files pass through untouched.
+RewriteCond %{REQUEST_URI} !^/static/
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteRule ^ /index.html [L]
+EOF
+echo "  Installed rewrite.config → $REWRITE_CONF"
+systemctl restart tomcat 2>/dev/null || echo "  ⚠ Could not restart Tomcat via systemctl. Restart it manually."
+
+# ── Step 1d: Install runtime dependencies (Redis + RabbitMQ) ──────────────────
+# The gateway rate limiter executes a Lua script in Redis on EVERY request
+# (rate-limit.enabled=true in ratelimiter.yml, fallback-strategy DENY). With
+# Redis down the filter errors and GlobalExceptionHandler mislabels the failure
+# as AUTH_001 "Invalid username or password". RabbitMQ receives gateway events.
+echo ""
+echo "══════════════════════════════════════════════════"
+echo "  Installing Redis + RabbitMQ"
+echo "══════════════════════════════════════════════════"
+
+if command -v redis-server >/dev/null 2>&1; then
+  echo "  ✓ redis-server already installed"
+else
+  apt-get update -qq
+  apt-get install -y redis-server
+  echo "  Installed redis-server"
+fi
+systemctl enable --now redis-server 2>/dev/null || echo "  ⚠ Could not start redis-server"
+
+if command -v rabbitmq-server >/dev/null 2>&1; then
+  echo "  ✓ rabbitmq-server already installed"
+else
+  apt-get install -y rabbitmq-server
+  echo "  Installed rabbitmq-server"
+fi
+systemctl enable --now rabbitmq-server 2>/dev/null || echo "  ⚠ Could not start rabbitmq-server"
+
+# ── Step 1b: Create the service account ───────────────────────────────────────
+# The systemd units run as User=publiclink; systemd fails every start with
+# status=217/USER if the account does not exist.
+echo ""
+echo "══════════════════════════════════════════════════"
+echo "  Creating service account: publiclink"
+echo "══════════════════════════════════════════════════"
+
+if id -u publiclink >/dev/null 2>&1; then
+  echo "  ✓ User publiclink already exists"
+else
+  useradd --system --no-create-home --shell /usr/sbin/nologin publiclink
+  echo "  ✓ Created system user publiclink"
+fi
+
+# The services' WorkingDirectory must be owned by the account so the JVMs can
+# write temp/log files there.
+mkdir -p "$(dirname "$RSA_KEYS_DEST")"
+chown publiclink:publiclink "$(dirname "$RSA_KEYS_DEST")"
 
 # ── Step 2: Install RSA keys ──────────────────────────────────────────────────
 echo ""
@@ -92,7 +187,10 @@ for key in auth260222.pem pubauth.pem; do
   if [[ -f "$KEYS_SRC_DIR/$key" ]]; then
     cp -f "$KEYS_SRC_DIR/$key" "$RSA_KEYS_DEST/"
     chmod 600 "$RSA_KEYS_DEST/$key"
-    echo "  Installed $key → $RSA_KEYS_DEST/"
+    # The services run as User=publiclink and read these keys via
+    # java.nio.file.Paths.get — root-only 600 would make login encryption fail.
+    chown publiclink:publiclink "$RSA_KEYS_DEST/$key"
+    echo "  Installed $key → $RSA_KEYS_DEST/ (owner: publiclink)"
   else
     echo "  ⚠ Missing: $KEYS_SRC_DIR/$key"
   fi
@@ -173,14 +271,23 @@ nginx -t || {
   exit 1
 }
 
-systemctl reload nginx
-echo "  Reloaded nginx"
+# Reload nginx if running; otherwise start it (reload on a stopped service fails)
+if systemctl is-active --quiet nginx; then
+  systemctl reload nginx
+  echo "  Reloaded nginx"
+else
+  systemctl start nginx
+  echo "  nginx was not running — started it"
+fi
 
 # ── Step 6: Enable and start services ─────────────────────────────────────────
 echo ""
 echo "══════════════════════════════════════════════════"
 echo "  Enabling and starting services"
 echo "══════════════════════════════════════════════════"
+
+# Make sure nginx survives a reboot too
+systemctl enable nginx 2>/dev/null || echo "  ⚠ Could not enable nginx"
 
 for svc in publiclink-gateway publiclink-app publiclink-user; do
   systemctl enable "$svc" 2>/dev/null || echo "  ⚠ Could not enable $svc"

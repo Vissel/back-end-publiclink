@@ -29,6 +29,8 @@ public interface UserService {
 
     Mono<Result<RegisterAdminResponse>> registerAdmin(String userName, String role);
 
+    Mono<Result<RegisterAdminResponse>> resetChangeTicket(String userName);
+
     Mono<Result<ChangePasswordResponse>> changePassword(ChangePasswordRequest changePasswordRequest);
 
 }

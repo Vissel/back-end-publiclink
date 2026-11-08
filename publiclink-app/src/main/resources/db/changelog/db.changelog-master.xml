@@ -8,6 +8,13 @@
     <!-- Include your changesets here -->
     <!--  <include file="db/changelog/changeset-004-update-tables.xml" /> -->
 
+    <!-- Baseline DDL: must run before the incremental ALTERs below (010/014/015/016/020),
+         which assume the base tables already exist. Without it a fresh publiclink-db
+         fails at changeset 010 with "Table 'publiclink-db.order' doesn't exist". -->
+    <changeSet id="000" author="thach">
+        <sqlFile path="db/changelog/changeset-000-baseline.sql"/>
+    </changeSet>
+
     <!-- <changeSet id="005" author="thach" >
         <sqlFile path="db/changelog/changeset-005-create-tables.sql"/>
     </changeSet> -->

@@ -122,6 +122,12 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
+    public Mono<Result<RegisterAdminResponse>> resetChangeTicket(String userName) {
+        return Mono.fromCallable(() -> transactionTemplate.execute(status -> doResetChangeTicket(userName)))
+                .subscribeOn(Schedulers.boundedElastic());
+    }
+
+    @Override
     public Mono<Result<ChangePasswordResponse>> changePassword(ChangePasswordRequest changePasswordRequest) {
         return Mono.fromCallable(() -> transactionTemplate.execute(status -> doChangePassword(changePasswordRequest)))
                 .subscribeOn(Schedulers.boundedElastic());
@@ -153,6 +159,36 @@ public class UserServiceImpl implements UserService {
         response.setPassword(generatedPassword); // plaintext: returned exactly once
         response.setRole(saved.getRole());
         return success(response);
+    }
+
+    /**
+     * Recover a user stuck in the first-login flow (e.g. the password-change
+     * ticket expired and the first password is no longer known): issue a fresh
+     * first password and re-arm the must-change-password requirement. The new
+     * password is returned in plaintext exactly once, like registration.
+     */
+    protected Result<RegisterAdminResponse> doResetChangeTicket(String userName) {
+        if (StringUtils.isBlank(userName)) {
+            return Result.error(400, "Username is required");
+        }
+
+        return userEntityRepository.findByUsername(userName)
+                .map(existing -> {
+                    String generatedPassword = generateFirstPassword();
+                    existing.setPassword(passwordEncoder.encode(generatedPassword));
+                    existing.setMustChangePassword(true);
+                    userEntityRepository.save(existing);
+
+                    log.info("Change ticket reset for user {} | new first password {} (masked)", userName,
+                            PasswordMasker.maskPassword(generatedPassword));
+
+                    RegisterAdminResponse response = new RegisterAdminResponse();
+                    response.setUserName(existing.getUsername());
+                    response.setPassword(generatedPassword); // plaintext: returned exactly once
+                    response.setRole(existing.getRole());
+                    return success(response);
+                })
+                .orElse(Result.error(404, "User not found: " + userName));
     }
 
     protected Result<ChangePasswordResponse> doChangePassword(ChangePasswordRequest request) {

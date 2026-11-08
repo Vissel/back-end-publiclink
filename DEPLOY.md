@@ -194,6 +194,85 @@ curl -I https://share-link.top/login                                 # HTTP/2 20
 | `release version 25 not supported` during build | Maven uses an older JDK from `JAVA_HOME` | export `JAVA_HOME=/usr/lib/jvm/java-25-…` (scripts auto-detect it) |
 | MariaDB `ERROR 1064` on `IDENTIFIED WITH … BY` | MariaDB 11 does not accept MySQL-style plugin syntax | use plain `CREATE USER … IDENTIFIED BY 'password'` |
 
+### 4.1 Public site 502 (`server: cloudflare`) while everything works locally
+
+**Situation** (verified 8 Nov 2026):
+
+```
+curl -I http://127.0.0.1/login        -> HTTP/1.1 404, Server: nginx   (nginx + Tomcat alive)
+curl -I https://share-link.top/login  -> HTTP/2 502, server: cloudflare, cf-ray: …
+```
+
+A `server: cloudflare` 502 means Cloudflare's edge cannot reach the origin through the tunnel.
+Since local curls answer, the fault is `cloudflared` on the VM, not nginx/Tomcat.
+
+**Fix:**
+
+```bash
+# 1. Is the tunnel service alive, and enabled across reboots?
+sudo systemctl status cloudflared --no-pager
+systemctl is-enabled cloudflared          # must say enabled, or the site dies on every reboot
+
+# 2. Logs — look for "Registered tunnel connection" vs repeated ERR lines
+sudo journalctl -u cloudflared -n 40 --no-pager
+
+# 3. The ingress the RUNNING unit reads must target nginx on :80
+sudo cat /etc/cloudflared/config.yml
+#    expected: hostname: share-link.top -> service: http://localhost:80
+
+# 4. Restart and watch it register
+sudo systemctl restart cloudflared
+sudo journalctl -u cloudflared -f
+```
+
+Then re-check: `curl -I https://share-link.top/login` must stop returning 502.
+Note: the systemd unit reads `/etc/cloudflared/config.yml` (verify with
+`ps aux | grep cloudflared`), NOT `~/.cloudflared/config.yml` — keep both copies in sync.
+
+### 4.2 `/login` returns 404 with `server: nginx` (RewriteValve missing)
+
+**Situation** (verified 8 Nov 2026, after a MANUAL frontend copy — `setup-server.sh` Step 1c was skipped):
+
+```
+curl -I http://127.0.0.1/login                  -> HTTP/1.1 404, Content-Length: 588
+                                                   (index.html body served by the WEB-INF/web.xml
+                                                    error page, which KEEPS the 404 status)
+grep RewriteValve /opt/tomcat/conf/server.xml   -> no output (Valve never installed)
+cat /opt/tomcat/conf/Catalina/localhost/rewrite.config
+  -> without sudo: Permission denied; with sudo: No such file or directory
+```
+
+**Fix:**
+
+```bash
+# 1. Create the rewrite config (root-owned path — use sudo tee)
+sudo mkdir -p /opt/tomcat/conf/Catalina/localhost
+sudo tee /opt/tomcat/conf/Catalina/localhost/rewrite.config > /dev/null <<'EOF'
+# SPA fallback: rewrite deep routes to /index.html with a 200 status.
+RewriteCond %{REQUEST_URI} !^/static/
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteRule ^ /index.html [L]
+EOF
+
+# 2. Sanity-check the anchor BEFORE inserting — expect exactly ONE </Host> line
+#    (if more than one, stop and inspect — do not run the sed)
+grep -n '</Host>' /opt/tomcat/conf/server.xml
+
+# 3. Insert the Valve right before </Host>. Never touch the <Connector> line:
+#    a bad sed there creates the fatal duplicate-address Tomcat crash loop.
+sudo sed -i '/<\/Host>/i\      <Valve className="org.apache.catalina.valves.rewrite.RewriteValve" />' /opt/tomcat/conf/server.xml
+
+# 4. Verify the edit landed, restart, and prove it end-to-end
+grep -n 'RewriteValve' /opt/tomcat/conf/server.xml   # must print the Valve line
+sudo systemctl restart tomcat
+curl -I http://127.0.0.1:8081/login    # 200
+curl -I http://127.0.0.1/login         # 200
+curl -I https://share-link.top/login   # HTTP/2 200
+```
+
+If Tomcat fails to start after the sed, the XML was mangled — inspect
+`sudo tail -40 /opt/tomcat/logs/catalina.out`.
+
 ---
 
 ## 5. Key files

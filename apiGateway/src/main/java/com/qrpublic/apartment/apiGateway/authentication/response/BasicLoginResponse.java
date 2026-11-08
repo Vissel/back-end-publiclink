@@ -19,6 +19,7 @@ public class BasicLoginResponse {
 
     private List<String> roles;
 
+    @Builder.Default
     private Boolean changePasswordRequired = Boolean.FALSE;
     private String passwordChangeTicket;
 }

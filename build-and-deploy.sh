@@ -14,6 +14,11 @@
 #   ./build-and-deploy.sh /opt/tomcat/webapps
 #   ./build-and-deploy.sh /opt/tomcat/webapps dev
 #
+# $TOMCAT_WEBAPPS_DIR is owned by the server's tomcat account, so file
+# operations inside it run as that account (see run_as_tomcat below).
+# Override the credentials via env when they differ:
+#   TOMCAT_USER=... TOMCAT_PASSWORD=... ./build-and-deploy.sh /opt/tomcat/webapps
+#
 set -euo pipefail
 
 # ── Arguments ──────────────────────────────────────────────────────────────────
@@ -25,8 +30,34 @@ FRONTEND_DIR="$(cd "$SCRIPT_DIR/../frontend-public-link" && pwd)"
 # Runnable service artifacts are collected here, ready to ship to the server.
 ARTIFACTS_DIR="$SCRIPT_DIR/target/deploy"
 
-if [[ ! -d "$TOMCAT_DIR" ]]; then
-  echo "✗ Target directory does not exist: ${TOMCAT_DIR}"
+# ── Tomcat credentials ─────────────────────────────────────────────────────────
+# The target webapps directory belongs to the tomcat account; a deploy run as
+# any other user hits "Permission denied" when copying into /opt/tomcat.
+# Override via environment if the server uses different credentials.
+TOMCAT_USER="${TOMCAT_USER:-tomcat}"
+TOMCAT_PASSWORD="${TOMCAT_PASSWORD:-tomcatpassword}"
+
+# Run a command as $TOMCAT_USER:
+#   - already tomcat  → run directly
+#   - root            → sudo -u tomcat (no password needed)
+#   - any other user  → non-interactive sudo driven by $TOMCAT_PASSWORD
+run_as_tomcat() {
+  if [[ "$(id -un)" == "$TOMCAT_USER" ]]; then
+    "$@"
+  elif [[ "$(id -u)" -eq 0 ]]; then
+    sudo -u "$TOMCAT_USER" "$@"
+  else
+    echo "$TOMCAT_PASSWORD" | sudo -S -p "" -u "$TOMCAT_USER" "$@" || {
+      echo "✗ Could not run '$*' as ${TOMCAT_USER}." >&2
+      echo "  Check TOMCAT_USER/TOMCAT_PASSWORD, grant this user sudo rights," >&2
+      echo "  or run the script with sudo." >&2
+      return 1
+    }
+  fi
+}
+
+if ! run_as_tomcat test -d "$TOMCAT_DIR"; then
+  echo "✗ Target directory does not exist or is not accessible: ${TOMCAT_DIR}"
   exit 1
 fi
 
@@ -127,18 +158,30 @@ echo ""
 # 3a. The frontend must live at webapps/ROOT so that https://share-link.top/
 #     serves index.html directly. Deploying it under /publiclink would make the
 #     login page live at https://share-link.top/publiclink/ instead.
+#     $TOMCAT_DIR belongs to the tomcat account, so every operation below runs
+#     as $TOMCAT_USER — a plain rm/cp as the deployer would be denied.
 FRONTEND_DEST="${TOMCAT_DIR}/ROOT"
-if [[ -d "$FRONTEND_DEST" ]]; then
+if run_as_tomcat test -d "$FRONTEND_DEST"; then
   echo "  Removing old frontend: ${FRONTEND_DEST}"
-  rm -rf "$FRONTEND_DEST"
+  run_as_tomcat rm -rf "$FRONTEND_DEST"
 fi
 # A leftover ROOT.war would be re-expanded by Tomcat and overwrite the build.
-if [[ -f "${TOMCAT_DIR}/ROOT.war" ]]; then
+if run_as_tomcat test -f "${TOMCAT_DIR}/ROOT.war"; then
   echo "  Removing stock Tomcat ROOT.war: ${TOMCAT_DIR}/ROOT.war"
-  rm -f "${TOMCAT_DIR}/ROOT.war"
+  run_as_tomcat rm -f "${TOMCAT_DIR}/ROOT.war"
 fi
+# The build lives in the deployer's workspace (often a 700 home dir) which the
+# tomcat account cannot traverse, so stage a world-readable copy under /tmp and
+# let tomcat pick it up from there. The copy runs as tomcat, keeping the
+# deployed files owned by tomcat as Tomcat expects.
+STAGE_DIR="$(mktemp -d /tmp/publiclink-frontend.XXXXXX)"
+trap 'rm -rf "$STAGE_DIR"' EXIT
+cp -r "$FRONTEND_DIR/build" "$STAGE_DIR/ROOT"
+chmod -R a+rX "$STAGE_DIR"
 echo "  Deploying frontend → ${FRONTEND_DEST}"
-cp -r "$FRONTEND_DIR/build" "$FRONTEND_DEST"
+run_as_tomcat cp -r "$STAGE_DIR/ROOT" "$FRONTEND_DEST"
+rm -rf "$STAGE_DIR"
+trap - EXIT
 
 # ── Step 4: Stage the standalone services ─────────────────────────────────────
 # apiGateway, publiclink-app and user all run as executable Spring Boot

@@ -12,12 +12,15 @@ import com.qrpublic.apartment.user.model.User;
 import com.qrpublic.apartment.user.model.UserType;
 import com.qrpublic.apartment.user.repository.UserAuthEntityRepository;
 import com.qrpublic.apartment.user.repository.UserEntityRepository;
+import com.qrpublic.apartment.user.service.request.ChangePasswordRequest;
 import com.qrpublic.apartment.user.service.request.CreateUserAuthRequest;
 import com.qrpublic.apartment.user.service.request.UserCreateRequest;
 import com.qrpublic.apartment.user.service.request.UserDeleteRequest;
 import com.qrpublic.apartment.user.service.request.UserUpdateRequest;
+import com.qrpublic.apartment.user.service.response.ChangePasswordResponse;
 import com.qrpublic.apartment.user.service.response.CreateUserAuthResponse;
 import com.qrpublic.apartment.user.service.response.FoundUserResponse;
+import com.qrpublic.apartment.user.service.response.RegisterAdminResponse;
 import com.qrpublic.apartment.user.service.response.UserCreateResponse;
 import com.qrpublic.apartment.user.service.response.UserDeleteResponse;
 import com.qrpublic.apartment.user.service.response.UserUpdateResponse;
@@ -32,6 +35,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
 
+import java.security.SecureRandom;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
@@ -122,6 +126,94 @@ public class UserServiceImpl implements UserService {
 
     }
 
+
+    @Override
+    public Mono<Result<RegisterAdminResponse>> registerAdmin(String userName, String role) {
+        return Mono.fromCallable(() ->
+                        transactionTemplate.execute(status ->
+                                doRegisterAdmin(userName, role))
+                )
+                .subscribeOn(Schedulers.boundedElastic());
+    }
+
+    @Override
+    public Mono<Result<ChangePasswordResponse>> changePassword(ChangePasswordRequest changePasswordRequest) {
+        return Mono.fromCallable(() ->
+                        transactionTemplate.execute(status ->
+                                doChangePassword(changePasswordRequest))
+                )
+                .subscribeOn(Schedulers.boundedElastic());
+    }
+
+    protected Result<RegisterAdminResponse> doRegisterAdmin(String userName, String role) {
+        if (StringUtils.isBlank(userName)) {
+            return Result.error(400, "Username is required");
+        }
+        if (userEntityRepository.findByUsername(userName).isPresent()) {
+            return Result.error(409, "User already exists: " + userName);
+        }
+
+        String generatedPassword = generateFirstPassword();
+        log.info("Registering admin {} | first password {} (masked)", userName, PasswordMasker.maskPassword(generatedPassword));
+
+        User user = new User();
+        user.setUsername(userName);
+        user.setPlainTextPassword(generatedPassword);
+        user.setRole(role);
+        user.setIsActive(true);
+        user.setMustChangePassword(true);
+
+        UserEntity saved = createNewUser(user);
+
+        RegisterAdminResponse response = new RegisterAdminResponse();
+        response.setUserName(saved.getUsername());
+        response.setPassword(generatedPassword); // plaintext: returned exactly once
+        response.setRole(saved.getRole());
+        return success(response);
+    }
+
+    protected Result<ChangePasswordResponse> doChangePassword(ChangePasswordRequest request) {
+        if (request == null || StringUtils.isBlank(request.getUserName())
+                || StringUtils.isBlank(request.getEncryptedPassword())) {
+            return Result.error(400, "Username and encrypted password are required");
+        }
+
+        String decryptedPassword = rsaClient.decrypt(request.getEncryptedPassword());
+        if (StringUtils.isBlank(decryptedPassword) || decryptedPassword.length() < 8) {
+            return Result.error(400, "New password must be at least 8 characters");
+        }
+
+        return userEntityRepository.findByUsername(request.getUserName())
+                .map(existing -> {
+                    existing.setPassword(passwordEncoder.encode(decryptedPassword));
+                    existing.setMustChangePassword(false);
+                    userEntityRepository.save(existing);
+
+                    log.info("Password changed for user: {}", existing.getUsername());
+
+                    ChangePasswordResponse response = new ChangePasswordResponse();
+                    response.setUserName(existing.getUsername());
+                    response.setChanged(true);
+                    response.setMessage("Change password successfully");
+                    return success(response);
+                })
+                .orElse(Result.error(404, "User not found: " + request.getUserName()));
+    }
+
+    /**
+     * Generate a first secure password: 16 characters drawn from letters,
+     * digits and symbols using SecureRandom.
+     */
+    private String generateFirstPassword() {
+        final String chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%";
+        final int length = 16;
+        SecureRandom random = new SecureRandom();
+        StringBuilder password = new StringBuilder(length);
+        for (int i = 0; i < length; i++) {
+            password.append(chars.charAt(random.nextInt(chars.length())));
+        }
+        return password.toString();
+    }
 
     protected Result<CreateUserAuthResponse> doCreateUserAuth(CreateUserAuthRequest request) {
         UserEntity user = userEntityRepository.findByUsername(request.getUserName())
@@ -249,6 +341,7 @@ public class UserServiceImpl implements UserService {
         response.setEncodedPassword(userModel.getPassword());
         response.setName(userModel.getFullName());
         response.setRole(userModel.getRole());
+        response.setMustChangePassword(userModel.getMustChangePassword());
         return response;
     }
 
@@ -262,6 +355,7 @@ public class UserServiceImpl implements UserService {
         newUser.setFullName(user.getFullName());
         newUser.setRole(user.getRole());
         newUser.setIsActive(user.getIsActive());
+        newUser.setMustChangePassword(user.getMustChangePassword());
         if (user.getProfileLinks() != null && !user.getProfileLinks().isEmpty()) {
             List<ProfileEntity> profiles = user.getProfileLinks().stream()
                     .map(link -> {

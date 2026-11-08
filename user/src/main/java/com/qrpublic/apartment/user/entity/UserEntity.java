@@ -25,6 +25,7 @@ public class UserEntity {
     private List<ProfileEntity> profiles;
     private String role;
     private Boolean isActive;
+    private Boolean mustChangePassword;
 
     @Column(updatable = false, insertable = false)
     private Timestamp createdAt;

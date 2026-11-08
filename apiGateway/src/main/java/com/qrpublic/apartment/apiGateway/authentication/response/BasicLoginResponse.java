@@ -18,4 +18,7 @@ public class BasicLoginResponse {
     private String reqUuid;
 
     private List<String> roles;
+
+    private Boolean changePasswordRequired = Boolean.FALSE;
+    private String passwordChangeTicket;
 }

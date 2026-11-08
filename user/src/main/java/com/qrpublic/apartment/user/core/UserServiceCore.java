@@ -29,6 +29,7 @@ public class UserServiceCore {
         user.setFullName(entity.getFullName());
         user.setRole(entity.getRole());
         user.setIsActive(entity.getIsActive());
+        user.setMustChangePassword(entity.getMustChangePassword());
         if (entity.getProfiles() != null && !entity.getProfiles().isEmpty()) {
             List<String> profileLinks = entity.getProfiles().stream()
                     .map(ProfileEntity::getProfileLink)

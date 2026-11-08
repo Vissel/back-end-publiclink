@@ -63,9 +63,14 @@ public class SecurityConfig {
                                 "/api/v1/auth/**", // Includes /basic, /refresh, /logout, /public-key
                                 "/actuator/**",
                                 "/security/v1/public/**",
-                                "/api/v1/user/**",
                                 "/publiclink/api/v1/publish/**")// temporary allow user creation without auth for
                                                                 // testing
+                        .permitAll()
+                        // Server-side-only admin registration: admin roles only
+                        // (authorities carry plain role strings, no ROLE_ prefix)
+                        .pathMatchers("/api/v1/user/admin/internal/**")
+                        .hasAnyAuthority("Admin", "Badminton_Admin")
+                        .pathMatchers("/api/v1/user/**")
                         .permitAll()
                         .anyExchange().authenticated())
                 .addFilterAt(rateLimitingWebFilter, SecurityWebFiltersOrder.FIRST)

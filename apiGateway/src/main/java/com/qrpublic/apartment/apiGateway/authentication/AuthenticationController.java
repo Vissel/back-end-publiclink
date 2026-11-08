@@ -1,9 +1,12 @@
 package com.qrpublic.apartment.apiGateway.authentication;
 
 import com.qrpublic.apartment.apiGateway.authentication.request.BasicLoginRequest;
+import com.qrpublic.apartment.apiGateway.authentication.request.ChangePasswordRequest;
 import com.qrpublic.apartment.apiGateway.authentication.request.RefreshTokenRequest;
 import com.qrpublic.apartment.apiGateway.authentication.response.BasicLoginResponse;
+import com.qrpublic.apartment.apiGateway.authentication.response.ChangePasswordResponse;
 import com.qrpublic.apartment.apiGateway.authentication.response.RefreshTokenResponse;
+import com.qrpublic.apartment.apiGateway.exception.BusinessException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.http.HttpStatus;
@@ -32,6 +35,32 @@ public class AuthenticationController {
         return authenticationService.basicLogin(request)
                 .map(ResponseEntity::ok)
                 .defaultIfEmpty(ResponseEntity.status(HttpStatus.UNAUTHORIZED).build());
+    }
+
+    /**
+     * First-login forced password change: consumes the single-use ticket issued
+     * by /basic and replaces the generated password with the user's own.
+     *
+     * @param request Change password request (ticket + RSA-encrypted password)
+     * @return Success response or mapped error status
+     */
+    @PostMapping("/change-password")
+    public Mono<ResponseEntity<ChangePasswordResponse>> changePassword(@RequestBody ChangePasswordRequest request) {
+        return authenticationService.changePassword(request)
+                .map(ResponseEntity::ok)
+                .onErrorResume(BusinessException.class, e -> {
+                    HttpStatus status = e.getErrorCode() != null
+                            ? e.getErrorCode().getHttpStatus()
+                            : HttpStatus.BAD_REQUEST;
+                    ChangePasswordResponse body = ChangePasswordResponse.builder()
+                            .changed(false)
+                            .message(e.getErrorCode() != null
+                                    ? e.getErrorCode().getMessage()
+                                    : "Change password failed")
+                            .build();
+                    return Mono.just(ResponseEntity.status(status).body(body));
+                })
+                .onErrorResume(e -> Mono.just(ResponseEntity.status(HttpStatus.UNAUTHORIZED).build()));
     }
 
     /**

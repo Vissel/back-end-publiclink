@@ -16,6 +16,7 @@ public class User {
     private List<String> profileLinks; // List of profile links
     private String role;
     private Boolean isActive;
+    private Boolean mustChangePassword;
 
     public void setPlainTextPassword(String plainTextPassword) {
         if (Objects.nonNull(plainTextPassword)) {

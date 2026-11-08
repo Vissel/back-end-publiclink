@@ -3,17 +3,21 @@ package com.qrpublic.apartment.user.controller;
 import com.qrpublic.apartment.adapter.authentication.request.FindUserRequest;
 import com.qrpublic.apartment.adapter.authentication.response.FindUserResponse;
 import com.qrpublic.apartment.adapter.template.Result;
+import com.qrpublic.apartment.adapter.user.request.UserChangePasswordRequest;
 import com.qrpublic.apartment.adapter.user.request.UserRegisterRequest;
 import com.qrpublic.apartment.adapter.user.request.UserRemoveRequest;
 import com.qrpublic.apartment.adapter.user.request.UserUserAuthRequest;
+import com.qrpublic.apartment.adapter.user.response.UserChangePasswordResponse;
 import com.qrpublic.apartment.adapter.user.response.UserRegisterResponse;
 import com.qrpublic.apartment.adapter.user.response.UserRemoveResponse;
 import com.qrpublic.apartment.adapter.user.response.UserUserAuthResponse;
 import com.qrpublic.apartment.user.service.UserService;
+import com.qrpublic.apartment.user.service.request.ChangePasswordRequest;
 import com.qrpublic.apartment.user.service.request.CreateUserAuthRequest;
 import com.qrpublic.apartment.user.service.request.UserCreateRequest;
 import com.qrpublic.apartment.user.service.request.UserDeleteRequest;
 import com.qrpublic.apartment.user.service.request.UserUpdateRequest;
+import com.qrpublic.apartment.user.service.response.ChangePasswordResponse;
 import com.qrpublic.apartment.user.service.response.FoundUserResponse;
 import com.qrpublic.apartment.user.service.response.UserCreateResponse;
 import com.qrpublic.apartment.user.service.response.UserDeleteResponse;
@@ -57,6 +61,20 @@ public class UserController {
                         return ResponseEntity.ok(toFindUserResponse(result.getData()));
                     }
                     return ResponseEntity.status(result.getErrorCode()).<FindUserResponse>body(null);
+                });
+    }
+
+    @PostMapping("/changePassword")
+    public Mono<ResponseEntity<Result<UserChangePasswordResponse>>> changePassword(
+            @RequestBody UserChangePasswordRequest request) {
+        return userService.changePassword(toChangePasswordRequest(request))
+                .map(result -> {
+                    if (result.isSuccess()) {
+                        return ResponseEntity.ok(Result.success(toUserChangePasswordResponse(result.getData())));
+                    }
+                    int code = result.getErrorCode() > 0 ? result.getErrorCode() : 400;
+                    return ResponseEntity.status(code)
+                            .<Result<UserChangePasswordResponse>>body(Result.error(code, result.getErrorMessage()));
                 });
     }
 
@@ -172,6 +190,22 @@ public class UserController {
         r.setName(data.getName());
         r.setEmail(data.getEmail());
         r.setRole(data.getRole());
+        r.setMustChangePassword(data.getMustChangePassword());
+        return r;
+    }
+
+    private ChangePasswordRequest toChangePasswordRequest(UserChangePasswordRequest request) {
+        ChangePasswordRequest r = new ChangePasswordRequest();
+        r.setUserName(request.getUserName());
+        r.setEncryptedPassword(request.getEncryptedPassword());
+        return r;
+    }
+
+    private UserChangePasswordResponse toUserChangePasswordResponse(ChangePasswordResponse data) {
+        UserChangePasswordResponse r = new UserChangePasswordResponse();
+        r.setUserName(data.getUserName());
+        r.setChanged(data.getChanged());
+        r.setMessage(data.getMessage());
         return r;
     }
 }

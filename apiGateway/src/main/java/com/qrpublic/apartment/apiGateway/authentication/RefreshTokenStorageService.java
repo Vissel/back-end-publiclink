@@ -22,6 +22,7 @@ public class RefreshTokenStorageService {
 
     private static final String REFRESH_TOKEN_PREFIX = "refresh_token:";
     private static final String BLACKLIST_PREFIX = "token_blacklist:";
+    private static final String PASSWORD_CHANGE_PREFIX = "pwd_change:";
 
     @Autowired
     private ReactiveStringRedisTemplate redisTemplate;
@@ -146,6 +147,50 @@ public class RefreshTokenStorageService {
                 .onErrorResume(e -> {
                     log.error("Error checking token blacklist status: {}", e.getMessage());
                     return Mono.just(false);
+                });
+    }
+
+    /**
+     * Store a one-time password-change ticket for a first-login user.
+     *
+     * @param ticket     Random ticket id issued to the client
+     * @param username   Username the ticket is bound to
+     * @param ttlSeconds Time-to-live in seconds
+     * @return Mono<Boolean> indicating success
+     */
+    public Mono<Boolean> storePasswordChangeTicket(String ticket, String username, long ttlSeconds) {
+        String key = PASSWORD_CHANGE_PREFIX + ticket;
+
+        return redisTemplate.opsForValue()
+                .set(key, username, Duration.ofSeconds(ttlSeconds))
+                .doOnSuccess(success -> {
+                    if (success) {
+                        log.info("Password-change ticket stored for user: {} | TTL: {}s", username, ttlSeconds);
+                    } else {
+                        log.warn("Failed to store password-change ticket for user: {}", username);
+                    }
+                })
+                .onErrorResume(e -> {
+                    log.error("Redis error storing password-change ticket | Error: {}", e.getMessage());
+                    return Mono.just(false);
+                });
+    }
+
+    /**
+     * Atomically consume a password-change ticket (single-use).
+     *
+     * @param ticket Ticket id issued at login
+     * @return Mono<String> the bound username, or empty if invalid/expired
+     */
+    public Mono<String> consumePasswordChangeTicket(String ticket) {
+        String key = PASSWORD_CHANGE_PREFIX + ticket;
+
+        return redisTemplate.opsForValue()
+                .getAndDelete(key)
+                .doOnNext(username -> log.info("Password-change ticket consumed for user: {}", username))
+                .onErrorResume(e -> {
+                    log.error("Error consuming password-change ticket: {}", e.getMessage());
+                    return Mono.empty();
                 });
     }
 

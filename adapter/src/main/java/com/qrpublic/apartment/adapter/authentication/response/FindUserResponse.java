@@ -9,4 +9,5 @@ public class FindUserResponse {
     private String name;
     private String email;
     private String role;
+    private Boolean mustChangePassword;
 }

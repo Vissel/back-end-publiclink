@@ -40,7 +40,7 @@ public class RefreshTokenStorageService {
     public Mono<Boolean> storeRefreshToken(String refreshToken, String username, String roles, long ttlSeconds) {
         String key = REFRESH_TOKEN_PREFIX + refreshToken;
         String value = username + "|" + roles;
-        
+
         return redisTemplate.opsForValue()
                 .set(key, value, Duration.ofSeconds(ttlSeconds))
                 .doOnSuccess(success -> {
@@ -58,14 +58,15 @@ public class RefreshTokenStorageService {
 
     /**
      * Validate and retrieve refresh token data
-     * Banking security: Atomic read-and-delete for rotation (prevents replay attacks)
+     * Banking security: Atomic read-and-delete for rotation (prevents replay
+     * attacks)
      *
      * @param refreshToken The refresh token JWT
      * @return Mono<TokenData> containing username and roles, or empty if invalid
      */
     public Mono<TokenData> validateAndGetRefreshToken(String refreshToken) {
         String key = REFRESH_TOKEN_PREFIX + refreshToken;
-        
+
         return redisTemplate.opsForValue()
                 .get(key)
                 .flatMap(value -> {
@@ -94,7 +95,7 @@ public class RefreshTokenStorageService {
      */
     public Mono<Boolean> deleteRefreshToken(String refreshToken) {
         String key = REFRESH_TOKEN_PREFIX + refreshToken;
-        
+
         return redisTemplate.delete(key)
                 .map(deleted -> deleted > 0)
                 .doOnSuccess(deleted -> {
@@ -114,13 +115,13 @@ public class RefreshTokenStorageService {
      * Blacklist a token (for logout or compromised token scenarios)
      * Banking security: Blacklist TTL matches original token expiration
      *
-     * @param token        The token to blacklist
-     * @param ttlSeconds   Time-to-live (should match token expiration)
+     * @param token      The token to blacklist
+     * @param ttlSeconds Time-to-live (should match token expiration)
      * @return Mono<Boolean> indicating success
      */
     public Mono<Boolean> blacklistToken(String token, long ttlSeconds) {
         String key = BLACKLIST_PREFIX + token;
-        
+
         return redisTemplate.opsForValue()
                 .set(key, "revoked", Duration.ofSeconds(ttlSeconds))
                 .doOnSuccess(success -> {
@@ -142,7 +143,7 @@ public class RefreshTokenStorageService {
      */
     public Mono<Boolean> isTokenBlacklisted(String token) {
         String key = BLACKLIST_PREFIX + token;
-        
+
         return redisTemplate.hasKey(key)
                 .onErrorResume(e -> {
                     log.error("Error checking token blacklist status: {}", e.getMessage());

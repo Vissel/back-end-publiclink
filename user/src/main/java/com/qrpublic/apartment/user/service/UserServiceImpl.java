@@ -88,60 +88,42 @@ public class UserServiceImpl implements UserService {
 
     @Override
     public Mono<Result<UserCreateResponse>> createUser(UserCreateRequest userCreateRequest) {
-        return Mono.fromCallable(() ->
-                        transactionTemplate.execute(status ->
-                                doCreateUser(userCreateRequest))
-                )
+        return Mono.fromCallable(() -> transactionTemplate.execute(status -> doCreateUser(userCreateRequest)))
                 .subscribeOn(Schedulers.boundedElastic());
     }
 
     @Override
     public Mono<Result<UserUpdateResponse>> updateUser(UserUpdateRequest userUpdateRequest) {
-        return Mono.fromCallable(() ->
-                        transactionTemplate.execute(status ->
-                                doUpdateUser(userUpdateRequest))
-                )
+        return Mono.fromCallable(() -> transactionTemplate.execute(status -> doUpdateUser(userUpdateRequest)))
                 .subscribeOn(Schedulers.boundedElastic());
     }
 
     @Override
     public Mono<Result<UserDeleteResponse>> deleteUserByUsername(UserDeleteRequest userDeleteRequest) {
-        return Mono.fromCallable(() ->
-                        transactionTemplate.execute(status ->
-                                doDeleteUser(userDeleteRequest))
-                )
+        return Mono.fromCallable(() -> transactionTemplate.execute(status -> doDeleteUser(userDeleteRequest)))
                 .subscribeOn(Schedulers.boundedElastic());
     }
 
     @Override
     public Mono<Result<CreateUserAuthResponse>> createUserAuth(CreateUserAuthRequest createUserAuthRequest) {
-        return Mono.fromCallable(() ->
-                        transactionTemplate.execute((status) ->
-                                doCreateUserAuth(createUserAuthRequest)
-                        )
-                )
+        return Mono.fromCallable(() -> transactionTemplate.execute((status) -> doCreateUserAuth(createUserAuthRequest)))
                 .subscribeOn(Schedulers.boundedElastic())
-                .doOnError(ex -> log.error("Failed to create user auth for {}", createUserAuthRequest.getUserName(), ex))
-                .onErrorReturn(Result.error(UserErrorEnum.USER_CREATE_AUTH_ERROR.getCode(), UserErrorEnum.USER_CREATE_AUTH_ERROR.getMessage()));
+                .doOnError(
+                        ex -> log.error("Failed to create user auth for {}", createUserAuthRequest.getUserName(), ex))
+                .onErrorReturn(Result.error(UserErrorEnum.USER_CREATE_AUTH_ERROR.getCode(),
+                        UserErrorEnum.USER_CREATE_AUTH_ERROR.getMessage()));
 
     }
 
-
     @Override
     public Mono<Result<RegisterAdminResponse>> registerAdmin(String userName, String role) {
-        return Mono.fromCallable(() ->
-                        transactionTemplate.execute(status ->
-                                doRegisterAdmin(userName, role))
-                )
+        return Mono.fromCallable(() -> transactionTemplate.execute(status -> doRegisterAdmin(userName, role)))
                 .subscribeOn(Schedulers.boundedElastic());
     }
 
     @Override
     public Mono<Result<ChangePasswordResponse>> changePassword(ChangePasswordRequest changePasswordRequest) {
-        return Mono.fromCallable(() ->
-                        transactionTemplate.execute(status ->
-                                doChangePassword(changePasswordRequest))
-                )
+        return Mono.fromCallable(() -> transactionTemplate.execute(status -> doChangePassword(changePasswordRequest)))
                 .subscribeOn(Schedulers.boundedElastic());
     }
 
@@ -154,7 +136,8 @@ public class UserServiceImpl implements UserService {
         }
 
         String generatedPassword = generateFirstPassword();
-        log.info("Registering admin {} | first password {} (masked)", userName, PasswordMasker.maskPassword(generatedPassword));
+        log.info("Registering admin {} | first password {} (masked)", userName,
+                PasswordMasker.maskPassword(generatedPassword));
 
         User user = new User();
         user.setUsername(userName);
@@ -238,7 +221,8 @@ public class UserServiceImpl implements UserService {
     }
 
     protected Result<UserCreateResponse> doCreateUser(UserCreateRequest request) {
-        if (request == null) return Result.error(400, "Invalid user request");
+        if (request == null)
+            return Result.error(400, "Invalid user request");
         User user = convertUserRegisterToUserModel(request);
         userEntityRepository.findByUsername(user.getUsername())
                 .map(existing -> setNewValueForExistUser(existing, user))
@@ -250,7 +234,7 @@ public class UserServiceImpl implements UserService {
         if (request == null || StringUtils.isBlank(request.getUserName())) {
             return Result.error(400, "Username is required for update");
         }
-        
+
         return userEntityRepository.findByUsername(request.getUserName())
                 .map(existingUser -> {
                     // Update fields except username (username is not allowed to be updated)
@@ -259,11 +243,12 @@ public class UserServiceImpl implements UserService {
                             updateFullName(existingUser, request.getFullName()),
                             updateRole(existingUser, request.getRole()),
                             updateIsActive(existingUser, true),
-                            updateProfileLinks(existingUser, request.getLink() != null ? List.of(request.getLink()) : null)
-                    ).filter(Objects::nonNull).forEach(updater -> updater.accept(existingUser));
-                    
+                            updateProfileLinks(existingUser,
+                                    request.getLink() != null ? List.of(request.getLink()) : null))
+                            .filter(Objects::nonNull).forEach(updater -> updater.accept(existingUser));
+
                     userEntityRepository.save(existingUser);
-                    
+
                     // Build response
                     UserUpdateResponse response = new UserUpdateResponse();
                     response.setUserName(existingUser.getUsername());
@@ -278,7 +263,7 @@ public class UserServiceImpl implements UserService {
                     }
                     response.setMessage("User updated successfully");
                     response.setSuccess(true);
-                    
+
                     return success(response);
                 })
                 .orElse(Result.error(404, "User not found: " + request.getUserName()));
@@ -377,8 +362,8 @@ public class UserServiceImpl implements UserService {
                 updateFullName(existing, user.getFullName()),
                 updateRole(existing, user.getRole()),
                 updateIsActive(existing, user.getIsActive()),
-                updateProfileLinks(existing, user.getProfileLinks())
-        ).filter(Objects::nonNull).forEach(updater -> updater.accept(existing));
+                updateProfileLinks(existing, user.getProfileLinks())).filter(Objects::nonNull)
+                .forEach(updater -> updater.accept(existing));
         return userEntityRepository.save(existing);
     }
 
@@ -387,7 +372,9 @@ public class UserServiceImpl implements UserService {
     }
 
     private Consumer<UserEntity> updatePassword(UserEntity u, String v) {
-        return StringUtils.isNotBlank(v) && !passwordEncoder.matches(v, u.getPassword()) ? e -> e.setPassword(passwordEncoder.encode(v)) : null;
+        return StringUtils.isNotBlank(v) && !passwordEncoder.matches(v, u.getPassword())
+                ? e -> e.setPassword(passwordEncoder.encode(v))
+                : null;
     }
 
     private Consumer<UserEntity> updateFullName(UserEntity u, String v) {
@@ -405,22 +392,22 @@ public class UserServiceImpl implements UserService {
     private Consumer<UserEntity> updateProfileLinks(UserEntity u, List<String> links) {
         if (links != null && !links.isEmpty()) {
             // Check if profiles already exist with the same links (idempotency check)
-            List<String> existingLinks = u.getProfiles() != null 
+            List<String> existingLinks = u.getProfiles() != null
                     ? u.getProfiles().stream().map(ProfileEntity::getProfileLink).toList()
                     : List.of();
-            
+
             // Only update if links are different
             if (existingLinks.equals(links)) {
                 return null; // No change needed
             }
-            
+
             // Clear existing profiles and add new ones
             if (u.getProfiles() != null) {
                 u.getProfiles().clear();
             } else {
                 u.setProfiles(new ArrayList<>());
             }
-            
+
             List<ProfileEntity> profiles = links.stream().map(link -> {
                 ProfileEntity p = new ProfileEntity();
                 p.setProfileLink(link);
@@ -428,7 +415,7 @@ public class UserServiceImpl implements UserService {
                 p.setUser(u);
                 return p;
             }).collect(Collectors.toCollection(ArrayList::new));
-            
+
             u.getProfiles().addAll(profiles);
             return e -> {
             };

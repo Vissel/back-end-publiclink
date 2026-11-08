@@ -17,6 +17,7 @@ public enum ErrorCode {
     RATE_LIMIT_EXCEEDED("RATE_001", "Too many requests", HttpStatus.TOO_MANY_REQUESTS),
 
     INVALID_ARGUMENTS("410", "Invalid arguments provided", HttpStatus.BAD_REQUEST);
+
     private final String code;
     private final String message;
     private final HttpStatus httpStatus;

@@ -41,7 +41,8 @@ public class UserController {
     UserService userService;
 
     @PostMapping("/createUser")
-    public Mono<ResponseEntity<Result<UserRegisterResponse>>> createUser(@Valid @RequestBody UserRegisterRequest request) {
+    public Mono<ResponseEntity<Result<UserRegisterResponse>>> createUser(
+            @Valid @RequestBody UserRegisterRequest request) {
         return userService.createUser(toUserCreateRequest(request))
                 .map(result -> {
                     if (result.isSuccess()) {
@@ -49,7 +50,8 @@ public class UserController {
                         resp.setMessage("User created successfully");
                         return ResponseEntity.ok(Result.success(resp));
                     }
-                    return ResponseEntity.status(result.getErrorCode()).<Result<UserRegisterResponse>>body(Result.error(result.getErrorCode(), null));
+                    return ResponseEntity.status(result.getErrorCode())
+                            .<Result<UserRegisterResponse>>body(Result.error(result.getErrorCode(), null));
                 });
     }
 
@@ -86,12 +88,14 @@ public class UserController {
                         UserRemoveResponse resp = toUserRemoveResponse(result.getData());
                         return ResponseEntity.ok(Result.success(resp));
                     }
-                    return ResponseEntity.status(result.getErrorCode()).<Result<UserRemoveResponse>>body(Result.error(result.getErrorCode(), null));
+                    return ResponseEntity.status(result.getErrorCode())
+                            .<Result<UserRemoveResponse>>body(Result.error(result.getErrorCode(), null));
                 });
     }
 
     @PostMapping("/createUserAndUserAuth")
-    public Mono<Result<UserUserAuthResponse>> createUserAndUserAuth(@Valid @RequestBody UserUserAuthRequest userUserAuthRequest) {
+    public Mono<Result<UserUserAuthResponse>> createUserAndUserAuth(
+            @Valid @RequestBody UserUserAuthRequest userUserAuthRequest) {
         CreateUserAuthRequest createUserAuthRequest = convertToCreateUserAuthRequest(userUserAuthRequest);
         return userService.createUserAuth(createUserAuthRequest)
                 .filter(result -> result.isSuccess())
@@ -102,8 +106,7 @@ public class UserController {
                             response.setErrorMessage(createUserAuthResponse.getErrorMessage());
                             response.setErrorCode(createUserAuthResponse.getErrorCode());
                             return Result.success(response);
-                        }
-                );
+                        });
     }
 
     @PutMapping("/{username}")
@@ -143,7 +146,7 @@ public class UserController {
 
     private UserUpdateRequest toUserUpdateRequest(UserRegisterRequest request) {
         UserUpdateRequest r = new UserUpdateRequest();
-        r.setUserName(request.getUserName());  // Username is required for identification but won't be updated
+        r.setUserName(request.getUserName()); // Username is required for identification but won't be updated
         r.setEncryptedPassword(request.getEncryptedPassword());
         r.setFullName(request.getFullName());
         r.setLink(request.getProfileLink() != null ? request.getProfileLink().toString() : null);

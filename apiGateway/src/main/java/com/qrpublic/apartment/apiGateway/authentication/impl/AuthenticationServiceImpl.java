@@ -73,25 +73,24 @@ public class AuthenticationServiceImpl implements AuthenticationService {
                     .map(v -> v.getPropertyPath() + ": " + v.getMessage())
                     .reduce((s1, s2) -> s1 + ", " + s2)
                     .orElse("Validation failed");
-            return Mono.error(new BusinessException(ErrorCode.INVALID_ARGUMENTS, new Object[]{errorMessage}));
+            return Mono.error(new BusinessException(ErrorCode.INVALID_ARGUMENTS, new Object[] { errorMessage }));
         }
 
         String reqUuid = request.getReqUuid();
 
-        return
-                authenticationManager.authenticate(
-                                new UsernamePasswordAuthenticationToken(request.getUsername(),
-                                        rsaService.decrypt(request.getEncryptedPassword())))
-                        .flatMap(authentication -> userClient
-                                .findUserByUsername(new FindUserRequest(authentication.getName()))
-                                .defaultIfEmpty(new FindUserResponse())
-                                .flatMap(user -> {
-                                    if (Boolean.TRUE.equals(user.getMustChangePassword())) {
-                                        return handleMustChangePassword(authentication.getName(), reqUuid);
-                                    }
-                                    return generateTokenAndResponse(authentication, reqUuid, user.getName());
-                                }))
-                        .onErrorMap(this::handleAuthenticationFailure);
+        return authenticationManager.authenticate(
+                new UsernamePasswordAuthenticationToken(request.getUsername(),
+                        rsaService.decrypt(request.getEncryptedPassword())))
+                .flatMap(authentication -> userClient
+                        .findUserByUsername(new FindUserRequest(authentication.getName()))
+                        .defaultIfEmpty(new FindUserResponse())
+                        .flatMap(user -> {
+                            if (Boolean.TRUE.equals(user.getMustChangePassword())) {
+                                return handleMustChangePassword(authentication.getName(), reqUuid);
+                            }
+                            return generateTokenAndResponse(authentication, reqUuid, user.getName());
+                        }))
+                .onErrorMap(this::handleAuthenticationFailure);
 
     }
 
@@ -128,7 +127,8 @@ public class AuthenticationServiceImpl implements AuthenticationService {
     private Mono<BasicLoginResponse> generateTokenAndResponse(Authentication authentication, String reqUuid,
             String name) {
         String username = authentication.getName();
-        List<String> roles = authentication.getAuthorities().stream().map(authority -> authority.getAuthority()).toList();
+        List<String> roles = authentication.getAuthorities().stream().map(authority -> authority.getAuthority())
+                .toList();
 
         String accessToken = tokenProvider.generateToken(username, roles, name);
         String refreshToken = tokenProvider.generateRefreshToken(username);
@@ -158,7 +158,8 @@ public class AuthenticationServiceImpl implements AuthenticationService {
 
     private Throwable handleAuthenticationFailure(Throwable error) {
         log.error("Authentication failed", error);
-        if (error instanceof BusinessException) return error;
+        if (error instanceof BusinessException)
+            return error;
         return new BusinessException(ErrorCode.AUTHENTICATION_FAILED, error);
     }
 
@@ -181,7 +182,7 @@ public class AuthenticationServiceImpl implements AuthenticationService {
                     .map(v -> v.getPropertyPath() + ": " + v.getMessage())
                     .reduce((s1, s2) -> s1 + ", " + s2)
                     .orElse("Validation failed");
-            return Mono.error(new BusinessException(ErrorCode.INVALID_ARGUMENTS, new Object[]{errorMessage}));
+            return Mono.error(new BusinessException(ErrorCode.INVALID_ARGUMENTS, new Object[] { errorMessage }));
         }
 
         // Atomic single-use ticket consumption; empty means invalid/expired
@@ -198,8 +199,10 @@ public class AuthenticationServiceImpl implements AuthenticationService {
                         .message(resp.getMessage() != null ? resp.getMessage() : "Change password successfully")
                         .build())
                 .onErrorResume(WebClientResponseException.class, e -> {
-                    log.warn("User service rejected password change: status {} | {}", e.getStatusCode(), e.getMessage());
-                    return Mono.error(new BusinessException(ErrorCode.INVALID_ARGUMENTS, new Object[]{"Invalid new password"}));
+                    log.warn("User service rejected password change: status {} | {}", e.getStatusCode(),
+                            e.getMessage());
+                    return Mono.error(new BusinessException(ErrorCode.INVALID_ARGUMENTS,
+                            new Object[] { "Invalid new password" }));
                 });
     }
 }

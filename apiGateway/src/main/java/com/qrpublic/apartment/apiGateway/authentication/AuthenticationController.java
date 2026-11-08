@@ -99,5 +99,4 @@ public class AuthenticationController {
                 .defaultIfEmpty(ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Logout failed"));
     }
 
-
 }

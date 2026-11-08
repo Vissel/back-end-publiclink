@@ -26,7 +26,8 @@ public class UserServiceImpl implements UserService {
     public User createSeller(SellerDTO seller) {
         return Optional.ofNullable(coreUserService.findSeller(seller))
                 .orElseGet(() -> {
-                    User newUser = new User(seller.getUsername(), CommonConstant.EMPTY, seller.getUsername(), seller.getLink(),
+                    User newUser = new User(seller.getUsername(), CommonConstant.EMPTY, seller.getUsername(),
+                            seller.getLink(),
                             RoleEnum.SELLER.getRole());
                     return userRepo.save(newUser);
                 });

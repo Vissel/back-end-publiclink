@@ -18,6 +18,7 @@
         <module>apiGateway</module>
         <module>adapter</module>
         <module>user</module>
+        <module>chat-app</module>
         <!-- <module>data-backup</module> -->
     </modules>
     <packaging>pom</packaging>

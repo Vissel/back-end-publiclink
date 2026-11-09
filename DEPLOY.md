@@ -11,7 +11,8 @@ nginx:  /apiGateway/  →  publiclink-gateway  127.0.0.1:8080  (java -jar apiGat
         everything else →  Tomcat             127.0.0.1:8081  (React SPA in webapps/ROOT)
 gateway routes:  /publiclink/**  → publiclink-app  :9080  (java -jar publiclink-exec.jar)
                  /api/v1/user/** → publiclink-user :8082  (java -jar user-0.0.1-SNAPSHOT.jar)
-support:  MariaDB :3306 (publiclink-db, user_schema) · Redis :6379 (gateway rate limiter)
+                 /chat/**        → publiclink-chat :9090  (java -jar chat-exec.jar)
+support:  MariaDB :3306 (publiclink-db, user_schema, chat_schema) · Redis :6379 (gateway rate limiter)
           RabbitMQ :5672 (gateway events)
 ```
 
@@ -22,7 +23,8 @@ support:  MariaDB :3306 (publiclink-db, user_schema) · Redis :6379 (gateway rat
 | 8081 | tomcat              | 127.0.0.1 | tomcat     | React build in `webapps/ROOT` |
 | 9080 | publiclink-app      | 127.0.0.1 | publiclink | `/opt/publiclink/publiclink-exec.jar` |
 | 8082 | publiclink-user     | 127.0.0.1 | publiclink | `/opt/publiclink/user-0.0.1-SNAPSHOT.jar` |
-| 3306 | mariadb             | 127.0.0.1 | mysql      | `publiclink-db` + `user_schema` |
+| 9090 | publiclink-chat     | 127.0.0.1 | publiclink | `/opt/publiclink/chat-exec.jar` (Zalo chat bridge) |
+| 3306 | mariadb             | 127.0.0.1 | mysql      | `publiclink-db` + `user_schema` + `chat_schema` |
 | 6379 | redis-server        | 127.0.0.1 | redis      | gateway rate limiter (required — see troubleshooting) |
 | 5672 | rabbitmq-server     | 127.0.0.1 | rabbitmq   | gateway event publishing |
 
@@ -62,7 +64,7 @@ What it installs:
 | 1d | Installs and enables `redis-server` and `rabbitmq-server` |
 | 1b | Creates the `publiclink` system account (units run as `User=publiclink`; without it every start fails with `status=217/USER`) |
 | 2  | Copies RSA keys (`auth260222.pem`, `pubauth.pem`) to `/opt/publiclink/keys/`, `chmod 600` + owned by `publiclink` |
-| 3+ | Installs `/etc/publiclink/publiclink.env`, the systemd units, and the nginx config; enables/starts nginx and the three services |
+| 3+ | Installs `/etc/publiclink/publiclink.env`, the systemd units (gateway, app, user, **chat**) and the nginx config; enables/starts nginx and the four services |
 
 ### 2.1 After the script — manual steps the script does NOT do
 
@@ -83,6 +85,11 @@ sudo nano /etc/publiclink/publiclink.env
   sudo sed -i 's|^DB_PASSWORD=.*|DB_PASSWORD=yourpass|' /etc/publiclink/publiclink.env
   ```
   Passwords containing `|`, `&` or `\` must be edited with `nano` instead.
+- `CHAT_DB_URL` / `CHAT_DB_USERNAME` / `CHAT_DB_PASSWORD` — chat-app's own schema (`chat_schema`).
+  **CHAT_** prefixed on purpose: `DB_*` is publiclink-app's and `USER_DB_*` is the user service's, and
+  all three read this one EnvironmentFile.
+- `ZALO_*` — chat bridge credentials. Leave `ZALO_ENABLED=false` here; section 2.2 turns it on once
+  the Zalo side exists. Nothing secret about the schema: the tables are created by chat-app itself.
 
 **b) Provision MariaDB** (Kali package is `default-mysql-server` = MariaDB):
 
@@ -93,6 +100,9 @@ GRANT ALL PRIVILEGES ON `publiclink-db`.* TO 'publiclink-user'@'localhost';
 CREATE DATABASE IF NOT EXISTS `user_schema`;
 CREATE USER IF NOT EXISTS 'user-service-user'@'localhost' IDENTIFIED BY 'user_service_pass03';
 GRANT ALL PRIVILEGES ON `user_schema`.* TO 'user-service-user'@'localhost';
+CREATE DATABASE IF NOT EXISTS `chat_schema` CHARACTER SET utf8mb4;
+CREATE USER IF NOT EXISTS 'chat-service-user'@'localhost' IDENTIFIED BY 'chat_service_pass04';
+GRANT ALL PRIVILEGES ON `chat_schema`.* TO 'chat-service-user'@'localhost';
 FLUSH PRIVILEGES;
 ```
 
@@ -116,13 +126,100 @@ ingress:
 
 ```bash
 sudo systemctl enable --now mariadb redis-server rabbitmq-server tomcat nginx cloudflared \
-     publiclink-gateway publiclink-app publiclink-user
-sudo ss -tlnp | grep -E ':(80|8080|8081|9080|8082|3306|6379|5672)'
+     publiclink-gateway publiclink-app publiclink-user publiclink-chat
+sudo ss -tlnp | grep -E ':(80|8080|8081|9080|8082|9090|3306|6379|5672)'
 # expected: :80 on 0.0.0.0, everything else bound to 127.0.0.1
 ```
 
 > Do NOT re-run `setup-server.sh` on a live server whose nginx config has been hand-fixed to the
 > tunnel variant — it would reinstall the old 443/Let's Encrypt config and break nginx again.
+
+### 2.2 First-time bring-up of the chat package (chat-app)
+
+One-time, after 2.1. The chat bridge is a separate deployable on **:9090** with its own
+schema, so it is deployed independently of the others — and releasing `publiclink-app` no longer
+drops open chat streams.
+
+**a) Create its schema** (chat-app owns `chat_schema` alone; publiclink-app stays the only DDL
+owner of `publiclink-db`). Liquibase creates the tables on first boot, the database must exist:
+
+```sql
+CREATE DATABASE IF NOT EXISTS `chat_schema` CHARACTER SET utf8mb4;
+CREATE USER IF NOT EXISTS 'chat-service-user'@'localhost' IDENTIFIED BY 'chat_service_pass04';
+GRANT ALL PRIVILEGES ON `chat_schema`.* TO 'chat-service-user'@'localhost';
+FLUSH PRIVILEGES;
+```
+
+**b) Build and stage** (from the repo root — `chat-app` is in the reactor, so a root build covers it):
+
+```bash
+mvn clean package -DskipTests -Pprod          # → chat-app/target/chat-exec.jar
+# or via the release script, which stages all four artifacts to target/deploy/:
+./build-and-deploy.sh /opt/tomcat/webapps prod
+```
+
+**c) Install the unit and the jar, then start it** (order matters: the jar must exist before the
+unit starts, or systemd's `Restart=on-failure` loop hides a missing file as a crash loop):
+
+```bash
+cd ~/deployment/publiclink-workspace/back-end-publiclink
+sudo cp deploy/systemd/publiclink-chat.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo cp target/deploy/chat-exec.jar /opt/publiclink/
+sudo chown -R publiclink:publiclink /opt/publiclink
+sudo systemctl enable --now publiclink-chat
+```
+
+**d) Update nginx** — the chat event stream needs its own location (buffering off, long read
+timeout), otherwise every stream is cut at 120 s. Copy the versioned config and reload, never restart:
+
+```bash
+sudo cp deploy/nginx/share-link.top.tunnel.conf /etc/nginx/conf.d/share-link.top.conf
+sudo nginx -t && sudo systemctl reload nginx
+```
+
+**e) Verify it is reachable before touching Zalo** — local, then through the whole chain:
+
+```bash
+curl -s http://127.0.0.1:9090/chat/api/v1/chat/health                       # {"status":"UP",…}
+curl -s https://share-link.top/apiGateway/chat/api/v1/chat/health           # same, via nginx+gateway
+sudo journalctl -u publiclink-chat -n 50 --no-pager | grep -i "Running Changeset"   # chat tables created
+```
+
+If the local curl works and the public one does not, the fault is the gateway `/chat/**` route or
+the permit-all list — not chat-app.
+
+**f) Register the Zalo side under the `/chat` namespace.** In `developers.zalo.me`, on the Zalo App:
+
+| Setting | Value |
+|---|---|
+| OAuth Callback URL | `https://share-link.top/apiGateway/chat/api/v1/chat/zalo/consent/callback` |
+| Webhook URL | `https://share-link.top/apiGateway/chat/api/v1/chat/zalo/webhook` |
+| Events to tick | `user_send_text`, `user_received_message`, `user_seen_message`, `follow`, `unfollow` |
+
+Then copy the **OA Secret Key** shown on the Webhook page into `ZALO_OA_SECRET_KEY` — it is the only
+gate on that public endpoint. Zalo verifies URL ownership with a `zalo_verifier<code>.html` file: put
+its contents in `ZALO_DOMAIN_VERIFICATION_CODE`; chat-app serves it under the `/chat` prefix. A
+mismatched callback URL answers `-14003 Invalid redirect uri`.
+
+**g) Turn the bridge on, in this order:**
+
+```bash
+# 1. fill ZALO_APP_ID, ZALO_SECRET_KEY, ZALO_OA_SECRET_KEY, ZALO_OA_ID, the redirect URI
+sudo systemctl restart publiclink-chat
+# 2. run the one-time OA consent: POST …/chat/admin/v1/chat/zalo/consent/begin (as Admin) and
+#    open the returned URL in the OA administrator's browser
+# 3. bind the administrator: from their personal Zalo, send the OA one message "LINK-ADMIN"
+# 4. switch on
+sudo sed -i 's|^ZALO_ENABLED=.*|ZALO_ENABLED=true|' /etc/publiclink/publiclink.env
+sudo systemctl restart publiclink-chat
+# 5. prove the round trip: open the chat widget, send a message, watch it arrive in Zalo,
+#    answer with Reply (quote), and confirm the status ticks move sent → delivered → seen
+sudo journalctl -u publiclink-chat -f
+```
+
+Until step 4 the feature still works **console-only** (`zalo.enabled=false`): visitors chat, staff
+answer in `/adminChat`, and nothing is sent to Zalo. That is the intended safe default.
 
 ---
 
@@ -143,11 +240,13 @@ What it does, in order:
    `frontend-public-link` into the script's directory. ⚠ local uncommitted changes under those two
    directories are destroyed — commit or move them first.
 3. **Step 2 — build & deploy frontend:** runs `build-and-deploy.sh /opt/tomcat/webapps prod`, which
-   builds backend + frontend and replaces `webapps/ROOT` with the fresh React build. Backend JARs
-   are only **staged** to `target/deploy/` (see 3.1).
-4. **Step 3 — health checks:** `https://share-link.top/login` must return **200** and
+   builds backend (adapter, apiGateway, publiclink-app, user, **chat-app**) + frontend and replaces
+   `webapps/ROOT` with the fresh React build. Backend artifacts — including `chat-exec.jar` — are
+   only **staged** to `target/deploy/` (see 3.1).
+4. **Step 3 — health checks:** `https://share-link.top/login` must return **200**,
    `https://share-link.top/apiGateway/api/v1/auth/public-key` must return a **non-empty, non-204**
-   PEM body.
+   PEM body, and `https://share-link.top/apiGateway/chat/api/v1/chat/health` must return **200 with
+   `"status":"UP"`** (this third one covers nginx + the `/chat/**` gateway route + chat-app at once).
 
 `set -euo pipefail` is active: any failing step aborts the script (and later steps do not run).
 Note the frontend wipe happens **before** the staging copy — if the frontend copy fails, the old
@@ -156,15 +255,18 @@ build still exists in `frontend-public-link/build`.
 
 ### 3.1 Copy the staged backend artifacts (manual step)
 
-`build-and-deploy.sh` stages the JARs but does not copy them into `/opt/publiclink`:
+`build-and-deploy.sh` stages the JARs but does not copy them into `/opt/publiclink`. The chat
+service is released independently — restarting it drops every open chat stream, but restarting
+`publiclink-app` no longer does:
 
 ```bash
 cd ~/deployment/publiclink-workspace/back-end-publiclink
 sudo cp target/deploy/apiGateway.war              /opt/publiclink/
 sudo cp target/deploy/publiclink-exec.jar         /opt/publiclink/
 sudo cp target/deploy/user-0.0.1-SNAPSHOT.jar     /opt/publiclink/
+sudo cp target/deploy/chat-exec.jar               /opt/publiclink/
 sudo chown -R publiclink:publiclink /opt/publiclink
-sudo systemctl restart publiclink-gateway publiclink-app publiclink-user
+sudo systemctl restart publiclink-gateway publiclink-app publiclink-user publiclink-chat
 ```
 
 ### 3.2 Final verification
@@ -182,8 +284,8 @@ curl -I https://share-link.top/login                                 # HTTP/2 20
 | Symptom | Root cause | Fix |
 |---------|-----------|-----|
 | 502 with `server: cloudflare` | origin chain dead (tunnel fine) — check listeners first | `ss -tlnp`: :80, :8080, :8081 must listen; ingress must target `http://localhost:80` |
-| 502 with `server: nginx` | nginx up, upstream down | `systemctl status publiclink-gateway publiclink-app publiclink-user` |
-| `code=exited, status=217/USER` on the three services | `publiclink` account missing | `sudo useradd --system --no-create-home --shell /usr/sbin/nologin publiclink` + `sudo chown -R publiclink:publiclink /opt/publiclink`, restart units |
+| 502 with `server: nginx` | nginx up, upstream down | `systemctl status publiclink-gateway publiclink-app publiclink-user publiclink-chat` |
+| `code=exited, status=217/USER` on the services | `publiclink` account missing | `sudo useradd --system --no-create-home --shell /usr/sbin/nologin publiclink` + `sudo chown -R publiclink:publiclink /opt/publiclink`, restart units |
 | Tomcat loop: `Main process exited, status=1` | duplicate `address` attribute in `server.xml` Connector | `tail -40 /opt/tomcat/logs/catalina.out`; keep exactly one `address="127.0.0.1"` |
 | `nginx -t` fails: cannot load `/etc/letsencrypt/live/…` | HTTPS config installed but no cert — wrong for tunnel | install `deploy/nginx/share-link.top.tunnel.conf` (port 80 only), symlink into sites-enabled, restart nginx |
 | public-key returns `AUTH_001 "Invalid username or password"` | Redis down — the rate limiter runs on every request and the exception handler mislabels non-business errors as AUTH_001 | `redis-cli ping` → `PONG`; `sudo systemctl enable --now redis-server`; restart gateway |
@@ -193,6 +295,12 @@ curl -I https://share-link.top/login                                 # HTTP/2 20
 | edited tunnel config, nothing changed | unit reads `/etc/cloudflared/config.yml`, not `~/.cloudflared/` | `sudo cp ~/.cloudflared/config.yml /etc/cloudflared/` |
 | `release version 25 not supported` during build | Maven uses an older JDK from `JAVA_HOME` | export `JAVA_HOME=/usr/lib/jvm/java-25-…` (scripts auto-detect it) |
 | MariaDB `ERROR 1064` on `IDENTIFIED WITH … BY` | MariaDB 11 does not accept MySQL-style plugin syntax | use plain `CREATE USER … IDENTIFIED BY 'password'` |
+| `chat/health` answers 404 but `127.0.0.1:9090/chat/...` answers 200 | gateway has no `/chat/**` route, or the chat route is shadowed by `/publiclink/**` | check `GatewayRoutesConfig` and restart `publiclink-gateway` after changing it |
+| `chat/health` answers 502 | chat-app not listening | `systemctl status publiclink-chat`; `journalctl -u publiclink-chat -n 50` (a missing `/opt/publiclink/chat-exec.jar` shows as a restart loop) |
+| Chat tables missing / `Table 'chat_schema.chat_message' doesn't exist` | `chat_schema` was never created, so Liquibase had nowhere to write | run the SQL in 2.2(a), then `systemctl restart publiclink-chat` and look for `Running Changeset … 001` |
+| Visitors see "Sending" forever, nothing reaches Zalo | `ZALO_ENABLED=false`, no OA token, or no administrator bound | `curl …/chat/health` shows `zaloEnabled`; `GET /chat/admin/v1/chat/zalo/status` shows token + adminBound |
+| Zalo webhook answered 401 / no events arrive | `ZALO_OA_SECRET_KEY` missing or wrong, or the registered URL prefix changed to `/chat` | set the OA Secret Key from the Webhook page; re-verify `zalo_verifier<code>.html` via `ZALO_DOMAIN_VERIFICATION_CODE`; check `journalctl -u publiclink-chat` for "non-matching signature" |
+| Chat status never reaches "Delivered/Seen" | Zalo event types not ticked on the Webhook page, or the admin answered in oa.zalo.me rather than the OA thread | tick `user_received_message` + `user_seen_message`; both sides of a mirror reply are recorded either way |
 
 ### 4.1 Public site 502 (`server: cloudflare`) while everything works locally
 
@@ -283,5 +391,6 @@ If Tomcat fails to start after the sed, the XML was mangled — inspect
 | `setup-server.sh` | one-time provisioning (Tomcat connector, RewriteValve, user, keys, env, units, nginx, Redis/RabbitMQ) |
 | `build-and-deploy.sh` | backend + frontend build, `webapps/ROOT` replacement, artifact staging |
 | `deploy/nginx/share-link.top.tunnel.conf` | nginx tunnel-mode config (port 80, prefix stripping, cache headers) |
-| `deploy/systemd/*.service` | gateway/app/user units (User=publiclink, `EnvironmentFile=/etc/publiclink/publiclink.env`) |
+| `deploy/systemd/*.service` | gateway/app/user/chat units (User=publiclink, `EnvironmentFile=/etc/publiclink/publiclink.env`) |
+| `chat-app/` | Zalo chat bridge service — own schema `chat_schema`, own Liquibase changelog, port 9090 |
 | `deploy/publiclink.env.example` | env template (secrets empty by design — fill before first boot) |

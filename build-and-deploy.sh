@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# Build backend (4 modules) + frontend, then stage them for deployment.
+# Build backend (5 modules) + frontend, then stage them for deployment.
 #
 # Target topology (see deploy/nginx/share-link.top.conf):
 #   nginx :443
@@ -112,7 +112,7 @@ echo "▶ Building with JDK ${JAVA_MAJOR} (${JAVA_BIN}; project target: ${REQUIR
 echo ""
 echo "══════════════════════════════════════════════════"
 echo "  Building backend: adapter, apiGateway,"
-echo "  publiclink-app, user"
+echo "  publiclink-app, user, chat-app"
 echo "══════════════════════════════════════════════════"
 echo ""
 
@@ -184,8 +184,8 @@ rm -rf "$STAGE_DIR"
 trap - EXIT
 
 # ── Step 4: Stage the standalone services ─────────────────────────────────────
-# apiGateway, publiclink-app and user all run as executable Spring Boot
-# archives on a JVM. None of them can be dropped into webapps/:
+# apiGateway, publiclink-app, user and chat-app all run as executable Spring
+# Boot archives on a JVM. None of them can be dropped into webapps/:
 # Spring Cloud Gateway is not supported in a servlet container, and the other
 # two are plain WebFlux apps. Nginx fronts them (see deploy/nginx/).
 rm -rf "$ARTIFACTS_DIR"
@@ -194,7 +194,8 @@ mkdir -p "$ARTIFACTS_DIR"
 for artifact in \
   "apiGateway/target/apiGateway.war" \
   "publiclink-app/target/publiclink-exec.jar" \
-  "user/target/user-0.0.1-SNAPSHOT.jar"; do
+  "user/target/user-0.0.1-SNAPSHOT.jar" \
+  "chat-app/target/chat-exec.jar"; do
   src="$SCRIPT_DIR/$artifact"
   if [[ -f "$src" ]]; then
     cp -f "$src" "$ARTIFACTS_DIR/"
@@ -213,6 +214,7 @@ echo "── Start each service (systemd templates in deploy/systemd/) ──"
 echo "  java -jar apiGateway.war                  # :8080"
 echo "  java -jar publiclink-exec.jar             # :9080"
 echo "  java -jar user-0.0.1-SNAPSHOT.jar         # :8082"
+echo "  java -jar chat-exec.jar                   # :9090 (chat bridge)"
 echo ""
 echo "Remember: copy the RSA PEMs to /opt/publiclink/keys/ and restart Tomcat."
 echo ""

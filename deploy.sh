@@ -247,6 +247,23 @@ else
   log_warn "Public key endpoint: HTTP $HTTP_CODE_KEY (non-200, but non-empty)"
 fi
 
+# Check 3: Chat bridge (chat-app on :9090 through the gateway /chat/** route)
+# A 200 here proves nginx, the gateway route and chat-app together, so a missing
+# unit or a wrong route order cannot pass silently.
+log_step "Health check 3: Chat bridge"
+CHAT_BODY=$(curl -s --max-time 10 https://share-link.top/apiGateway/chat/api/v1/chat/health 2>/dev/null || echo "")
+HTTP_CODE_CHAT=$(curl -s --max-time 10 -o /dev/null -w "%{http_code}" https://share-link.top/apiGateway/chat/api/v1/chat/health 2>/dev/null || echo "000")
+
+if [[ "$HTTP_CODE_CHAT" == "200" && "$CHAT_BODY" == *'"status":"UP"'* ]]; then
+  log_done "Chat bridge: HTTP $HTTP_CODE_CHAT — $CHAT_BODY"
+elif [[ "$HTTP_CODE_CHAT" == "000" ]]; then
+  log_error "Chat bridge: no response — is publiclink-chat running? (systemctl status publiclink-chat)"
+  HEALTH_OK=false
+else
+  log_error "Chat bridge: HTTP $HTTP_CODE_CHAT, body: ${CHAT_BODY:0:160} (expected 200 with status UP)"
+  HEALTH_OK=false
+fi
+
 # ── Summary ────────────────────────────────────────────────────────────────────
 echo ""
 echo "══════════════════════════════════════════════════"

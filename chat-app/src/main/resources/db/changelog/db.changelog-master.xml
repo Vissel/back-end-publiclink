@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+     https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.3.xsd">
+
+    <!--
+      chat_schema is owned by this module alone. publiclink-app owns publiclink-db
+      and must not gain chat tables; future chat changes get a NEW changeset id
+      appended below and never edit an already-applied changeset body.
+    -->
+    <changeSet id="001" author="thach">
+        <sqlFile path="db/changelog/changeset-001-create-chat.sql"/>
+    </changeSet>
+</databaseChangeLog>

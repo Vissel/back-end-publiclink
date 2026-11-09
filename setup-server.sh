@@ -209,6 +209,8 @@ if [[ ! -f "$ENV_FILE_DEST" ]]; then
   echo "  Installed publiclink.env from template → $ENV_FILE_DEST"
   echo "  ⚠ You must edit $ENV_FILE_DEST and fill in:"
   echo "      JWT_KEY, JWT_URLKEY, DB_*, USER_DB_*, MAIL_*"
+  echo "      and, for the Zalo chat bridge: CHAT_DB_*, ZALO_* (leave"
+  echo "      ZALO_ENABLED=false until the OA + Zalo App + OAuth consent exist)"
 else
   echo "  $ENV_FILE_DEST already exists — skipping (manual edit required)"
 fi
@@ -220,7 +222,7 @@ echo "  Installing systemd units to ${SYSTEMD_DEST}"
 echo "══════════════════════════════════════════════════"
 
 mkdir -p "$SYSTEMD_DEST"
-for unit in publiclink-gateway.service publiclink-app.service publiclink-user.service; do
+for unit in publiclink-gateway.service publiclink-app.service publiclink-user.service publiclink-chat.service; do
   if [[ -f "$DEPLOY_DIR/systemd/$unit" ]]; then
     cp -f "$DEPLOY_DIR/systemd/$unit" "$SYSTEMD_DEST/"
     echo "  Installed $unit → $SYSTEMD_DEST/"
@@ -289,7 +291,7 @@ echo "════════════════════════�
 # Make sure nginx survives a reboot too
 systemctl enable nginx 2>/dev/null || echo "  ⚠ Could not enable nginx"
 
-for svc in publiclink-gateway publiclink-app publiclink-user; do
+for svc in publiclink-gateway publiclink-app publiclink-user publiclink-chat; do
   systemctl enable "$svc" 2>/dev/null || echo "  ⚠ Could not enable $svc"
   systemctl start "$svc" 2>/dev/null || echo "  ⚠ Could not start $svc (check journalctl -u $svc)"
   echo "  Enabled and started $svc"
@@ -306,5 +308,6 @@ echo "  1. Edit $ENV_FILE_DEST and fill in secrets"
 echo "  2. Restart services: systemctl restart publiclink-*"
 echo "  3. Verify: curl -I https://share-link.top/login"
 echo "  4. Verify: curl -s https://share-link.top/apiGateway/api/v1/auth/public-key"
+echo "  5. Verify chat bridge: curl -s https://share-link.top/apiGateway/chat/api/v1/chat/health"
 echo ""
 echo "Done."

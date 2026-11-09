@@ -1,0 +1,18 @@
+[Unit]
+Description=PublicLink chat service (app chat to Zalo bridge)
+After=network-online.target mysql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=publiclink
+Group=publiclink
+WorkingDirectory=/opt/publiclink
+EnvironmentFile=/etc/publiclink/publiclink.env
+ExecStart=/usr/bin/java -XX:MaxRAMPercentage=25 -jar /opt/publiclink/chat-exec.jar
+SuccessExitStatus=143
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

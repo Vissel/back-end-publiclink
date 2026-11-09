@@ -8,12 +8,14 @@
 | `authen-authorisation` | 8081 | `/authen-authorisation` | `publiclink-db` | Server-to-server auth (RSA key, normal login) |
 | `user` | 8082 | `/api/v1/user`, `/api/v1/seller` | `user_schema` | User & seller CRUD, auth token management |
 | `publiclink-app` | 9080 | `/publiclink` | `publiclink-db` | Core business — sale environments, orders, products |
+| `chat-app` | 9090 | `/chat` | `chat_schema` | Zalo chat bridge — visitor app chat, admin Zalo leg, event streams |
 
 ### Gateway Routes
 | Route | Target Service | Default URL |
 |-------|---------------|-------------|
 | `/publiclink/**` | publiclink-app | `http://localhost:9080` |
 | `/api/v1/user/**` | user service | `http://localhost:8082` |
+| `/chat/**` | chat-app | `http://localhost:9090` |
 
 ---
 
@@ -29,6 +31,7 @@ Every Spring Boot service binds to **all network interfaces** (`server.address=0
 | publiclink-app (dev) | `publiclink-app/src/main/resources/application-dev.properties` | 9080 |
 | publiclink-app (qa) | `publiclink-app/src/main/resources/application-qa.properties` | 9080 |
 | user | `user/src/main/resources/application.properties` | 8082 |
+| chat-app | `chat-app/src/main/resources/application.properties` (+ -dev/-qa/-prod) | 9090 |
 | authen-authorisation | `authen-authorisation/src/main/resources/application.properties` | 8081 |
 
 ### Environment Variables
@@ -39,6 +42,9 @@ All inter-service URLs are configurable via environment variables:
 |----------|---------|---------|---------|
 | `PUBLICLINK_SERVICE_URL` | `http://localhost:9080` | GatewayRoutesConfig (apiGateway) | Gateway → publiclink-app routing |
 | `USER_SERVICE_URL` | `http://localhost:8082` | GatewayRoutesConfig, UserClient, OperatedUserClient, OperatedSellerClient | Gateway → user service routing, publiclink-app → user service WebClient calls |
+| `CHAT_SERVICE_URL` | `http://localhost:9090` | GatewayRoutesConfig (apiGateway) | Gateway → chat-app routing |
+| `CHAT_DB_URL` / `CHAT_DB_USERNAME` / `CHAT_DB_PASSWORD` | `jdbc:mysql://localhost:3306/chat_schema` | chat-app | Chat schema — owned and migrated by chat-app alone, never by publiclink-app |
+| `ZALO_*` | see `deploy/publiclink.env.example` | chat-app | OA credentials, webhook signature key, admin binding, bridge toggles |
 | `SECURITY_SERVICE_URL` | `http://localhost:8080` | SecurityCheckClient (publiclink-app) | publiclink-app → gateway security endpoints |
 | `JWT_KEY` | *(required)* | All modules | JWT signing secret |
 | `JWT_URLKEY` | *(required)* | publiclink-app, authen-authorisation | JWT URL secret |

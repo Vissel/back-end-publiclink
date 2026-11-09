@@ -1,0 +1,18 @@
+[Unit]
+Description=PublicLink user service (users, sellers, auth token management)
+After=network-online.target mysql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=publiclink
+Group=publiclink
+WorkingDirectory=/opt/publiclink
+EnvironmentFile=/etc/publiclink/publiclink.env
+ExecStart=/usr/bin/java -XX:MaxRAMPercentage=40 -jar /opt/publiclink/user-0.0.1-SNAPSHOT.jar
+SuccessExitStatus=143
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+    https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.3.xsd">
+    <changeSet id="001" author="data-backup"><sqlFile path="db/changelog/changeset-001-create-trigger-tbl.sql"/></changeSet>
+    <changeSet id="002" author="data-backup"><sqlFile path="db/changelog/changeset-002-create-backup-file-tbl.sql"/></changeSet>
+    <changeSet id="003" author="data-backup"><sqlFile path="db/changelog/changeset-003-create-otp-session-tbl.sql"/></changeSet>
+    <changeSet id="004" author="data-backup"><sqlFile path="db/changelog/changeset-004-create-backup-watermark-tbl.sql"/></changeSet>
+</databaseChangeLog>

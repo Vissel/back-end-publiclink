@@ -1,0 +1,25 @@
+[Unit]
+Description=PublicLink API Gateway (Spring Cloud Gateway)
+Documentation=file:///opt/publiclink/deploy/nginx/share-link.top.conf
+After=network-online.target redis-server.service rabbitmq-server.service
+# Wants (not After) is what STARTS Redis/RabbitMQ with the gateway: the rate
+# limiter executes a Lua script in Redis on every request, and login events
+# are published to RabbitMQ. After= alone only orders — it never starts a unit.
+Wants=network-online.target redis-server.service rabbitmq-server.service
+
+[Service]
+Type=simple
+User=publiclink
+Group=publiclink
+WorkingDirectory=/opt/publiclink
+EnvironmentFile=/etc/publiclink/publiclink.env
+# The WAR is executable: spring-boot-maven-plugin repackages it, so `java -jar`
+# boots an embedded Netty. It is NOT deployed into webapps/ — Spring Cloud
+# Gateway does not support a servlet container.
+ExecStart=/usr/bin/java -XX:MaxRAMPercentage=60 -jar /opt/publiclink/apiGateway.war
+SuccessExitStatus=143
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

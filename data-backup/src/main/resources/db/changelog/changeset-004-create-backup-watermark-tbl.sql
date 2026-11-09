@@ -1,0 +1,7 @@
+CREATE TABLE IF NOT EXISTS backup_watermark_tbl (
+    watermark_id BIGINT AUTO_INCREMENT PRIMARY KEY, schema_name VARCHAR(50) NOT NULL,
+    table_name VARCHAR(100) NOT NULL, last_backup_at TIMESTAMP NOT NULL,
+    last_max_id BIGINT NULL, created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY uk_schema_table (schema_name, table_name)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

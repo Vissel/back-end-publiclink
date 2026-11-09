@@ -1,0 +1,21 @@
+[Unit]
+Description=PublicLink core business service (sale environments, orders, products)
+After=network-online.target mysql.service rabbitmq-server.service publiclink-gateway.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=publiclink
+Group=publiclink
+WorkingDirectory=/opt/publiclink
+EnvironmentFile=/etc/publiclink/publiclink.env
+# The active Spring profile is baked in at build time from the Maven profile
+# (-Pprod writes activeProfile=prod into application.properties). Verify with:
+#     unzip -p publiclink-exec.jar BOOT-INF/classes/application.properties
+ExecStart=/usr/bin/java -XX:MaxRAMPercentage=60 -jar /opt/publiclink/publiclink-exec.jar
+SuccessExitStatus=143
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

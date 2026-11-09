@@ -1,0 +1,461 @@
+package com.qrpublic.apartment.user.service;
+
+import com.qrpublic.apartment.adapter.template.Result;
+import com.qrpublic.apartment.user.core.UserServiceCore;
+import com.qrpublic.apartment.user.entity.ProfileEntity;
+import com.qrpublic.apartment.user.entity.UserAuthEntity;
+import com.qrpublic.apartment.user.entity.UserEntity;
+import com.qrpublic.apartment.user.exception.UserDeleteException;
+import com.qrpublic.apartment.user.exception.UserErrorEnum;
+import com.qrpublic.apartment.user.exception.UserNotFoundException;
+import com.qrpublic.apartment.user.model.User;
+import com.qrpublic.apartment.user.model.UserType;
+import com.qrpublic.apartment.user.repository.UserAuthEntityRepository;
+import com.qrpublic.apartment.user.repository.UserEntityRepository;
+import com.qrpublic.apartment.user.service.request.ChangePasswordRequest;
+import com.qrpublic.apartment.user.service.request.CreateUserAuthRequest;
+import com.qrpublic.apartment.user.service.request.UserCreateRequest;
+import com.qrpublic.apartment.user.service.request.UserDeleteRequest;
+import com.qrpublic.apartment.user.service.request.UserUpdateRequest;
+import com.qrpublic.apartment.user.service.response.ChangePasswordResponse;
+import com.qrpublic.apartment.user.service.response.CreateUserAuthResponse;
+import com.qrpublic.apartment.user.service.response.FoundUserResponse;
+import com.qrpublic.apartment.user.service.response.RegisterAdminResponse;
+import com.qrpublic.apartment.user.service.response.UserCreateResponse;
+import com.qrpublic.apartment.user.service.response.UserDeleteResponse;
+import com.qrpublic.apartment.user.service.response.UserUpdateResponse;
+import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.lang3.StringUtils;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.TransactionTemplate;
+import reactor.core.publisher.Mono;
+import reactor.core.scheduler.Schedulers;
+
+import java.security.SecureRandom;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Objects;
+import java.util.UUID;
+import java.util.function.Consumer;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
+
+import static com.qrpublic.apartment.adapter.template.Result.success;
+
+@Slf4j
+@Service
+public class UserServiceImpl implements UserService {
+
+    @Autowired
+    private UserEntityRepository userEntityRepository;
+
+    @Autowired
+    private UserAuthEntityRepository userAuthEntityRepository;
+
+    @Autowired
+    UserServiceCore userServiceCore;
+
+    @Autowired
+    private PasswordEncoder passwordEncoder;
+
+    @Autowired
+    private RsaClient rsaClient;
+
+    @Autowired
+    private PlatformTransactionManager transactionManager;
+
+    private final TransactionTemplate transactionTemplate;
+
+    public UserServiceImpl(PlatformTransactionManager transactionManager) {
+        this.transactionTemplate = new TransactionTemplate(transactionManager);
+        transactionTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRED);
+    }
+
+    @Override
+    public Mono<Result<FoundUserResponse>> findByUserName(String userName) {
+        return Mono.fromCallable(() -> {
+            User userModel = userServiceCore.doFindUserByUsername(userName);
+            if (userModel != null) {
+                return Result.<FoundUserResponse>success(mapToFoundUserResponse(userModel));
+            }
+            return Result.<FoundUserResponse>error(404, "User not found");
+        }).subscribeOn(Schedulers.boundedElastic());
+    }
+
+    @Override
+    public Mono<Result<UserCreateResponse>> createUser(UserCreateRequest userCreateRequest) {
+        return Mono.fromCallable(() -> transactionTemplate.execute(status -> doCreateUser(userCreateRequest)))
+                .subscribeOn(Schedulers.boundedElastic());
+    }
+
+    @Override
+    public Mono<Result<UserUpdateResponse>> updateUser(UserUpdateRequest userUpdateRequest) {
+        return Mono.fromCallable(() -> transactionTemplate.execute(status -> doUpdateUser(userUpdateRequest)))
+                .subscribeOn(Schedulers.boundedElastic());
+    }
+
+    @Override
+    public Mono<Result<UserDeleteResponse>> deleteUserByUsername(UserDeleteRequest userDeleteRequest) {
+        return Mono.fromCallable(() -> transactionTemplate.execute(status -> doDeleteUser(userDeleteRequest)))
+                .subscribeOn(Schedulers.boundedElastic());
+    }
+
+    @Override
+    public Mono<Result<CreateUserAuthResponse>> createUserAuth(CreateUserAuthRequest createUserAuthRequest) {
+        return Mono.fromCallable(() -> transactionTemplate.execute((status) -> doCreateUserAuth(createUserAuthRequest)))
+                .subscribeOn(Schedulers.boundedElastic())
+                .doOnError(
+                        ex -> log.error("Failed to create user auth for {}", createUserAuthRequest.getUserName(), ex))
+                .onErrorReturn(Result.error(UserErrorEnum.USER_CREATE_AUTH_ERROR.getCode(),
+                        UserErrorEnum.USER_CREATE_AUTH_ERROR.getMessage()));
+
+    }
+
+    @Override
+    public Mono<Result<RegisterAdminResponse>> registerAdmin(String userName, String role) {
+        return Mono.fromCallable(() -> transactionTemplate.execute(status -> doRegisterAdmin(userName, role)))
+                .subscribeOn(Schedulers.boundedElastic());
+    }
+
+    @Override
+    public Mono<Result<RegisterAdminResponse>> resetChangeTicket(String userName) {
+        return Mono.fromCallable(() -> transactionTemplate.execute(status -> doResetChangeTicket(userName)))
+                .subscribeOn(Schedulers.boundedElastic());
+    }
+
+    @Override
+    public Mono<Result<ChangePasswordResponse>> changePassword(ChangePasswordRequest changePasswordRequest) {
+        return Mono.fromCallable(() -> transactionTemplate.execute(status -> doChangePassword(changePasswordRequest)))
+                .subscribeOn(Schedulers.boundedElastic());
+    }
+
+    protected Result<RegisterAdminResponse> doRegisterAdmin(String userName, String role) {
+        if (StringUtils.isBlank(userName)) {
+            return Result.error(400, "Username is required");
+        }
+        if (userEntityRepository.findByUsername(userName).isPresent()) {
+            return Result.error(409, "User already exists: " + userName);
+        }
+
+        String generatedPassword = generateFirstPassword();
+        log.info("Registering admin {} | first password {} (masked)", userName,
+                PasswordMasker.maskPassword(generatedPassword));
+
+        User user = new User();
+        user.setUsername(userName);
+        user.setPlainTextPassword(generatedPassword);
+        user.setRole(role);
+        user.setIsActive(true);
+        user.setMustChangePassword(true);
+
+        UserEntity saved = createNewUser(user);
+
+        RegisterAdminResponse response = new RegisterAdminResponse();
+        response.setUserName(saved.getUsername());
+        response.setPassword(generatedPassword); // plaintext: returned exactly once
+        response.setRole(saved.getRole());
+        return success(response);
+    }
+
+    /**
+     * Recover a user stuck in the first-login flow (e.g. the password-change
+     * ticket expired and the first password is no longer known): issue a fresh
+     * first password and re-arm the must-change-password requirement. The new
+     * password is returned in plaintext exactly once, like registration.
+     */
+    protected Result<RegisterAdminResponse> doResetChangeTicket(String userName) {
+        if (StringUtils.isBlank(userName)) {
+            return Result.error(400, "Username is required");
+        }
+
+        return userEntityRepository.findByUsername(userName)
+                .map(existing -> {
+                    String generatedPassword = generateFirstPassword();
+                    existing.setPassword(passwordEncoder.encode(generatedPassword));
+                    existing.setMustChangePassword(true);
+                    userEntityRepository.save(existing);
+
+                    log.info("Change ticket reset for user {} | new first password {} (masked)", userName,
+                            PasswordMasker.maskPassword(generatedPassword));
+
+                    RegisterAdminResponse response = new RegisterAdminResponse();
+                    response.setUserName(existing.getUsername());
+                    response.setPassword(generatedPassword); // plaintext: returned exactly once
+                    response.setRole(existing.getRole());
+                    return success(response);
+                })
+                .orElse(Result.error(404, "User not found: " + userName));
+    }
+
+    protected Result<ChangePasswordResponse> doChangePassword(ChangePasswordRequest request) {
+        if (request == null || StringUtils.isBlank(request.getUserName())
+                || StringUtils.isBlank(request.getEncryptedPassword())) {
+            return Result.error(400, "Username and encrypted password are required");
+        }
+
+        String decryptedPassword = rsaClient.decrypt(request.getEncryptedPassword());
+        if (StringUtils.isBlank(decryptedPassword) || decryptedPassword.length() < 8) {
+            return Result.error(400, "New password must be at least 8 characters");
+        }
+
+        return userEntityRepository.findByUsername(request.getUserName())
+                .map(existing -> {
+                    existing.setPassword(passwordEncoder.encode(decryptedPassword));
+                    existing.setMustChangePassword(false);
+                    userEntityRepository.save(existing);
+
+                    log.info("Password changed for user: {}", existing.getUsername());
+
+                    ChangePasswordResponse response = new ChangePasswordResponse();
+                    response.setUserName(existing.getUsername());
+                    response.setChanged(true);
+                    response.setMessage("Change password successfully");
+                    return success(response);
+                })
+                .orElse(Result.error(404, "User not found: " + request.getUserName()));
+    }
+
+    /**
+     * Generate a first secure password: 16 characters drawn from letters,
+     * digits and symbols using SecureRandom.
+     */
+    private String generateFirstPassword() {
+        final String chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%";
+        final int length = 16;
+        SecureRandom random = new SecureRandom();
+        StringBuilder password = new StringBuilder(length);
+        for (int i = 0; i < length; i++) {
+            password.append(chars.charAt(random.nextInt(chars.length())));
+        }
+        return password.toString();
+    }
+
+    protected Result<CreateUserAuthResponse> doCreateUserAuth(CreateUserAuthRequest request) {
+        UserEntity user = userEntityRepository.findByUsername(request.getUserName())
+                .orElseGet(() -> {
+                    User userModel = new User();
+                    userModel.setUsername(request.getUserName());
+                    userModel.setRole(UserType.SELLER.name());
+                    userModel.setIsActive(true);
+                    return createNewUser(userModel);
+                });
+
+        UserAuthEntity auth = new UserAuthEntity();
+        auth.setUser(user);
+        auth.setAuthToken(request.getAuthToken());
+        auth.setExpireAt(new java.sql.Timestamp(request.getExpire().getTime()));
+        auth.setIsActive(true);
+        userAuthEntityRepository.save(auth);
+
+        CreateUserAuthResponse response = new CreateUserAuthResponse();
+        response.setSuccess(true);
+        return success(response);
+    }
+
+    protected Result<UserCreateResponse> doCreateUser(UserCreateRequest request) {
+        if (request == null)
+            return Result.error(400, "Invalid user request");
+        User user = convertUserRegisterToUserModel(request);
+        userEntityRepository.findByUsername(user.getUsername())
+                .map(existing -> setNewValueForExistUser(existing, user))
+                .orElseGet(() -> createNewUser(user));
+        return success(buildUserCreateResponse(user));
+    }
+
+    protected Result<UserUpdateResponse> doUpdateUser(UserUpdateRequest request) {
+        if (request == null || StringUtils.isBlank(request.getUserName())) {
+            return Result.error(400, "Username is required for update");
+        }
+
+        return userEntityRepository.findByUsername(request.getUserName())
+                .map(existingUser -> {
+                    // Update fields except username (username is not allowed to be updated)
+                    Stream.of(
+                            updatePassword(existingUser, rsaClient.decrypt(request.getEncryptedPassword())),
+                            updateFullName(existingUser, request.getFullName()),
+                            updateRole(existingUser, request.getRole()),
+                            updateIsActive(existingUser, true),
+                            updateProfileLinks(existingUser,
+                                    request.getLink() != null ? List.of(request.getLink()) : null))
+                            .filter(Objects::nonNull).forEach(updater -> updater.accept(existingUser));
+
+                    userEntityRepository.save(existingUser);
+
+                    // Build response
+                    UserUpdateResponse response = new UserUpdateResponse();
+                    response.setUserName(existingUser.getUsername());
+                    if (StringUtils.isNotBlank(request.getEncryptedPassword())) {
+                        String decryptedPassword = rsaClient.decrypt(request.getEncryptedPassword());
+                        response.setPassword(PasswordMasker.maskPassword(decryptedPassword));
+                    }
+                    response.setFullName(existingUser.getFullName());
+                    response.setRole(existingUser.getRole());
+                    if (existingUser.getProfiles() != null && !existingUser.getProfiles().isEmpty()) {
+                        response.setLink(existingUser.getProfiles().get(0).getProfileLink());
+                    }
+                    response.setMessage("User updated successfully");
+                    response.setSuccess(true);
+
+                    return success(response);
+                })
+                .orElse(Result.error(404, "User not found: " + request.getUserName()));
+    }
+
+    protected Result<UserDeleteResponse> doDeleteUser(UserDeleteRequest request) {
+        if (request == null || StringUtils.isBlank(request.getUserId()))
+            throw new UserDeleteException(UserErrorEnum.USER_DELETE_ERROR, "invalid");
+        User user = new User();
+        user.setUserId(request.getUserId());
+        user.setUsername(request.getUserName());
+        return userEntityRepository.findByUsername(user.getUsername())
+                .map(existing -> {
+                    userEntityRepository.delete(existing);
+                    user.setUsername(existing.getUsername());
+                    user.setFullName(existing.getFullName());
+                    return success(buildUserDeleteResponse(user));
+                })
+                .orElseThrow(() -> new UserNotFoundException(user.getUserId()));
+    }
+
+    private UserDeleteResponse buildUserDeleteResponse(User user) {
+        UserDeleteResponse response = new UserDeleteResponse();
+        response.setUserId(user.getUserId());
+        response.setDeleted(Boolean.TRUE);
+        response.setMessage("User deleted successfully");
+        return response;
+    }
+
+    private UserCreateResponse buildUserCreateResponse(User user) {
+        UserCreateResponse response = new UserCreateResponse();
+        response.setUserName(user.getUsername());
+        if (StringUtils.isNotBlank(user.getPlainTextPassword())) {
+            response.setPassword(PasswordMasker.maskPassword(user.getPlainTextPassword()));
+        }
+        response.setFullName(user.getFullName());
+        if (user.getProfileLinks() != null && !user.getProfileLinks().isEmpty()) {
+            response.setLink(user.getProfileLinks().get(0));
+        }
+        if (Objects.nonNull(user.getRole())) {
+            response.setRole(user.getRole());
+        }
+        return response;
+    }
+
+    private User convertUserRegisterToUserModel(UserCreateRequest request) {
+        User user = new User();
+        user.setUsername(request.getUserName());
+        user.setPlainTextPassword(rsaClient.decrypt(request.getEncryptedPassword()));
+        user.setFullName(request.getFullName());
+        user.setProfileLinks(List.of(request.getLink()));
+        user.setRole(request.getRole());
+        user.setIsActive(true);
+        return user;
+    }
+
+    private FoundUserResponse mapToFoundUserResponse(User userModel) {
+        FoundUserResponse response = new FoundUserResponse();
+        response.setUserName(userModel.getUsername());
+        response.setEncodedPassword(userModel.getPassword());
+        response.setName(userModel.getFullName());
+        response.setRole(userModel.getRole());
+        response.setMustChangePassword(userModel.getMustChangePassword());
+        return response;
+    }
+
+    private UserEntity createNewUser(User user) {
+        UserEntity newUser = new UserEntity();
+        newUser.setUserId(UUID.randomUUID().toString());
+        newUser.setUsername(user.getUsername());
+        if (StringUtils.isNotBlank(user.getPlainTextPassword())) {
+            newUser.setPassword(passwordEncoder.encode(user.getPlainTextPassword()));
+        }
+        newUser.setFullName(user.getFullName());
+        newUser.setRole(user.getRole());
+        newUser.setIsActive(user.getIsActive());
+        newUser.setMustChangePassword(user.getMustChangePassword());
+        if (user.getProfileLinks() != null && !user.getProfileLinks().isEmpty()) {
+            List<ProfileEntity> profiles = user.getProfileLinks().stream()
+                    .map(link -> {
+                        ProfileEntity profile = new ProfileEntity();
+                        profile.setProfileLink(link);
+                        profile.setProfileType("default");
+                        profile.setUser(newUser);
+                        return profile;
+                    }).toList();
+            newUser.setProfiles(profiles);
+        }
+        return userEntityRepository.save(newUser);
+    }
+
+    private UserEntity setNewValueForExistUser(UserEntity existing, User user) {
+        Stream.of(
+                updateUserName(existing, user.getUsername()),
+                updatePassword(existing, user.getPlainTextPassword()),
+                updateFullName(existing, user.getFullName()),
+                updateRole(existing, user.getRole()),
+                updateIsActive(existing, user.getIsActive()),
+                updateProfileLinks(existing, user.getProfileLinks())).filter(Objects::nonNull)
+                .forEach(updater -> updater.accept(existing));
+        return userEntityRepository.save(existing);
+    }
+
+    private Consumer<UserEntity> updateUserName(UserEntity u, String v) {
+        return StringUtils.isNotBlank(v) && !v.equals(u.getUsername()) ? e -> e.setUsername(v) : null;
+    }
+
+    private Consumer<UserEntity> updatePassword(UserEntity u, String v) {
+        return StringUtils.isNotBlank(v) && !passwordEncoder.matches(v, u.getPassword())
+                ? e -> e.setPassword(passwordEncoder.encode(v))
+                : null;
+    }
+
+    private Consumer<UserEntity> updateFullName(UserEntity u, String v) {
+        return StringUtils.isNotBlank(v) && !v.equals(u.getFullName()) ? e -> e.setFullName(v) : null;
+    }
+
+    private Consumer<UserEntity> updateRole(UserEntity u, String v) {
+        return StringUtils.isNotBlank(v) && !v.equals(u.getRole()) ? e -> e.setRole(v) : null;
+    }
+
+    private Consumer<UserEntity> updateIsActive(UserEntity u, Boolean v) {
+        return v != null && !v.equals(u.getIsActive()) ? e -> e.setIsActive(v) : null;
+    }
+
+    private Consumer<UserEntity> updateProfileLinks(UserEntity u, List<String> links) {
+        if (links != null && !links.isEmpty()) {
+            // Check if profiles already exist with the same links (idempotency check)
+            List<String> existingLinks = u.getProfiles() != null
+                    ? u.getProfiles().stream().map(ProfileEntity::getProfileLink).toList()
+                    : List.of();
+
+            // Only update if links are different
+            if (existingLinks.equals(links)) {
+                return null; // No change needed
+            }
+
+            // Clear existing profiles and add new ones
+            if (u.getProfiles() != null) {
+                u.getProfiles().clear();
+            } else {
+                u.setProfiles(new ArrayList<>());
+            }
+
+            List<ProfileEntity> profiles = links.stream().map(link -> {
+                ProfileEntity p = new ProfileEntity();
+                p.setProfileLink(link);
+                p.setProfileType("default");
+                p.setUser(u);
+                return p;
+            }).collect(Collectors.toCollection(ArrayList::new));
+
+            u.getProfiles().addAll(profiles);
+            return e -> {
+            };
+        }
+        return null;
+    }
+}

@@ -66,24 +66,26 @@ public class CoreRequestService {
         if (seller != null) {
             sellerName = seller.getUserName();
         }
-        Request req = new Request();
-        req.setReqUUID(UUID.randomUUID().toString());
-        req.setSellerName(sellerName); // can be null if not found
-        req.setAuthenticated(false);
+        Request requestEntity = new Request();
+        requestEntity.setReqUUID(UUID.randomUUID().toString());
+        requestEntity.setSellerName(sellerName); // can be null if not found
+        requestEntity.setAuthenticated(false);
 
         // Persist pricing if provided
         if (sellerDTO.getPrice() != null) {
             PriceRequest priceReq = sellerDTO.getPrice();
-            Pricing pricing = new Pricing();
-            pricing.setDurationHours(priceReq.getDurationHours());
-            pricing.setAmount(priceReq.getPriceAmount());
-            pricing.setCurrency(priceReq.getCurrency() != null ? priceReq.getCurrency() : "VND");
-            pricing.setRequest(req);
-            req.setPricings(new ArrayList<>(List.of(pricing)));
+            Pricing pricingEntity = new Pricing();
+            pricingEntity.setDurationHours(priceReq.getDurationHours());
+            pricingEntity.setAmount(priceReq.getPriceAmount());
+            pricingEntity.setCurrency(priceReq.getCurrency() != null ? priceReq.getCurrency() : "VND");
+            pricingEntity.setRequest(requestEntity);
+            List<Pricing> pricings = new ArrayList<>();
+            pricings.add(pricingEntity);
+            requestEntity.setPricings(pricings);
         }
 
         // Save to database
-        return convertToModel(requestRepository.save(req));
+        return convertToModel(requestRepository.save(requestEntity));
     }
 
     private RequestModel convertToModel(Request savedRequestEntity) {

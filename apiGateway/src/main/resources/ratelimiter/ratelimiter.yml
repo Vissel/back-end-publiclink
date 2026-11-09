@@ -22,6 +22,14 @@ rate-limit:
       refill-period-seconds: 60
       order: 10
 
+    # Chat bridge traffic: a visitor sends a message plus debounced typing beacons,
+    # so a chat window costs several requests per minute, not one.
+    - path-pattern: "/publiclink/api/v1/chat/**"
+      capacity: 120
+      refill-token: 120
+      refill-period-seconds: 60
+      order: 15
+
     - path-pattern: "/api/v1/user/**"
       capacity: 10
       refill-token: 10
@@ -30,6 +38,12 @@ rate-limit:
   exclude-paths:
     - "/api/v1/health/**"
     - "/api/v1/healthcheck/**"
+    # Zalo deliveries are authenticated by signature, not by quota. Answering a
+    # webhook with 429 makes Zalo retry and eventually disable it outright.
+    - "/publiclink/api/v1/chat/zalo/webhook"
+    # One long-lived event stream per visitor, not a per-request budget.
+    - "/publiclink/api/v1/chat/stream"
+    - "/publiclink/admin/v1/chat/stream"
 
 management:
   endpoints:

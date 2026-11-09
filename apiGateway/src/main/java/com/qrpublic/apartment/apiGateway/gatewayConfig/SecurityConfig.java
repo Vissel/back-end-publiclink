@@ -63,6 +63,11 @@ public class SecurityConfig {
                                 "/api/v1/auth/**", // Includes /basic, /refresh, /logout, /public-key
                                 "/actuator/**",
                                 "/security/v1/public/**",
+                                // Public chat widget: visitors are recognised by device identity,
+                                // not by an account. The Zalo webhook and the OAuth consent
+                                // callback are here too - both are authenticated by Zalo's
+                                // signature / single-use state instead of a JWT.
+                                "/publiclink/api/v1/chat/**",
                                 "/publiclink/api/v1/publish/**")// temporary allow user creation without auth for
                                                                 // testing
                         .permitAll()

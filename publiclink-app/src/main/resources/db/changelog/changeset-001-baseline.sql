@@ -1,4 +1,4 @@
--- Changeset 000: baseline DDL for publiclink-db
+-- Changeset 001: baseline DDL for publiclink-db
 -- Creates the base tables that changesets 001-009 used to create (those changesets
 -- exist as files but are commented out of db.changelog-master.xml, so a fresh
 -- database had no tables at all and changeset 010 failed with

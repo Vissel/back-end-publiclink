@@ -367,7 +367,7 @@ flowchart TD
   S7["7. log in as Admin → /adminHome"]
 ```
 
-To make this reproducible, the clean fix is a `changeset-000-baseline.sql` (or
+To make this reproducible, the clean fix is a `changeset-001-baseline.sql` (or
 `.xml`) creating the base tables and included **first** in the master — today the
 first-boot story is "restore a dump".
 

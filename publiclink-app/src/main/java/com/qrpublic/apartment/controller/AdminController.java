@@ -1,9 +1,11 @@
 package com.qrpublic.apartment.controller;
 
 import com.qrpublic.apartment.model.SellerDTO;
+import com.qrpublic.apartment.constant.HeaderConstant;
 import com.qrpublic.apartment.model.notification.SellerEnvironmentListResponse;
 import com.qrpublic.apartment.model.notification.SellerListResponse;
-import com.qrpublic.apartment.plan.request.CreatePlanRequest;
+import com.qrpublic.apartment.paymentplan.request.CreateSellerPlanRequest;
+import com.qrpublic.apartment.paymentplan.response.CreateSellerPlanResponse;
 import com.qrpublic.apartment.requestmodel.Pagination;
 import com.qrpublic.apartment.requestmodel.RequestDTO;
 import com.qrpublic.apartment.requestmodel.SaleEnvDTO;
@@ -13,6 +15,7 @@ import com.qrpublic.apartment.saleenv.request.ListEnvironmentRequest;
 import com.qrpublic.apartment.saleenv.response.ListEnvironmentResponse;
 import com.qrpublic.apartment.service.AdminService;
 import com.qrpublic.apartment.service.NotificationService;
+import com.qrpublic.apartment.service.PaymentPlanAdminService;
 import com.qrpublic.apartment.service.RequestService;
 import com.qrpublic.apartment.template.ResponseEntityConvertor;
 import com.qrpublic.apartment.user.request.ListUserRequest;
@@ -22,11 +25,11 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Mono;
+import reactor.core.scheduler.Schedulers;
 
 import jakarta.validation.Valid;
 import lombok.extern.slf4j.Slf4j;
 
-import com.qrpublic.apartment.plan.response.CreatePlanResponse;
 
 import java.util.Map;
 
@@ -45,6 +48,9 @@ public class AdminController {
 
     @Autowired
     NotificationService notificationService;
+
+    @Autowired
+    PaymentPlanAdminService paymentPlanAdminService;
 
     /**
      * Display environment list for administrator to manage, including the link
@@ -140,16 +146,17 @@ public class AdminController {
     }
 
     /**
-     * Create seller plan with seller details, request UUID, start time and
-     * description
+     * Assign a payment plan to a seller and get back the payment URL that the
+     * admin sends to the seller manually. Repurposed from the old pricing-plan
+     * flow: it now creates a payment record (CREATE) plus a payment_plan_user
+     * assignment.
      */
     @PostMapping("/createSellerPlan")
-    public Mono<ResponseEntity<CreatePlanResponse>> createSellerPlan(
-            @Valid @RequestBody CreatePlanRequest request) {
-        return adminService.createSellerPlan(request)
-                .map(response -> {
-                    log.info("Seller plan created successfully");
-                    return ResponseEntity.ok(response);
-                });
+    public Mono<ResponseEntity<CreateSellerPlanResponse>> createSellerPlan(
+            @Valid @RequestBody CreateSellerPlanRequest request,
+            @RequestHeader(value = HeaderConstant.USER_ID_HEADER, defaultValue = "admin") String adminUsername) {
+        return Mono.fromCallable(() -> paymentPlanAdminService.createSellerPlan(request, adminUsername))
+                .subscribeOn(Schedulers.boundedElastic())
+                .flatMap(ResponseEntityConvertor::convertToMonoResponseEntity);
     }
 }

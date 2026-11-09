@@ -3,6 +3,11 @@ package com.qrpublic.apartment.controller;
 import com.qrpublic.apartment.core.model.EnvStateEnum;
 import com.qrpublic.apartment.exception.ResourceNotFoundException;
 import com.qrpublic.apartment.order.OrderService;
+import com.qrpublic.apartment.paymentplan.request.PaymentConfirmRequest;
+import com.qrpublic.apartment.paymentplan.request.PaymentInfoRequest;
+import com.qrpublic.apartment.paymentplan.response.PaymentConfirmResponse;
+import com.qrpublic.apartment.paymentplan.response.PaymentInfoResponse;
+import com.qrpublic.apartment.service.PaymentPlanPublicService;
 import com.qrpublic.apartment.requestmodel.SaleEnvDTO;
 import com.qrpublic.apartment.saleenv.SaleEnvironmentService;
 import com.qrpublic.apartment.saleenv.SaleSpaceService;
@@ -45,6 +50,9 @@ public class PageController {
 
     @Autowired
     PubUserService pubUserService;
+
+    @Autowired
+    PaymentPlanPublicService paymentPlanPublicService;
 
     @GetMapping("/testGet")
     public Mono<ResponseEntity<String>> index() {
@@ -125,6 +133,28 @@ public class PageController {
     @PostMapping("/register")
     Mono<ResponseEntity<SellerRegisterResponse>> register(@RequestBody SellerRegisterRequest request) {
         return pubUserService.registerNewSeller(request);
+    }
+
+    /**
+     * Public payment page data. The payment URL token is the only credential,
+     * no authorization here.
+     */
+    @PostMapping("/payment/info")
+    public Mono<ResponseEntity<PaymentInfoResponse>> paymentInfo(@RequestBody PaymentInfoRequest request) {
+        return Mono.fromCallable(() -> paymentPlanPublicService.paymentInfo(request.getToken()))
+                .subscribeOn(Schedulers.boundedElastic())
+                .flatMap(ResponseEntityConvertor::convertToMonoResponseEntity);
+    }
+
+    /**
+     * Seller confirms the bank transfer; admins get a notification.
+     */
+    @PostMapping("/payment/confirm")
+    public Mono<ResponseEntity<PaymentConfirmResponse>> confirmPayment(
+            @RequestBody PaymentConfirmRequest request) {
+        return Mono.fromCallable(() -> paymentPlanPublicService.confirmPayment(request))
+                .subscribeOn(Schedulers.boundedElastic())
+                .flatMap(ResponseEntityConvertor::convertToMonoResponseEntity);
     }
 
 }

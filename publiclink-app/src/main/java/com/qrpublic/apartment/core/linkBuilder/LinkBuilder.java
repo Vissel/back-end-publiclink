@@ -19,4 +19,15 @@ public class LinkBuilder {
                 .toUriString();
     }
 
+    /**
+     * Payment page URL handed to the seller. No authorization is required to
+     * open it; the token carries the payment code claim.
+     */
+    public static String buildPaymentLink(String validToken) {
+        return UriComponentsBuilder.fromPath("/payment")
+                .queryParam("token", validToken)
+                .build()
+                .toUriString();
+    }
+
 }

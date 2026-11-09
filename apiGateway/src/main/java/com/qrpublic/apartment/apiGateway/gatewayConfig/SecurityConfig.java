@@ -77,6 +77,12 @@ public class SecurityConfig {
                         // (authorities carry plain role strings, no ROLE_ prefix)
                         .pathMatchers("/api/v1/user/admin/internal/**")
                         .hasAnyAuthority("Admin", "Badminton_Admin")
+                        // Payment plan administration and the environment/quota
+                        // listing live under /admin/v1: sellers hold a valid JWT too,
+                        // so the path has to be role-restricted here (publiclink-app
+                        // runs with method security disabled)
+                        .pathMatchers("/publiclink/admin/v1/**")
+                        .hasAnyAuthority("Admin", "Badminton_Admin")
                         .pathMatchers("/api/v1/user/**")
                         .permitAll()
                         .anyExchange().authenticated())

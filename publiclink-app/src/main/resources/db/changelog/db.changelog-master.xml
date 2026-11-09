@@ -58,6 +58,15 @@
     <changeSet id="020" author="thach">
         <sqlFile path="db/changelog/changeset-020-add-start-end-time.sql"/>
     </changeSet>
+    <changeSet id="021" author="thach">
+        <sqlFile path="db/changelog/changeset-021-create-payment-plan.sql"/>
+    </changeSet>
+    <changeSet id="022" author="thach">
+        <sqlFile path="db/changelog/changeset-022-create-payment.sql"/>
+    </changeSet>
+    <changeSet id="023" author="thach">
+        <sqlFile path="db/changelog/changeset-023-create-transfer-info.sql"/>
+    </changeSet>
     <!-- Chat tables moved to the chat-app module, which owns the chat_schema.
          publiclink-app stays the sole DDL owner of publiclink-db.
     <changeSet id="021" author="thach">

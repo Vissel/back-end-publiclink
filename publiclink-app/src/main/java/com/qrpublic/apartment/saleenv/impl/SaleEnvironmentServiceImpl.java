@@ -105,6 +105,13 @@ public class SaleEnvironmentServiceImpl implements SaleEnvironmentService {
     @Autowired
     private NamedParameterJdbcOperations namedParameterJdbcOperations;
 
+    /**
+     * Payment plan gate: every generated environment consumes one slot of the
+     * seller's ACTIVE plan assignment.
+     */
+    @Autowired
+    private com.qrpublic.apartment.domain.paymentplan.PaymentPlanService paymentPlanService;
+
     @Override
     public SaleEnvironment generateSaleEnvironment(Request request) {
         log.info("Creating sale environment.");
@@ -155,6 +162,8 @@ public class SaleEnvironmentServiceImpl implements SaleEnvironmentService {
         Request requestEntity = coreRequestService.getRequestByUuid(requestObject.getRequestUuid()).orElseThrow(
                 () -> new ResourceNotFoundException("Request not found with UUID: " + requestObject.getRequestUuid()));
 
+        // Gate on the payment plan quota before anything is written
+        paymentPlanService.consumeQuotaOrThrow(requestObject.getSellerRequest().getUsername());
         if (requestObject.getProductRequest() != null) {
             log.info("Step 2: Validating business rules");
             validateProductCreationRequest(requestObject.getProductRequest());

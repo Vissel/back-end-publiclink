@@ -1,9 +1,6 @@
 package com.qrpublic.apartment.service;
 
 import com.qrpublic.apartment.exception.EnvironmentCreationException;
-import com.qrpublic.apartment.plan.PlanService;
-import com.qrpublic.apartment.plan.request.CreatePlanRequest;
-import com.qrpublic.apartment.plan.response.CreatePlanResponse;
 
 import com.qrpublic.apartment.requestmodel.Pagination;
 import com.qrpublic.apartment.saleenv.SaleEnvironmentService;
@@ -34,9 +31,6 @@ public class AdminService {
     @Autowired
     PubUserService pubUserService;
 
-    @Autowired
-    PlanService planService;
-    
     /**
      * 2026 - create sale environment with public link
      *
@@ -60,17 +54,9 @@ public class AdminService {
     }
 
     /**
-     * Create seller plan with seller details, request UUID, start time and description
-     *
-     * @param createSellerPlanRequest
-     * @return
+     * Create seller plan moved to PaymentPlanAdminService: the endpoint now
+     * owns the payment plan / payment record semantics.
      */
-    public Mono<CreatePlanResponse> createSellerPlan(CreatePlanRequest createSellerPlanRequest) {
-        return Mono.fromCallable(() -> planService.createPricingPlanForSeller(createSellerPlanRequest))
-                .subscribeOn(Schedulers.boundedElastic())
-                .onErrorMap(throwable ->
-                        new EnvironmentCreationException("Failed to create seller plan. Please try again later."));
-    }
 
     public Mono<ListUserResponse> listInnerUsers(Pagination<ListUserRequest> listUserRequestPagination) {
         return Mono.fromCallable(() -> pubUserService.listUser(listUserRequestPagination))

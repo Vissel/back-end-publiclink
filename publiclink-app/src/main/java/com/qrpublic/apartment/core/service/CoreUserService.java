@@ -48,6 +48,26 @@ public class CoreUserService {
         return userRepo.findAll(pageable);
     }
 
+    /**
+     * Core-layer entity lookup by username. Used by features that need the FK
+     * entity; never exposed above the core layer.
+     */
+    @Transactional(readOnly = true)
+    public User getUserEntityByUsername(String username) {
+        return userRepo.findByUserName(username)
+                .orElseThrow(() -> new com.qrpublic.apartment.exception.ResourceNotFoundException(
+                        "User not found: " + username));
+    }
+
+    /**
+     * Non-throwing variant: callers such as the transfer info feature must
+     * distinguish "known seller" from "admin, who has no row here".
+     */
+    @Transactional(readOnly = true)
+    public Optional<User> findUserEntityByUsername(String username) {
+        return userRepo.findByUserName(username);
+    }
+
     @Transactional
     public Page<User> getUsers(Pageable pageable, String username, String name, String email, String role) {
         return userRepo.findByFilters(username, name, email, role, pageable);

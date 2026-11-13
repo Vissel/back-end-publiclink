@@ -69,7 +69,10 @@ public class ChatEventStreamRegistry {
         adminStream.emit(event);
     }
 
-    /** True while the conversation has a live stream — used to skip redundant pushes. */
+    /**
+     * True while the conversation has a live stream — used to skip redundant
+     * pushes.
+     */
     public boolean isClientOnline(String conversationUuid) {
         StreamHolder holder = clientStreams.get(conversationUuid);
         return holder != null && holder.subscribers.get() > 0;

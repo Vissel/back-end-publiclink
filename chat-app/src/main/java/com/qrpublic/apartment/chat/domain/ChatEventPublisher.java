@@ -37,7 +37,9 @@ public class ChatEventPublisher {
     @Autowired
     ChatEventStreamRegistry chatEventStreamRegistry;
 
-    /** Raw event stream of one conversation; consumed by the client's SSE endpoint. */
+    /**
+     * Raw event stream of one conversation; consumed by the client's SSE endpoint.
+     */
     public Flux<ServerSentEvent<String>> streamFor(String conversationUuid) {
         return chatEventStreamRegistry.clientStream(conversationUuid);
     }
@@ -57,7 +59,8 @@ public class ChatEventPublisher {
         if (json == null) {
             return;
         }
-        chatEventStreamRegistry.publishToClient(message.getConversationUuid(), event(EVENT_MESSAGE, json, message.getId()));
+        chatEventStreamRegistry.publishToClient(message.getConversationUuid(),
+                event(EVENT_MESSAGE, json, message.getId()));
         chatEventStreamRegistry.publishToAdmins(event(EVENT_MESSAGE, json, message.getId()));
     }
 
@@ -71,7 +74,8 @@ public class ChatEventPublisher {
         if (json == null) {
             return;
         }
-        chatEventStreamRegistry.publishToClient(message.getConversationUuid(), event(EVENT_STATUS, json, message.getId()));
+        chatEventStreamRegistry.publishToClient(message.getConversationUuid(),
+                event(EVENT_STATUS, json, message.getId()));
         chatEventStreamRegistry.publishToAdmins(event(EVENT_STATUS, json, message.getId()));
     }
 

@@ -156,7 +156,9 @@ public class AdminChatController {
                 .flatMap(ResponseEntityConvertor::convertToMonoResponseEntity);
     }
 
-    /** The VAPID key the service worker registration needs, if push is configured. */
+    /**
+     * The VAPID key the service worker registration needs, if push is configured.
+     */
     @GetMapping("/push/vapid-public-key")
     public Mono<ResponseEntity<VapidPublicKeyResponse>> vapidPublicKey() {
         return Mono.fromCallable(() -> adminChatService.vapidPublicKey())

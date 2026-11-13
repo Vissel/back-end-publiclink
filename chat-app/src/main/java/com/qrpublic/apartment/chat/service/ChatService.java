@@ -150,7 +150,8 @@ public class ChatService {
                 response.setServerTime(Instant.now().toString());
 
                 log.info("Chat session started: conversation={}, owner={}, recognition={}, resumed={}, history={}",
-                        conversation.getUuid(), owner, identity.getRecognition(), identity.isResumed(), messages.size());
+                        conversation.getUuid(), owner, identity.getRecognition(), identity.isResumed(),
+                        messages.size());
                 return response;
             }
         });
@@ -294,7 +295,8 @@ public class ChatService {
 
     /**
      * Liveness probe for deployment scripts and load balancers. Answers 200 with a
-     * tiny payload and reports whether the Zalo leg is live or the bridge is running
+     * tiny payload and reports whether the Zalo leg is live or the bridge is
+     * running
      * console-only, which is the first thing a broken release check needs to know.
      */
     public Result<ChatHealthResponse> health() {

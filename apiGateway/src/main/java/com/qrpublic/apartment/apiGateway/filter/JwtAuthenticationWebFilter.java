@@ -29,7 +29,7 @@ public class JwtAuthenticationWebFilter implements WebFilter, Ordered {
     @Autowired
     private JwtTokenProducer jwtTokenProducer;
 
-    //    @Override
+    // @Override
     public Mono<Void> filter(ServerWebExchange exchange, WebFilterChain chain) {
         String traceId = generateTraceId();
         // Identity headers are never accepted from the wire. The previous version
@@ -52,64 +52,81 @@ public class JwtAuthenticationWebFilter implements WebFilter, Ordered {
 
             if (jwtTokenProducer.isTokenValid(token)) {
                 // Use flatMap to handle the async username extraction reactively
-                return jwtTokenProducer.getUsernameFromToken(token).doOnNext(username -> log.debug("Successfully extracted username: {} | TraceID: {}", username, traceId)).flatMap(username -> {
-                    try {
-                        // Banking security: Validate token type is 'access' (not 'refresh')
-                        var claims = jwtTokenProducer.extractClaims(token);
-                        String tokenType = claims.get(FilterConstant.TOKEN_TYPE_CLAIM, String.class);
-                        
-                        if (!FilterConstant.ACCESS_TOKEN_TYPE.equals(tokenType)) {
-                            log.warn("Invalid token type for authentication: {} | Expected: access | TraceID: {} | Path: {}", 
-                                    tokenType, traceId, cleaned.getRequest().getPath().value());
-                            return sendUnauthorized(cleaned, "Invalid token type. Access token required.", traceId);
-                        }
-                        
-                        List<String> roles = extractRolesFromToken(token);
+                return jwtTokenProducer.getUsernameFromToken(token).doOnNext(
+                        username -> log.debug("Successfully extracted username: {} | TraceID: {}", username, traceId))
+                        .flatMap(username -> {
+                            try {
+                                // Banking security: Validate token type is 'access' (not 'refresh')
+                                var claims = jwtTokenProducer.extractClaims(token);
+                                String tokenType = claims.get(FilterConstant.TOKEN_TYPE_CLAIM, String.class);
 
-                        if (roles.isEmpty()) {
-                            log.warn("No roles found for user: {} | TraceID: {} | Path: {}", username, traceId, cleaned.getRequest().getPath().value());
+                                if (!FilterConstant.ACCESS_TOKEN_TYPE.equals(tokenType)) {
+                                    log.warn(
+                                            "Invalid token type for authentication: {} | Expected: access | TraceID: {} | Path: {}",
+                                            tokenType, traceId, cleaned.getRequest().getPath().value());
+                                    return sendUnauthorized(cleaned, "Invalid token type. Access token required.",
+                                            traceId);
+                                }
+
+                                List<String> roles = extractRolesFromToken(token);
+
+                                if (roles.isEmpty()) {
+                                    log.warn("No roles found for user: {} | TraceID: {} | Path: {}", username, traceId,
+                                            cleaned.getRequest().getPath().value());
+                                    return chain.filter(cleaned);
+                                }
+
+                                // Create authentication object
+                                UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
+                                        username, null,
+                                        roles.stream().map(SimpleGrantedAuthority::new).collect(Collectors.toList()));
+
+                                // Set authentication in security context
+                                SecurityContext context = new SecurityContextImpl(authentication);
+
+                                log.info("Valid JWT token for user: {} | TraceID: {} | Path: {} | Roles: {}", username,
+                                        traceId, cleaned.getRequest().getPath().value(), roles);
+
+                                // Forward the authenticated identity downstream. Mutating the
+                                // request alone is not enough: the new request has to travel to
+                                // the chain inside a mutated exchange.
+                                ServerWebExchange forwarded = cleaned.mutate()
+                                        .request(request -> request
+                                                .header(FilterConstant.USER_ID_HEADER, username)
+                                                .header(FilterConstant.TRACE_ID_HEADER, traceId)
+                                                .header(FilterConstant.AUTH_TIMESTAMP_HEADER,
+                                                        String.valueOf(System.currentTimeMillis())))
+                                        .build();
+
+                                // Add security headers to response
+                                forwarded.getResponse().getHeaders().add(FilterConstant.USER_ID_HEADER, username);
+                                forwarded.getResponse().getHeaders().add(FilterConstant.CONTENT_TYPE_OPTIONS_HEADER,
+                                        FilterConstant.CONTENT_TYPE_OPTIONS_VALUE);
+                                forwarded.getResponse().getHeaders().add(FilterConstant.FRAME_OPTIONS_HEADER,
+                                        FilterConstant.FRAME_OPTIONS_VALUE);
+                                forwarded.getResponse().getHeaders().add(FilterConstant.XSS_PROTECTION_HEADER,
+                                        FilterConstant.XSS_PROTECTION_VALUE);
+
+                                return chain.filter(forwarded).contextWrite(
+                                        ReactiveSecurityContextHolder.withSecurityContext(Mono.just(context)));
+                            } catch (Exception e) {
+                                log.error("Error processing roles for user: {} | TraceID: {} | Error: {}", username,
+                                        traceId, e.getMessage());
+                                return chain.filter(cleaned);
+                            }
+                        }).onErrorResume(e -> {
+                            log.warn("Failed to extract username from token | TraceID: {} | Path: {} | Error: {}",
+                                    traceId, cleaned.getRequest().getPath().value(), e.getMessage());
                             return chain.filter(cleaned);
-                        }
-
-                        // Create authentication object
-                        UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(username, null, roles.stream().map(SimpleGrantedAuthority::new).collect(Collectors.toList()));
-
-                        // Set authentication in security context
-                        SecurityContext context = new SecurityContextImpl(authentication);
-
-                        log.info("Valid JWT token for user: {} | TraceID: {} | Path: {} | Roles: {}", username, traceId, cleaned.getRequest().getPath().value(), roles);
-
-                        // Forward the authenticated identity downstream. Mutating the
-                        // request alone is not enough: the new request has to travel to
-                        // the chain inside a mutated exchange.
-                        ServerWebExchange forwarded = cleaned.mutate()
-                                .request(request -> request
-                                        .header(FilterConstant.USER_ID_HEADER, username)
-                                        .header(FilterConstant.TRACE_ID_HEADER, traceId)
-                                        .header(FilterConstant.AUTH_TIMESTAMP_HEADER, String.valueOf(System.currentTimeMillis())))
-                                .build();
-
-                        // Add security headers to response
-                        forwarded.getResponse().getHeaders().add(FilterConstant.USER_ID_HEADER, username);
-                        forwarded.getResponse().getHeaders().add(FilterConstant.CONTENT_TYPE_OPTIONS_HEADER, FilterConstant.CONTENT_TYPE_OPTIONS_VALUE);
-                        forwarded.getResponse().getHeaders().add(FilterConstant.FRAME_OPTIONS_HEADER, FilterConstant.FRAME_OPTIONS_VALUE);
-                        forwarded.getResponse().getHeaders().add(FilterConstant.XSS_PROTECTION_HEADER, FilterConstant.XSS_PROTECTION_VALUE);
-
-                        return chain.filter(forwarded).contextWrite(ReactiveSecurityContextHolder.withSecurityContext(Mono.just(context)));
-                    } catch (Exception e) {
-                        log.error("Error processing roles for user: {} | TraceID: {} | Error: {}", username, traceId, e.getMessage());
-                        return chain.filter(cleaned);
-                    }
-                }).onErrorResume(e -> {
-                    log.warn("Failed to extract username from token | TraceID: {} | Path: {} | Error: {}", traceId, cleaned.getRequest().getPath().value(), e.getMessage());
-                    return chain.filter(cleaned);
-                });
+                        });
             } else {
-                log.warn("Expired or invalid JWT token | TraceID: {} | Path: {}", traceId, cleaned.getRequest().getPath().value());
+                log.warn("Expired or invalid JWT token | TraceID: {} | Path: {}", traceId,
+                        cleaned.getRequest().getPath().value());
                 return chain.filter(cleaned);
             }
         } catch (Exception e) {
-            log.debug("No Authorization header present | TraceID: {} | Path: {}", traceId, cleaned.getRequest().getPath().value());
+            log.debug("No Authorization header present | TraceID: {} | Path: {}", traceId,
+                    cleaned.getRequest().getPath().value());
             return chain.filter(cleaned);
         } finally {
             // Add trace ID to response for audit trail
@@ -119,7 +136,8 @@ public class JwtAuthenticationWebFilter implements WebFilter, Ordered {
     }
 
     private boolean duplicatedRequest(ServerWebExchange exchange) {
-        return exchange.getResponse().getHeaders().containsKey(FilterConstant.TRACE_ID_HEADER) && exchange.getResponse().getHeaders().containsKey(FilterConstant.USER_ID_HEADER);
+        return exchange.getResponse().getHeaders().containsKey(FilterConstant.TRACE_ID_HEADER)
+                && exchange.getResponse().getHeaders().containsKey(FilterConstant.USER_ID_HEADER);
     }
 
     /**
@@ -172,8 +190,10 @@ public class JwtAuthenticationWebFilter implements WebFilter, Ordered {
         exchange.getResponse().getHeaders().add(FilterConstant.TRACE_ID_HEADER, traceId);
         exchange.getResponse().getHeaders().add("Content-Type", "application/json");
 
-        String jsonResponse = String.format("{\"error\":\"Unauthorized\",\"message\":\"%s\",\"traceId\":\"%s\"}", errorMessage, traceId);
+        String jsonResponse = String.format("{\"error\":\"Unauthorized\",\"message\":\"%s\",\"traceId\":\"%s\"}",
+                errorMessage, traceId);
 
-        return exchange.getResponse().writeWith(Mono.just(exchange.getResponse().bufferFactory().wrap(jsonResponse.getBytes())));
+        return exchange.getResponse()
+                .writeWith(Mono.just(exchange.getResponse().bufferFactory().wrap(jsonResponse.getBytes())));
     }
 }

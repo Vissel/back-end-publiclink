@@ -86,7 +86,9 @@ public class ChatConversationDomain {
         return coreChatService.findConversationById(conversationId);
     }
 
-    /** The administrator opened the thread: clear the badge, same broadcast shape. */
+    /**
+     * The administrator opened the thread: clear the badge, same broadcast shape.
+     */
     public Optional<ChatConversationModel> markRead(Long conversationId) {
         coreChatService.resetUnread(conversationId);
         return coreChatService.findConversationById(conversationId);

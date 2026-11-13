@@ -181,7 +181,8 @@ public class AdminPushDomain {
             URI uri = URI.create(endpoint.trim());
             String scheme = uri.getScheme();
             return "https".equals(scheme)
-                    || ("http".equals(scheme) && ("localhost".equals(uri.getHost()) || "127.0.0.1".equals(uri.getHost())));
+                    || ("http".equals(scheme)
+                            && ("localhost".equals(uri.getHost()) || "127.0.0.1".equals(uri.getHost())));
         } catch (Exception e) {
             return false;
         }
@@ -199,7 +200,9 @@ public class AdminPushDomain {
         return value != null && !value.isBlank();
     }
 
-    /** Shape the service worker reads; keep the field names in sync with chat-sw.js. */
+    /**
+     * Shape the service worker reads; keep the field names in sync with chat-sw.js.
+     */
     private record PushPayload(String title, String body, String conversationUuid, Long messageId) {
     }
 }

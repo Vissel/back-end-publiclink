@@ -138,7 +138,8 @@ public class UserServiceImpl implements UserService {
 
     @Override
     public Mono<Result<UserCreateResponse>> generateAccount(String userName, String fullName, String role) {
-        return Mono.fromCallable(() -> transactionTemplate.execute(status -> doGenerateAccount(userName, fullName, role)))
+        return Mono
+                .fromCallable(() -> transactionTemplate.execute(status -> doGenerateAccount(userName, fullName, role)))
                 .subscribeOn(Schedulers.boundedElastic());
     }
 

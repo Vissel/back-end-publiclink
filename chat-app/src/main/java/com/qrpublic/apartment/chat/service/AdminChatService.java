@@ -269,7 +269,8 @@ public class AdminChatService {
             public StreamTicketResponse process() {
                 purgeExpiredTickets();
                 String ticket = UUID.randomUUID().toString();
-                streamTickets.put(ticket, System.currentTimeMillis() + TimeUnit.SECONDS.toMillis(streamTicketTtlSeconds));
+                streamTickets.put(ticket,
+                        System.currentTimeMillis() + TimeUnit.SECONDS.toMillis(streamTicketTtlSeconds));
                 log.info("Issued a chat stream ticket, {} outstanding", streamTickets.size());
                 return new StreamTicketResponse(ticket, streamTicketTtlSeconds);
             }

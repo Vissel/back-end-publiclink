@@ -192,7 +192,9 @@ public class CoreChatService {
                 .map(c -> toModel(c, false));
     }
 
-    /** Newest thread of a signed-in account, closed ones included for resume checks. */
+    /**
+     * Newest thread of a signed-in account, closed ones included for resume checks.
+     */
     @Transactional(readOnly = true)
     public Optional<ChatConversationModel> findLatestConversationByOwner(String ownerUsername) {
         return chatConversationRepository.findTop1ByOwnerUsernameOrderByIdDesc(ownerUsername)

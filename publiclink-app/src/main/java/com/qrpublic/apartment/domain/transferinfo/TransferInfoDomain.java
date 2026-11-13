@@ -26,7 +26,8 @@ public class TransferInfoDomain {
     @Transactional(readOnly = true)
     public TransferInfoListResponse list(String username, String status) {
         String effectiveStatus = (status == null || status.isBlank() || "ALL".equalsIgnoreCase(status))
-                ? "ACTIVE" : status.toUpperCase();
+                ? "ACTIVE"
+                : status.toUpperCase();
         List<TransferInfoModel> models = coreTransferInfoService
                 .findByOwnerAndStatus(username, effectiveStatus).stream()
                 .map(coreTransferInfoService::toModel)
@@ -45,17 +46,17 @@ public class TransferInfoDomain {
                 request.getType(), request.getTransferNumber(), request.getAccountName(),
                 request.getQrImage(), request.getDefaultMessage(), request.isSetDefault())));
     }
-    
+
     @Transactional
     public void setDefault(String username, String transferCode) {
         coreTransferInfoService.setDefault(username, transferCode);
     }
-    
+
     @Transactional
     public void remove(String username, String transferCode) {
         coreTransferInfoService.deactivate(username, transferCode);
     }
-    
+
     private TransferInfoListResponse.TransferItem toItem(TransferInfoModel model) {
         TransferInfoListResponse.TransferItem item = new TransferInfoListResponse.TransferItem();
         item.setTransferCode(model.getTransferCode());

@@ -39,10 +39,20 @@ public interface PaymentPlanUserRepository extends JpaRepository<PaymentPlanUser
         long countPlans(@Param("state") String state,
                         @Param("username") String username);
 
+        /**
+         * Assignments that may still produce an environment: ACTIVE, inside the
+         * paid window (activeDate <= now < endedDate) and with quota left.
+         * The window is authoritative: planState is never flipped automatically
+         * when a plan expires, so without these predicates an ended plan would
+         * keep selling links forever.
+         */
         @Query("SELECT ppu FROM PaymentPlanUser ppu JOIN ppu.user u " +
                         "WHERE u.userName = :username AND ppu.planState = 'ACTIVE' " +
+                        "AND ppu.activeDate IS NOT NULL AND ppu.activeDate <= :now " +
+                        "AND ppu.endedDate IS NOT NULL AND ppu.endedDate > :now " +
                         "AND ppu.envQuota > ppu.usedCount ORDER BY ppu.activeDate ASC")
-        List<PaymentPlanUser> findUsableActiveByUserName(@Param("username") String username);
+        List<PaymentPlanUser> findUsableActiveByUserName(@Param("username") String username,
+                        @Param("now") java.sql.Timestamp now);
 
         @Query("SELECT ppu FROM PaymentPlanUser ppu JOIN ppu.user u " +
                         "WHERE u.userName = :username AND ppu.planState = 'ACTIVE' ORDER BY ppu.createdAt DESC")
@@ -51,8 +61,11 @@ public interface PaymentPlanUserRepository extends JpaRepository<PaymentPlanUser
         @Lock(LockModeType.PESSIMISTIC_WRITE)
         @Query("SELECT ppu FROM PaymentPlanUser ppu JOIN ppu.user u " +
                         "WHERE u.userName = :username AND ppu.planState = 'ACTIVE' " +
+                        "AND ppu.activeDate IS NOT NULL AND ppu.activeDate <= :now " +
+                        "AND ppu.endedDate IS NOT NULL AND ppu.endedDate > :now " +
                         "AND ppu.envQuota > ppu.usedCount ORDER BY ppu.activeDate ASC")
-        List<PaymentPlanUser> findUsableActiveByUserNameForUpdate(@Param("username") String username);
+        List<PaymentPlanUser> findUsableActiveByUserNameForUpdate(@Param("username") String username,
+                        @Param("now") java.sql.Timestamp now);
 
         @Lock(LockModeType.PESSIMISTIC_WRITE)
         @Query("SELECT ppu FROM PaymentPlanUser ppu WHERE ppu.planUserCode IN :codes")

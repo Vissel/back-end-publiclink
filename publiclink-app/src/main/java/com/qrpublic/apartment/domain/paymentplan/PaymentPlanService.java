@@ -186,16 +186,28 @@ public class PaymentPlanService {
     }
 
     /**
+     * Read-only gate used by the UI before it opens the product screen. Reports
+     * the plan window and the reason a creation would be refused.
+     */
+    @Transactional(readOnly = true)
+    public com.qrpublic.apartment.core.model.PlanGateModel evaluate(String username) {
+        return corePaymentPlanService.evaluate(username);
+    }
+
+    /**
      * Consume one environment slot for the seller. Called inside the sale
-     * environment transaction. Throws when nothing is left.
+     * environment transaction: refuses creation when the plan has not started,
+     * has ended, or has no slot left, and returns the plan deadline so the
+     * generated link can be clamped to it.
      */
     @Transactional
-    public void consumeQuotaOrThrow(String username) {
-        boolean deducted = corePaymentPlanService.deductOneQuota(username);
-        if (!deducted) {
-            throw new ApplicationException(
-                    "No remaining environment quota. Please contact admin to get support.", 403);
+    public com.qrpublic.apartment.core.model.PlanGateModel consumeQuotaOrThrow(String username) {
+        com.qrpublic.apartment.core.model.PlanGateModel gate = corePaymentPlanService.consumeOne(username);
+        if (!gate.isAllowed()) {
+            log.warn("Refused environment creation for [{}]: {}", username, gate.getReason());
+            throw new ApplicationException(gate.getMessage(), 403);
         }
+        return gate;
     }
 
     /**

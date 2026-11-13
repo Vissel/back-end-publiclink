@@ -52,10 +52,16 @@ public class ChatConversationDomain {
     }
 
     /**
-     * Newest conversation of a device, if the visitor never got a start response.
+     * Newest anonymous conversation of a device, if the visitor never got a
+     * start response. Account threads are resolved by owner, never by device.
      */
     public Optional<ChatConversationModel> findLatestByDeviceId(String deviceId) {
-        return coreChatService.findLatestConversationByDeviceId(deviceId);
+        return coreChatService.findLatestAnonymousConversationByDeviceId(deviceId);
+    }
+
+    /** Newest thread of a signed-in account. */
+    public Optional<ChatConversationModel> findLatestByOwner(String ownerUsername) {
+        return coreChatService.findLatestConversationByOwner(ownerUsername);
     }
 
     public List<ChatConversationModel> listForAdmin(int page, int size) {
@@ -72,23 +78,48 @@ public class ChatConversationDomain {
     }
 
     /**
+     * One more unread guest message. Returns the refreshed conversation so the
+     * caller can broadcast the new badge to every open console.
+     */
+    public Optional<ChatConversationModel> markUnread(Long conversationId) {
+        coreChatService.incrementUnread(conversationId);
+        return coreChatService.findConversationById(conversationId);
+    }
+
+    /** The administrator opened the thread: clear the badge, same broadcast shape. */
+    public Optional<ChatConversationModel> markRead(Long conversationId) {
+        coreChatService.resetUnread(conversationId);
+        return coreChatService.findConversationById(conversationId);
+    }
+
+    /** Legacy threads have no stream key; mint one before it is handed out. */
+    public ChatConversationModel ensureStreamKey(Long conversationId) {
+        return coreChatService.ensureStreamKey(conversationId);
+    }
+
+    /** Keeps the console's human name in step with the account profile. */
+    public void refreshOwnerName(Long conversationId, String displayName) {
+        coreChatService.updateOwnerDisplayName(conversationId, displayName);
+    }
+
+    /**
      * Called when a client stream opens: the administrator sees the visitor come
      * back.
      */
     public void onClientConnected(ChatConversationModel conversation) {
         coreChatService.updateConversationStatus(conversation.getId(),
                 CoreChatService.ChatConversationStatus.ACTIVE);
-        chatEventPublisher.publishPresence(conversation.getDeviceId(), conversation.getUuid(), true);
+        chatEventPublisher.publishPresence(conversation.getUuid(), true);
     }
 
     /**
      * Called when a client stream closes (tab shut, network dropped, proxy
      * timeout).
      */
-    public void onClientDisconnected(String deviceId, String conversationUuid) {
-        chatEventPublisher.publishPresence(deviceId, conversationUuid, false);
+    public void onClientDisconnected(String conversationUuid) {
+        chatEventPublisher.publishPresence(conversationUuid, false);
         coreChatService.findConversationByUuid(conversationUuid)
-                .filter(conversation -> !chatEventStreamRegistry.isClientOnline(deviceId))
+                .filter(conversation -> !chatEventStreamRegistry.isClientOnline(conversationUuid))
                 .ifPresent(conversation -> coreChatService.updateConversationStatus(conversation.getId(),
                         CoreChatService.ChatConversationStatus.IDLE));
     }
@@ -107,7 +138,7 @@ public class ChatConversationDomain {
             if (!CoreChatService.ChatConversationStatus.ACTIVE.equals(conversation.getStatus())) {
                 continue;
             }
-            if (chatEventStreamRegistry.isClientOnline(conversation.getDeviceId())) {
+            if (chatEventStreamRegistry.isClientOnline(conversation.getUuid())) {
                 continue;
             }
             if (conversation.getLastMessageAt() != null && conversation.getLastMessageAt().after(cutoff)) {
@@ -115,7 +146,7 @@ public class ChatConversationDomain {
             }
             coreChatService.updateConversationStatus(conversation.getId(),
                     CoreChatService.ChatConversationStatus.IDLE);
-            chatEventPublisher.publishPresence(conversation.getDeviceId(), conversation.getUuid(), false);
+            chatEventPublisher.publishPresence(conversation.getUuid(), false);
             parked++;
         }
         if (parked > 0) {

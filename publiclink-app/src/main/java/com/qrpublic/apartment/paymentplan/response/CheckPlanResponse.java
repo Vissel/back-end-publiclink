@@ -11,4 +11,9 @@ public class CheckPlanResponse {
     private boolean allowed;
     private int remaining;
     private String message;
+    /** OK | NO_PLAN | NOT_STARTED | EXPIRED | QUOTA_EXHAUSTED */
+    private String reason;
+    private String activeDate;
+    /** paid plan end; a generated link is clamped to this instant */
+    private String endedDate;
 }

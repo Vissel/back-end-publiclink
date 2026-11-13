@@ -37,7 +37,6 @@ public class CoreUserService {
         return user.orElse(null);
     }
 
-
     @Transactional
     public List<User> getAllUser() {
         return userRepo.findAllWithLock();
@@ -125,7 +124,8 @@ public class CoreUserService {
     }
 
     @Transactional
-    public UserModel findAndUpdateUserWithAuthentication(String username, String password, String email, String name, String profileLink) {
+    public UserModel findAndUpdateUserWithAuthentication(String username, String password, String email, String name,
+            String profileLink) {
         // Find user by username
         User existingUser = userRepo.findByUserName(username)
                 .orElseThrow(() -> new IllegalArgumentException("User not found: " + username));

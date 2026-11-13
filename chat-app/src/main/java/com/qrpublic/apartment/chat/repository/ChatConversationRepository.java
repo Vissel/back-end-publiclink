@@ -19,6 +19,26 @@ public interface ChatConversationRepository extends JpaRepository<ChatConversati
 
     List<ChatConversation> findByDeviceIdOrderByIdDesc(String deviceId);
 
+    /**
+     * Newest thread of a signed-in account. Account threads are resolved by
+     * owner alone: the device id is shared by every account on one browser.
+     */
+    Optional<ChatConversation> findTop1ByOwnerUsernameOrderByIdDesc(String ownerUsername);
+
+    /**
+     * Newest anonymous thread of a device. The owner-null filter is what keeps
+     * a signed-out browser from inheriting an account's conversation.
+     */
+    Optional<ChatConversation> findTop1ByDeviceIdAndOwnerUsernameIsNullOrderByIdDesc(String deviceId);
+
+    /**
+     * True when some signed-in account has chatted on this device. Anonymous
+     * fingerprint matching must skip such devices: adopting one would let a
+     * signed-out visitor latch onto an account's device row and pollute its
+     * fingerprint, IP hash and visit counter.
+     */
+    boolean existsByDeviceIdAndOwnerUsernameIsNotNull(String deviceId);
+
     Page<ChatConversation> findByStatusOrderByLastMessageAtDesc(String status, Pageable pageable);
 
     Page<ChatConversation> findByStatusIsNotNullOrderByLastMessageAtDesc(Pageable pageable);

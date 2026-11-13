@@ -37,9 +37,9 @@ public class ChatEventPublisher {
     @Autowired
     ChatEventStreamRegistry chatEventStreamRegistry;
 
-    /** Raw event stream of one visitor; consumed by the client's SSE endpoint. */
-    public Flux<ServerSentEvent<String>> streamFor(String deviceId) {
-        return chatEventStreamRegistry.clientStream(deviceId);
+    /** Raw event stream of one conversation; consumed by the client's SSE endpoint. */
+    public Flux<ServerSentEvent<String>> streamFor(String conversationUuid) {
+        return chatEventStreamRegistry.clientStream(conversationUuid);
     }
 
     /** Raw event stream of the administrator console. */
@@ -57,7 +57,7 @@ public class ChatEventPublisher {
         if (json == null) {
             return;
         }
-        chatEventStreamRegistry.publishToClient(message.getDeviceId(), event(EVENT_MESSAGE, json, message.getId()));
+        chatEventStreamRegistry.publishToClient(message.getConversationUuid(), event(EVENT_MESSAGE, json, message.getId()));
         chatEventStreamRegistry.publishToAdmins(event(EVENT_MESSAGE, json, message.getId()));
     }
 
@@ -71,7 +71,7 @@ public class ChatEventPublisher {
         if (json == null) {
             return;
         }
-        chatEventStreamRegistry.publishToClient(message.getDeviceId(), event(EVENT_STATUS, json, message.getId()));
+        chatEventStreamRegistry.publishToClient(message.getConversationUuid(), event(EVENT_STATUS, json, message.getId()));
         chatEventStreamRegistry.publishToAdmins(event(EVENT_STATUS, json, message.getId()));
     }
 
@@ -80,12 +80,12 @@ public class ChatEventPublisher {
      * not expose a typing signal, so a reply written in the Zalo app appears as a
      * message without a preceding typing hint.
      */
-    public void publishTyping(String deviceId, String conversationUuid, String source, boolean typing) {
+    public void publishTyping(String conversationUuid, String source, boolean typing) {
         String json = write(new TypingPayload(conversationUuid, source, typing));
         if (json == null) {
             return;
         }
-        chatEventStreamRegistry.publishToClient(deviceId, event(EVENT_TYPING, json, null));
+        chatEventStreamRegistry.publishToClient(conversationUuid, event(EVENT_TYPING, json, null));
         chatEventStreamRegistry.publishToAdmins(event(EVENT_TYPING, json, null));
     }
 
@@ -104,7 +104,7 @@ public class ChatEventPublisher {
      * lost the system (offline) or came back (online) without waiting for a
      * message.
      */
-    public void publishPresence(String deviceId, String conversationUuid, boolean online) {
+    public void publishPresence(String conversationUuid, boolean online) {
         String json = write(new PresencePayload(conversationUuid, online));
         if (json == null) {
             return;
@@ -115,6 +115,18 @@ public class ChatEventPublisher {
 
     public void publishPing(String deviceId) {
         chatEventStreamRegistry.publishToClient(deviceId, event(EVENT_PING, "1", null));
+    }
+
+    /**
+     * Keeps the administrator console stream warm. An idle SSE connection is
+     * what makes an intermediary (nginx, the tunnel) close the response, and the
+     * console would then silently stop receiving guest messages until reload.
+     */
+    public void publishAdminPing() {
+        if (chatEventStreamRegistry.onlineAdminCount() == 0) {
+            return;
+        }
+        chatEventStreamRegistry.publishToAdmins(event(EVENT_PING, "1", null));
     }
 
     public boolean isClientOnline(String deviceId) {

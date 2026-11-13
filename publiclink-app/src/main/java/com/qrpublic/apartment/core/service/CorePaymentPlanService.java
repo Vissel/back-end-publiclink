@@ -1,6 +1,7 @@
 package com.qrpublic.apartment.core.service;
 
 import com.qrpublic.apartment.core.model.PaymentPlanModel;
+import com.qrpublic.apartment.core.model.PlanGateModel;
 import com.qrpublic.apartment.core.model.PlanUserModel;
 import com.qrpublic.apartment.entity.PaymentPlan;
 import com.qrpublic.apartment.entity.PaymentPlanUser;
@@ -40,6 +41,9 @@ public class CorePaymentPlanService {
 
     @Autowired
     private CoreUserService coreUserService;
+
+    @Autowired
+    private CoreTimezoneService coreTimezoneService;
 
     // ---------------------------------------------------------------- catalog
 
@@ -135,36 +139,133 @@ public class CorePaymentPlanService {
                 .toList();
     }
 
-    // ------------------------------------------------------------------ quota
+    // ------------------------------------------------------- quota / deadline
 
     /**
-     * Environments still creatable for this user across all ACTIVE plans.
+     * Environments still creatable inside the paid window.
      */
     @Transactional(readOnly = true)
     public int findRemainingQuota(String username) {
-        return paymentPlanUserRepository.findUsableActiveByUserName(username).stream()
+        return paymentPlanUserRepository.findUsableActiveByUserName(username, now()).stream()
                 .mapToInt(a -> a.getEnvQuota() - a.getUsedCount())
                 .sum();
     }
 
     /**
-     * Consume one environment slot from the oldest usable ACTIVE assignment.
-     * Row is locked for update so concurrent generations cannot oversell.
-     *
-     * @return true when a slot was consumed, false when the user has none left
+     * Evaluate the seller against their plan window and quota without writing.
+     * Distinguishes "no plan", "not started yet", "expired" and "quota used up"
+     * so the caller can show the right message.
+     */
+    @Transactional(readOnly = true)
+    public PlanGateModel evaluate(String username) {
+        Timestamp now = now();
+        List<PaymentPlanUser> active = paymentPlanUserRepository.findActiveByUserName(username);
+        if (active.isEmpty()) {
+            return PlanGateModel.builder()
+                    .allowed(false)
+                    .reason(PlanGateModel.REASON_NO_PLAN)
+                    .message("You have no active payment plan. Please contact admin via chat or buy a plan.")
+                    .remaining(0)
+                    .build();
+        }
+
+        List<PaymentPlanUser> usable = paymentPlanUserRepository.findUsableActiveByUserName(username, now);
+        if (!usable.isEmpty()) {
+            PaymentPlanUser chosen = usable.get(0);
+            int remaining = usable.stream().mapToInt(a -> a.getEnvQuota() - a.getUsedCount()).sum();
+            return allowedGate(chosen, remaining);
+        }
+
+        return blockedGate(active, now);
+    }
+
+    /**
+     * Consume one environment slot from the oldest usable assignment inside the
+     * paid window. The row is locked for update so concurrent generations
+     * cannot oversell. Returns the gate describing the outcome; when nothing
+     * could be consumed the reason explains why.
      */
     @Transactional
-    public boolean deductOneQuota(String username) {
-        List<PaymentPlanUser> usable = paymentPlanUserRepository.findUsableActiveByUserNameForUpdate(username);
+    public PlanGateModel consumeOne(String username) {
+        Timestamp now = now();
+        List<PaymentPlanUser> usable = paymentPlanUserRepository
+                .findUsableActiveByUserNameForUpdate(username, now);
         if (usable.isEmpty()) {
-            return false;
+            return evaluate(username);
         }
+
         PaymentPlanUser assignment = usable.get(0);
         assignment.setUsedCount(assignment.getUsedCount() + 1);
         paymentPlanUserRepository.save(assignment);
-        log.info("Deducted environment quota for [{}] from plan [{}], used={}/{}", username,
-                assignment.getPlanUserCode(), assignment.getUsedCount(), assignment.getEnvQuota());
-        return true;
+        log.info("Consumed environment slot for [{}] from plan [{}], used={}/{}, deadline={}", username,
+                assignment.getPlanUserCode(), assignment.getUsedCount(), assignment.getEnvQuota(),
+                assignment.getEndedDate());
+
+        int remaining = usable.stream()
+                .mapToInt(a -> a.getEnvQuota() - a.getUsedCount())
+                .sum();
+        return allowedGate(assignment, remaining);
+    }
+
+    private PlanGateModel allowedGate(PaymentPlanUser assignment, int remaining) {
+        return PlanGateModel.builder()
+                .allowed(true)
+                .reason(PlanGateModel.REASON_OK)
+                .remaining(Math.max(0, remaining))
+                .activeDate(DateUtils.dateToString(assignment.getActiveDate()))
+                .endedDate(DateUtils.dateToString(assignment.getEndedDate()))
+                .deadline(assignment.getEndedDate())
+                .build();
+    }
+
+    private PlanGateModel blockedGate(List<PaymentPlanUser> active, Timestamp now) {
+        // Prefer the most recently ended plan so the message quotes a real date
+        PaymentPlanUser latestEnded = active.stream()
+                .filter(a -> a.getEndedDate() != null && !a.getEndedDate().after(now))
+                .max(java.util.Comparator.comparing(PaymentPlanUser::getEndedDate))
+                .orElse(null);
+        if (latestEnded != null) {
+            return PlanGateModel.builder()
+                    .allowed(false)
+                    .reason(PlanGateModel.REASON_EXPIRED)
+                    .message("Your payment plan ended on " + DateUtils.dateToString(latestEnded.getEndedDate())
+                            + ". You cannot create more product links. "
+                            + "Please contact admin via chat or buy a new plan.")
+                    .remaining(0)
+                    .activeDate(DateUtils.dateToString(latestEnded.getActiveDate()))
+                    .endedDate(DateUtils.dateToString(latestEnded.getEndedDate()))
+                    .build();
+        }
+
+        PaymentPlanUser notStarted = active.stream()
+                .filter(a -> a.getActiveDate() != null && a.getActiveDate().after(now))
+                .min(java.util.Comparator.comparing(PaymentPlanUser::getActiveDate))
+                .orElse(null);
+        if (notStarted != null) {
+            return PlanGateModel.builder()
+                    .allowed(false)
+                    .reason(PlanGateModel.REASON_NOT_STARTED)
+                    .message("Your payment plan starts on " + DateUtils.dateToString(notStarted.getActiveDate())
+                            + ". Please try again from that date, or contact admin via chat.")
+                    .remaining(0)
+                    .activeDate(DateUtils.dateToString(notStarted.getActiveDate()))
+                    .endedDate(DateUtils.dateToString(notStarted.getEndedDate()))
+                    .build();
+        }
+
+        return PlanGateModel.builder()
+                .allowed(false)
+                .reason(PlanGateModel.REASON_QUOTA_EXHAUSTED)
+                .message("Your payment plan has no environment slot left. "
+                        + "Please contact admin via chat or buy more.")
+                .remaining(0)
+                .activeDate(DateUtils.dateToString(active.get(0).getActiveDate()))
+                .endedDate(DateUtils.dateToString(active.get(0).getEndedDate()))
+                .build();
+    }
+
+    private Timestamp now() {
+        return new Timestamp(coreTimezoneService.getNow().getTime());
     }
 
     // ----------------------------------------------------------- state changes

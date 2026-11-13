@@ -221,6 +221,112 @@ sudo journalctl -u publiclink-chat -f
 Until step 4 the feature still works **console-only** (`zalo.enabled=false`): visitors chat, staff
 answer in `/adminChat`, and nothing is sent to Zalo. That is the intended safe default.
 
+### 2.3 Console extras: identity forwarding, avatar, unread badges, background push
+
+The WhatsApp-style admin console (`/adminChat`) sits on top of the bridge. None of
+this is required for chat to work, but (a) is required for the new endpoints.
+
+**a) The gateway now forwards the real identity.** `JwtAuthenticationWebFilter`
+strips `X-User-ID`, `X-Trace-ID` and `X-Auth-Timestamp` from every inbound request
+and re-attaches them from the validated JWT. It used to build the mutated request
+and throw it away, so downstream services trusted whatever the browser sent —
+spoofable on every permit-all route. Deploy `apiGateway.war` in the **same**
+release as `user-*.jar` and `chat-exec.jar`: the avatar and push endpoints take
+the caller from that header and have no other identity source.
+
+**b) Avatar storage.** `user_avatar` in `user_schema` is created by
+`ddl-auto=update` on the user service's next start (that module has no Liquibase
+changelog). If the DB user has no DDL rights, create it by hand:
+
+```sql
+CREATE TABLE IF NOT EXISTS user_avatar (
+  username     VARCHAR(64) NOT NULL PRIMARY KEY,
+  content_type VARCHAR(40) NULL,
+  data         MEDIUMTEXT  NULL,
+  updated_at   TIMESTAMP   NULL
+);
+```
+
+The browser resizes every picture to a 256x256 JPEG before upload, so a row is a
+few tens of kilobytes — no volume, no object storage.
+
+**c) Chat schema changeset-002** (the `unread_count` column and
+`chat_push_subscription`) applies itself on the next chat start:
+
+```bash
+sudo journalctl -u publiclink-chat -n 100 --no-pager | grep "Running Changeset"
+```
+
+**d) VAPID keys — only for out-of-tab notifications.** Everything else (live
+console, unread badges, in-page chime) works without them:
+
+```bash
+npx --yes web-push generate-vapid-keys     # run anywhere, e.g. a laptop
+sudo nano /etc/publiclink/publiclink.env   # CHAT_VAPID_PUBLIC_KEY / _PRIVATE_KEY / _SUBJECT
+sudo systemctl restart publiclink-chat
+```
+
+Then the administrator clicks the bell in the console header and accepts the
+browser prompt. Push requires HTTPS (the tunnel provides it) and, on iOS, the
+site added to the home screen. Rotating the keys invalidates every stored
+subscription, so each administrator must click the bell again.
+
+**e) Verify the three new calls** (a JWT of an Admin is needed for all three):
+
+```bash
+curl -s -H "Authorization: Bearer $TOKEN" \
+     https://share-link.top/apiGateway/chat/admin/v1/chat/push/vapid-public-key
+curl -s -X POST -H "Authorization: Bearer $TOKEN" \
+     https://share-link.top/apiGateway/chat/admin/v1/chat/stream-ticket
+curl -s -H "Authorization: Bearer $TOKEN" \
+     https://share-link.top/apiGateway/api/v1/user/avatar
+```
+
+The ticket call answers `{"ticket":"…","expiresInSeconds":60}` and is single-use —
+the stream itself is opened by the browser, not by curl.
+
+What the console does with a new visitor message (useful when testing):
+
+| Administrator is | Result |
+|---|---|
+| on `/adminChat`, tab visible | thread updates in place, no sound |
+| on another page, tab visible | chime plus a toast with an Open button |
+| tab hidden or minimised, push on | system notification with the system sound |
+| tab hidden, push off | chime in the tab, plus a notification if permission was given |
+| browser closed, push on | delivered by the push service when the browser next starts |
+
+**f) Account-first chat identity (changeset-003).** A thread now belongs to the
+signed-in account (`owner_username`, resolved from the gateway-forwarded
+`X-User-ID`); the device/fingerprint ladder only serves signed-out visitors and
+only among owner-less threads. The visitor's live stream is keyed by a
+per-conversation `stream_key` issued at `/start`: a device id is shared by every
+account on one browser, and keying the feed by it is exactly how one account
+used to read another's messages. The console shows the account's human name
+(resolved best-effort from the user service) instead of "Guest #tag".
+
+**g) Per-tab sessions and the customer identity audit.** The login session now
+lives in `sessionStorage`: one tab = one account. It used to live in
+`localStorage`, which every tab of a browser shares — signing in as micro09 in
+a second tab fired a `storage` event that rewrote the first tab's account, so
+micro08's widget resumed micro09's thread and wrote micro08's messages into it.
+Legacy browser-global keys are purged on the next login/logout and never read
+back, so each tab signs in once after this release.
+
+What the customer check can and cannot prove: a browser cannot expose a MAC
+address at all (no web API exists), so there is no MAC check and any design
+claiming one is wrong by construction; the IP is read only server-side from
+nginx's `X-Real-IP`, stored as a salted hash and never used alone (carrier-grade
+NAT shares addresses); the salted attribute fingerprint only re-links
+signed-out visitors and, since this release, never adopts a device that carries
+a signed-in account's conversation. `/start` additionally refuses (403) any
+thread whose owner differs from the requesting identity, and the widget refuses
+to render history or stream frames for a conversation it does not own.
+
+Deploy `chat-exec.jar`, `apiGateway.war` and the frontend build **together** for
+this change. The pre-fix merged thread (two accounts inside one "Guest #0001")
+remains as anonymous history: end it from the console (× in the thread header)
+so nobody resumes it; new signed-in chats start isolated per account.
+
 ---
 
 ## 3. Release deployment — `deploy.sh`
@@ -301,6 +407,13 @@ curl -I https://share-link.top/login                                 # HTTP/2 20
 | Visitors see "Sending" forever, nothing reaches Zalo | `ZALO_ENABLED=false`, no OA token, or no administrator bound | `curl …/chat/health` shows `zaloEnabled`; `GET /chat/admin/v1/chat/zalo/status` shows token + adminBound |
 | Zalo webhook answered 401 / no events arrive | `ZALO_OA_SECRET_KEY` missing or wrong, or the registered URL prefix changed to `/chat` | set the OA Secret Key from the Webhook page; re-verify `zalo_verifier<code>.html` via `ZALO_DOMAIN_VERIFICATION_CODE`; check `journalctl -u publiclink-chat` for "non-matching signature" |
 | Chat status never reaches "Delivered/Seen" | Zalo event types not ticked on the Webhook page, or the admin answered in oa.zalo.me rather than the OA thread | tick `user_received_message` + `user_seen_message`; both sides of a mirror reply are recorded either way |
+| Avatar upload answers 401 while clearly logged in | gateway still runs the pre-fix jar, so `X-User-ID` never reaches the user service | deploy `apiGateway.war` and restart `publiclink-gateway` (2.3 a) |
+| Console is not live, the list only refreshes every 15 s | stream-ticket call failing, or the SSE location missing from the installed nginx config | `POST …/chat/admin/v1/chat/stream-ticket` must return a ticket; `grep "chat/stream" /etc/nginx/conf.d/share-link.top.conf` must match |
+| Bell button reports push is not configured | `CHAT_VAPID_*` empty in the env file | generate keys per 2.3 (d), restart `publiclink-chat` |
+| No system notification while the tab is hidden | permission denied, non-HTTPS origin, or another app window is visible — a visible window handles the event itself and no notification is raised | check the site permission; close other app windows when testing |
+| Notifications appear twice | an old service worker is still installed | DevTools → Application → Service Workers → Unregister, then hard reload |
+| Two accounts read each other's chat | pre-fix release: browser-global localStorage session flipped one tab to the other account, and identity/stream keyed by the shared device id | deploy chat-app + gateway + frontend together; sign in once per tab (sessionStorage); `SELECT uuid, owner_username FROM chat_conversation` must show one thread per account; end the legacy merged thread from the console |
+| Widget says "chatting as \<other account\>" | tab session rewritten by a login in another tab (pre-fix localStorage), or a stale tab kept open across the upgrade | reload the tab and sign in again; sessions are per-tab since this release |
 
 ### 4.1 Public site 502 (`server: cloudflare`) while everything works locally
 
@@ -393,4 +506,5 @@ If Tomcat fails to start after the sed, the XML was mangled — inspect
 | `deploy/nginx/share-link.top.tunnel.conf` | nginx tunnel-mode config (port 80, prefix stripping, cache headers) |
 | `deploy/systemd/*.service` | gateway/app/user/chat units (User=publiclink, `EnvironmentFile=/etc/publiclink/publiclink.env`) |
 | `chat-app/` | Zalo chat bridge service — own schema `chat_schema`, own Liquibase changelog, port 9090 |
+| `frontend public/chat-sw.js` | service worker that turns chat pushes into system notifications (and stays quiet while a window is looking at the app) |
 | `deploy/publiclink.env.example` | env template (secrets empty by design — fill before first boot) |

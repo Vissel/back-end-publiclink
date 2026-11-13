@@ -49,23 +49,23 @@ public class TransferInfoService {
             CreateTransferInfoRequest request) {
         return publicLinkServiceTemplate.execute(
                 new ProcessCallback<CreateTransferInfoRequest, TransferInfoListResponse.TransferItem>() {
-            @Override
-            public CreateTransferInfoRequest getRequest() {
-                return request;
-            }
+                    @Override
+                    public CreateTransferInfoRequest getRequest() {
+                        return request;
+                    }
 
-            @Override
-            public void preProcess(CreateTransferInfoRequest req) {
-                Assert.hasText(username, "Caller identity is required.");
-                Assert.hasText(req.getTransferIssuer(), "Transfer issuer is required.");
-                Assert.hasText(req.getTransferNumber(), "Transfer number is required.");
-            }
+                    @Override
+                    public void preProcess(CreateTransferInfoRequest req) {
+                        Assert.hasText(username, "Caller identity is required.");
+                        Assert.hasText(req.getTransferIssuer(), "Transfer issuer is required.");
+                        Assert.hasText(req.getTransferNumber(), "Transfer number is required.");
+                    }
 
-            @Override
-            public TransferInfoListResponse.TransferItem process() {
-                return transferInfoDomain.create(username.trim(), request);
-            }
-        });
+                    @Override
+                    public TransferInfoListResponse.TransferItem process() {
+                        return transferInfoDomain.create(username.trim(), request);
+                    }
+                });
     }
 
     public Result<Void> setDefault(String username, String transferCode) {

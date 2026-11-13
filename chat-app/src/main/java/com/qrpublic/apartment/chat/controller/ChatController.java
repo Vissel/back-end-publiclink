@@ -28,16 +28,15 @@ import reactor.core.scheduler.Schedulers;
  * Public entry point of the client side of the chat bridge.
  *
  * Paths are relative to the configured webflux base path, so the outside world
- * reaches them as {@code /publiclink/api/v1/chat/**}. They are anonymous by
- * design:
- * the visitor is recognised by device identity rather than by an account, which
- * is
- * why they are listed in the gateway permit-all set.
+ * reaches them as {@code /chat/api/v1/chat/**}. They stay in the gateway
+ * permit-all set because anonymous visitors must be able to chat, but identity
+ * is account-first: when the caller carries a JWT, the gateway forwards the
+ * validated username in X-User-ID and the thread belongs to that account. The
+ * device ladder only serves signed-out visitors.
  *
  * Client IP is taken from the {@code X-Real-IP} header set by nginx. The socket
  * address cannot be used: nginx, gateway and app share one host, so every
- * request
- * arrives from 127.0.0.1.
+ * request arrives from 127.0.0.1.
  */
 @Slf4j
 @RestController
@@ -69,25 +68,31 @@ public class ChatController {
             @RequestBody ChatStartRequest request,
             @RequestHeader(value = "X-Real-IP", required = false) String realIp,
             @RequestHeader(value = "X-Forwarded-For", required = false) String forwardedFor,
-            @RequestHeader(value = "User-Agent", required = false) String userAgent) {
+            @RequestHeader(value = "User-Agent", required = false) String userAgent,
+            @RequestHeader(value = "X-User-ID", required = false) String callerUsername) {
 
         // The template runs blocking JPA, so the whole call is moved off the event
         // loop.
-        return Mono.fromCallable(() -> chatService.start(request, resolveIp(realIp, forwardedFor), userAgent))
+        return Mono.fromCallable(() -> chatService.start(request, resolveIp(realIp, forwardedFor), userAgent,
+                callerUsername))
                 .subscribeOn(Schedulers.boundedElastic())
                 .flatMap(ResponseEntityConvertor::convertToMonoResponseEntity);
     }
 
     @PostMapping("/message")
-    public Mono<ResponseEntity<ChatMessageResponse>> message(@RequestBody ChatSendMessageRequest request) {
-        return Mono.fromCallable(() -> chatService.sendMessage(request))
+    public Mono<ResponseEntity<ChatMessageResponse>> message(
+            @RequestBody ChatSendMessageRequest request,
+            @RequestHeader(value = "X-User-ID", required = false) String callerUsername) {
+        return Mono.fromCallable(() -> chatService.sendMessage(request, callerUsername))
                 .subscribeOn(Schedulers.boundedElastic())
                 .flatMap(ResponseEntityConvertor::convertToMonoResponseEntity);
     }
 
     @PostMapping("/history")
-    public Mono<ResponseEntity<ChatHistoryResponse>> history(@RequestBody ChatHistoryRequest request) {
-        return Mono.fromCallable(() -> chatService.history(request))
+    public Mono<ResponseEntity<ChatHistoryResponse>> history(
+            @RequestBody ChatHistoryRequest request,
+            @RequestHeader(value = "X-User-ID", required = false) String callerUsername) {
+        return Mono.fromCallable(() -> chatService.history(request, callerUsername))
                 .subscribeOn(Schedulers.boundedElastic())
                 .flatMap(ResponseEntityConvertor::convertToMonoResponseEntity);
     }
@@ -96,29 +101,36 @@ public class ChatController {
      * Fires the visitor's typing indicator; never fails the chat when it misfires.
      */
     @PostMapping("/typing")
-    public Mono<ResponseEntity<Void>> typing(@RequestBody ChatTypingRequest request) {
-        return Mono.fromCallable(() -> chatService.typing(request))
+    public Mono<ResponseEntity<Void>> typing(
+            @RequestBody ChatTypingRequest request,
+            @RequestHeader(value = "X-User-ID", required = false) String callerUsername) {
+        return Mono.fromCallable(() -> chatService.typing(request, callerUsername))
                 .subscribeOn(Schedulers.boundedElastic())
                 .flatMap(ResponseEntityConvertor::convertToMonoResponseEntity);
     }
 
     @PostMapping("/close")
-    public Mono<ResponseEntity<ChatConversationResponse>> close(@RequestParam String conversationUuid) {
-        return Mono.fromCallable(() -> chatService.closeConversation(conversationUuid))
+    public Mono<ResponseEntity<ChatConversationResponse>> close(
+            @RequestParam String conversationUuid,
+            @RequestHeader(value = "X-User-ID", required = false) String callerUsername) {
+        return Mono.fromCallable(() -> chatService.closeConversation(conversationUuid, callerUsername))
                 .subscribeOn(Schedulers.boundedElastic())
                 .flatMap(ResponseEntityConvertor::convertToMonoResponseEntity);
     }
 
     /**
-     * Live status/message feed for one visitor. Reconnects are expected and cheap:
-     * the browser sends the last event id it saw and the server replays the gap.
+     * Live status/message feed for one conversation. Reconnects are expected and
+     * cheap: the browser sends the last event id it saw and the server replays
+     * the gap. The per-conversation {@code key} issued at /start is the
+     * credential, because EventSource cannot send an Authorization header.
      */
     @GetMapping(value = "/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public Flux<ServerSentEvent<String>> stream(
             @RequestParam(required = false) String deviceId,
             @RequestParam(required = false) String conversationUuid,
+            @RequestParam(required = false) String key,
             @RequestHeader(value = "Last-Event-ID", required = false) String lastEventId) {
-        return chatService.attachStream(deviceId, conversationUuid, parseLong(lastEventId));
+        return chatService.attachStream(deviceId, conversationUuid, key, parseLong(lastEventId));
     }
 
     /**

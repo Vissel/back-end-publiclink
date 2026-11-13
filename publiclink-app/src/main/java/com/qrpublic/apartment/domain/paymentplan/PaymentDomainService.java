@@ -28,9 +28,8 @@ import java.util.Objects;
 @Component
 public class PaymentDomainService {
 
-    private static final String RESULT_GUIDANCE =
-            "We received your confirmation. You will get the result within a few minutes "
-                    + "via app chat, or the email / phone number you provided.";
+    private static final String RESULT_GUIDANCE = "We received your confirmation. You will get the result within a few minutes "
+            + "via app chat, or the email / phone number you provided.";
 
     @Autowired
     private LinkService linkService;

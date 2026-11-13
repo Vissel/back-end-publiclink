@@ -33,10 +33,6 @@ import java.util.List;
 @Service
 public class PaymentPlanAdminService {
 
-    private static final String NO_QUOTA_MESSAGE =
-            "Unable to create. No environment is left in the active payment plan. "
-                    + "Please contact admin to get support.";
-
     @Autowired
     private PaymentPlanService paymentPlanService;
 
@@ -44,26 +40,27 @@ public class PaymentPlanAdminService {
     private PublicLinkServiceTemplate publicLinkServiceTemplate;
 
     public Result<CreateSellerPlanResponse> createSellerPlan(CreateSellerPlanRequest request, String adminUsername) {
-        return publicLinkServiceTemplate.execute(new ProcessCallback<CreateSellerPlanRequest, CreateSellerPlanResponse>() {
-            @Override
-            public CreateSellerPlanRequest getRequest() {
-                return request;
-            }
+        return publicLinkServiceTemplate
+                .execute(new ProcessCallback<CreateSellerPlanRequest, CreateSellerPlanResponse>() {
+                    @Override
+                    public CreateSellerPlanRequest getRequest() {
+                        return request;
+                    }
 
-            @Override
-            public void preProcess(CreateSellerPlanRequest req) {
-                Assert.hasText(req.getUsername(), "Seller username is required.");
-                Assert.hasText(adminUsername, "Admin identity is required.");
-                boolean hasPlanCode = req.getPlanCode() != null && !req.getPlanCode().isBlank();
-                boolean hasNewPlan = req.getNewPlan() != null && req.getNewPlan().getFee() != null;
-                Assert.isTrue(hasPlanCode || hasNewPlan, "Either an existing plan or a new plan is required.");
-            }
+                    @Override
+                    public void preProcess(CreateSellerPlanRequest req) {
+                        Assert.hasText(req.getUsername(), "Seller username is required.");
+                        Assert.hasText(adminUsername, "Admin identity is required.");
+                        boolean hasPlanCode = req.getPlanCode() != null && !req.getPlanCode().isBlank();
+                        boolean hasNewPlan = req.getNewPlan() != null && req.getNewPlan().getFee() != null;
+                        Assert.isTrue(hasPlanCode || hasNewPlan, "Either an existing plan or a new plan is required.");
+                    }
 
-            @Override
-            public CreateSellerPlanResponse process() {
-                return paymentPlanService.createSellerPlan(request, adminUsername);
-            }
-        });
+                    @Override
+                    public CreateSellerPlanResponse process() {
+                        return paymentPlanService.createSellerPlan(request, adminUsername);
+                    }
+                });
     }
 
     public Result<CheckPlanResponse> checkPlan(CheckPlanRequest request) {
@@ -80,11 +77,15 @@ public class PaymentPlanAdminService {
 
             @Override
             public CheckPlanResponse process() {
-                int remaining = paymentPlanService.remainingQuota(request.getUsername().trim());
+                com.qrpublic.apartment.core.model.PlanGateModel gate = paymentPlanService
+                        .evaluate(request.getUsername().trim());
                 CheckPlanResponse response = new CheckPlanResponse();
-                response.setRemaining(remaining);
-                response.setAllowed(remaining > 0);
-                response.setMessage(remaining > 0 ? null : NO_QUOTA_MESSAGE);
+                response.setAllowed(gate.isAllowed());
+                response.setRemaining(gate.getRemaining());
+                response.setReason(gate.getReason());
+                response.setActiveDate(gate.getActiveDate());
+                response.setEndedDate(gate.getEndedDate());
+                response.setMessage(gate.isAllowed() ? null : gate.getMessage());
                 return response;
             }
         });
@@ -125,30 +126,31 @@ public class PaymentPlanAdminService {
      * approval table / ALL), username search and pagination in one payload.
      */
     public Result<ListPlanUserResponse> listPlanUsers(Pagination<ListPlanUserRequest> pagination) {
-        return publicLinkServiceTemplate.execute(new ProcessCallback<Pagination<ListPlanUserRequest>, ListPlanUserResponse>() {
-            @Override
-            public Pagination<ListPlanUserRequest> getRequest() {
-                return pagination;
-            }
+        return publicLinkServiceTemplate
+                .execute(new ProcessCallback<Pagination<ListPlanUserRequest>, ListPlanUserResponse>() {
+                    @Override
+                    public Pagination<ListPlanUserRequest> getRequest() {
+                        return pagination;
+                    }
 
-            @Override
-            public void preProcess(Pagination<ListPlanUserRequest> req) {
-                Assert.notNull(req, "Pagination payload is required.");
-                Assert.isTrue(req.getPage() >= 0, "Page must not be negative.");
-                Assert.isTrue(req.getSize() > 0, "Size must be positive.");
-            }
+                    @Override
+                    public void preProcess(Pagination<ListPlanUserRequest> req) {
+                        Assert.notNull(req, "Pagination payload is required.");
+                        Assert.isTrue(req.getPage() >= 0, "Page must not be negative.");
+                        Assert.isTrue(req.getSize() > 0, "Size must be positive.");
+                    }
 
-            @Override
-            public ListPlanUserResponse process() {
-                ListPlanUserRequest filter = firstFilter(pagination);
-                String state = filter == null ? null : filter.getState();
-                String username = filter == null ? null : filter.getUsername();
-                List<PlanUserModel> assignments = paymentPlanService.listAssignments(
-                        state, username, pagination.getPage(), pagination.getSize());
-                paymentPlanService.enrichWithPayment(assignments);
-                return buildList(assignments, paymentPlanService.countAssignments(state, username));
-            }
-        });
+                    @Override
+                    public ListPlanUserResponse process() {
+                        ListPlanUserRequest filter = firstFilter(pagination);
+                        String state = filter == null ? null : filter.getState();
+                        String username = filter == null ? null : filter.getUsername();
+                        List<PlanUserModel> assignments = paymentPlanService.listAssignments(
+                                state, username, pagination.getPage(), pagination.getSize());
+                        paymentPlanService.enrichWithPayment(assignments);
+                        return buildList(assignments, paymentPlanService.countAssignments(state, username));
+                    }
+                });
     }
 
     /**

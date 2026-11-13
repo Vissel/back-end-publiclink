@@ -199,6 +199,9 @@ public class SaleSpaceServiceImpl implements SaleSpaceService {
         response.setListOrder(toOrderDTOs(orders, saleEnvironment.getPublicLink()));
         response.setListProduct(toProductDTOs(products));
         response.setAvailableAmount(calculateAvailableAmount(products, orders));
+        response.setProductType(products.isEmpty() || products.get(0).getProductType() == null
+                ? "STANDARD"
+                : products.get(0).getProductType());
         return response;
     }
 

@@ -15,6 +15,7 @@ import com.qrpublic.apartment.chat.core.model.ChatConversationModel;
 import com.qrpublic.apartment.chat.core.model.ChatDeviceModel;
 import com.qrpublic.apartment.chat.core.model.ChatMessageModel;
 import com.qrpublic.apartment.chat.domain.ChatConversationDomain;
+import com.qrpublic.apartment.chat.domain.ChatAccountDomain;
 import com.qrpublic.apartment.chat.domain.ChatEventPublisher;
 import com.qrpublic.apartment.chat.domain.ChatIdentityDomain;
 import com.qrpublic.apartment.chat.domain.ChatIdentityResult;
@@ -28,8 +29,10 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.codec.ServerSentEvent;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.util.Assert;
+import org.springframework.web.server.ResponseStatusException;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
@@ -62,6 +65,9 @@ public class ChatService {
     ChatIdentityDomain chatIdentityDomain;
 
     @Autowired
+    ChatAccountDomain chatAccountDomain;
+
+    @Autowired
     ChatConversationDomain chatConversationDomain;
 
     @Autowired
@@ -88,7 +94,8 @@ public class ChatService {
      * the full history so a returning visitor continues exactly where they left
      * off.
      */
-    public Result<ChatStartResponse> start(ChatStartRequest request, String clientIp, String userAgent) {
+    public Result<ChatStartResponse> start(ChatStartRequest request, String clientIp, String userAgent,
+            String ownerUsername) {
         return chatServiceTemplate.execute(new ProcessCallback<ChatStartRequest, ChatStartResponse>() {
             @Override
             public ChatStartRequest getRequest() {
@@ -104,10 +111,27 @@ public class ChatService {
 
             @Override
             public ChatStartResponse process() {
+                String owner = ownerUsername == null || ownerUsername.isBlank() ? null : ownerUsername.trim();
+                String displayName = owner == null ? null
+                        : chatAccountDomain.displayName(owner).orElse(owner);
                 ChatIdentityResult identity = chatIdentityDomain.identify(
-                        request.getDeviceId(), request.getAttributes(), clientIp, userAgent);
+                        request.getDeviceId(), request.getAttributes(), clientIp, userAgent, owner, displayName);
                 ChatDeviceModel device = identity.getDevice();
-                ChatConversationModel conversation = identity.getConversation();
+                ChatConversationModel conversation = ensureStreamKey(identity.getConversation());
+                // Invariant: the thread handed back must belong to exactly the
+                // identity that asked for it. A mismatch means some layer merged
+                // two participants; refuse instead of leaking one account's
+                // history into another's widget.
+                String resolvedOwner = conversation.getOwnerUsername();
+                boolean ownerMismatch = owner == null ? resolvedOwner != null : !owner.equals(resolvedOwner);
+                if (ownerMismatch) {
+                    log.error("Chat identity mismatch: requested owner={}, resolved owner={}, conversation={}",
+                            owner, resolvedOwner, conversation.getUuid());
+                    throw new ApplicationException("Chat identity does not match the signed-in account.", 403);
+                }
+                if (owner != null && displayName != null) {
+                    chatConversationDomain.refreshOwnerName(conversation.getId(), displayName);
+                }
 
                 List<ChatMessageModel> messages = chatMessageDomain.listMessages(conversation.getId()).stream()
                         .limit(historyLimit)
@@ -116,6 +140,7 @@ public class ChatService {
                 ChatStartResponse response = new ChatStartResponse();
                 response.setDeviceId(device.getDeviceId());
                 response.setRecognition(identity.getRecognition());
+                response.setStreamKey(conversation.getStreamKey());
                 response.setResumed(identity.isResumed());
                 response.setVisitCount(device.getVisitCount());
                 response.setConversation(ChatConvertor.toConversationResponse(conversation,
@@ -124,18 +149,23 @@ public class ChatService {
                 response.setMessages(messages.stream().map(ChatConvertor::toMessageResponse).toList());
                 response.setServerTime(Instant.now().toString());
 
-                log.info("Chat session started: conversation={}, recognition={}, resumed={}, history={}",
-                        conversation.getUuid(), identity.getRecognition(), identity.isResumed(), messages.size());
+                log.info("Chat session started: conversation={}, owner={}, recognition={}, resumed={}, history={}",
+                        conversation.getUuid(), owner, identity.getRecognition(), identity.isResumed(), messages.size());
                 return response;
             }
         });
+    }
+
+    /** Legacy threads have no stream key yet; mint one before handing it out. */
+    private ChatConversationModel ensureStreamKey(ChatConversationModel conversation) {
+        return chatConversationDomain.ensureStreamKey(conversation.getId());
     }
 
     /**
      * Records a visitor message and mirrors it into the administrator's Zalo
      * thread.
      */
-    public Result<ChatMessageResponse> sendMessage(ChatSendMessageRequest request) {
+    public Result<ChatMessageResponse> sendMessage(ChatSendMessageRequest request, String callerUsername) {
         return chatServiceTemplate.execute(new ProcessCallback<ChatSendMessageRequest, ChatMessageResponse>() {
             @Override
             public ChatSendMessageRequest getRequest() {
@@ -157,6 +187,7 @@ public class ChatService {
             public ChatMessageResponse process() {
                 ChatConversationModel conversation = resolveConversation(
                         request.getConversationUuid(), request.getDeviceId());
+                assertCallerOwns(conversation, callerUsername, request.getDeviceId());
                 ChatMessageModel saved = chatMessageDomain.saveClientMessage(
                         conversation.getId(), request.getClientMessageId(), request.getContent());
                 return ChatConvertor.toMessageResponse(saved);
@@ -169,7 +200,7 @@ public class ChatService {
      * administrator's
      * messages as seen, which is the client-side twin of the Zalo seen receipt.
      */
-    public Result<ChatHistoryResponse> history(ChatHistoryRequest request) {
+    public Result<ChatHistoryResponse> history(ChatHistoryRequest request, String callerUsername) {
         return chatServiceTemplate.execute(new ProcessCallback<ChatHistoryRequest, ChatHistoryResponse>() {
             @Override
             public ChatHistoryRequest getRequest() {
@@ -186,6 +217,7 @@ public class ChatService {
             public ChatHistoryResponse process() {
                 ChatConversationModel conversation = chatConversationDomain.findByUuid(request.getConversationUuid())
                         .orElseThrow(() -> new ApplicationException("Conversation not found.", 404));
+                assertCallerOwns(conversation, callerUsername, null);
 
                 boolean catchUp = request.getAfterMessageId() != null;
                 List<ChatMessageModel> messages = catchUp
@@ -209,7 +241,7 @@ public class ChatService {
     }
 
     /** Visitor typing indicator, relayed to the open administrator console. */
-    public Result<Void> typing(ChatTypingRequest request) {
+    public Result<Void> typing(ChatTypingRequest request, String callerUsername) {
         return chatServiceTemplate.execute(new ProcessCallback<ChatTypingRequest, Void>() {
             @Override
             public ChatTypingRequest getRequest() {
@@ -226,10 +258,10 @@ public class ChatService {
             public Void process() {
                 ChatConversationModel conversation = resolveConversationQuietly(
                         request.getConversationUuid(), request.getDeviceId());
-                if (conversation == null) {
+                if (conversation == null || !callerOwns(conversation, callerUsername, request.getDeviceId())) {
                     return null;
                 }
-                chatMessageDomain.publishTyping(conversation.getDeviceId(), conversation.getUuid(),
+                chatMessageDomain.publishTyping(conversation.getUuid(),
                         SOURCE_CLIENT, Boolean.TRUE.equals(request.getTyping()));
                 return null;
             }
@@ -237,7 +269,7 @@ public class ChatService {
     }
 
     /** Visitor explicitly ends the thread; history is kept for the next return. */
-    public Result<ChatConversationResponse> closeConversation(String conversationUuid) {
+    public Result<ChatConversationResponse> closeConversation(String conversationUuid, String callerUsername) {
         return chatServiceTemplate.execute(new ProcessCallback<String, ChatConversationResponse>() {
             @Override
             public String getRequest() {
@@ -253,6 +285,7 @@ public class ChatService {
             public ChatConversationResponse process() {
                 ChatConversationModel conversation = chatConversationDomain.findByUuid(conversationUuid)
                         .orElseThrow(() -> new ApplicationException("Conversation not found.", 404));
+                assertCallerOwns(conversation, callerUsername, null);
                 return ChatConvertor.toConversationResponse(
                         chatConversationDomain.close(conversation.getId()).orElse(conversation));
             }
@@ -291,18 +324,25 @@ public class ChatService {
      * Blocking work (conversation lookup, replay read) runs on the bounded elastic
      * scheduler, never on the event-loop thread serving the request.
      */
-    public Flux<ServerSentEvent<String>> attachStream(String deviceId, String conversationUuid, Long lastEventId) {
-        return Mono.fromCallable(() -> openStreamContext(deviceId, conversationUuid))
+    public Flux<ServerSentEvent<String>> attachStream(String deviceId, String conversationUuid, String streamKey,
+            Long lastEventId) {
+        return Mono.fromCallable(() -> openStreamContext(deviceId, conversationUuid, streamKey))
                 .subscribeOn(Schedulers.boundedElastic())
                 .flatMapMany(context -> {
                     ServerSentEvent<String> hello = ServerSentEvent
                             .builder("{\"conversationUuid\":\"" + context.conversation().getUuid()
-                                    + "\",\"deviceId\":\"" + context.deviceId() + "\"}")
+                                    + "\",\"ownerUsername\":"
+                                    + (context.conversation().getOwnerUsername() == null ? "null"
+                                            : "\"" + context.conversation().getOwnerUsername() + "\"")
+                                    + "}")
                             .event("hello")
                             .build();
 
                     Flux<ServerSentEvent<String>> replay = Flux.fromIterable(context.replay());
-                    Flux<ServerSentEvent<String>> live = chatEventPublisher.streamFor(context.deviceId())
+                    // The sink is keyed by conversation, never by device: two
+                    // accounts on one browser share a device id, and a shared
+                    // sink is exactly how one user used to read another's chat.
+                    Flux<ServerSentEvent<String>> live = chatEventPublisher.streamFor(context.conversation().getUuid())
                             .filter(event -> isNewerThanWatermark(event, context.watermark()));
                     Flux<ServerSentEvent<String>> heartbeat = Flux.interval(Duration.ofSeconds(heartbeatSeconds))
                             .map(tick -> ServerSentEvent.builder("").event("ping").build());
@@ -310,12 +350,23 @@ public class ChatService {
                     return Flux.concat(Mono.just(hello), replay,
                             Flux.merge(live, heartbeat))
                             .doFinally(signal -> chatConversationDomain.onClientDisconnected(
-                                    context.deviceId(), context.conversation().getUuid()));
+                                    context.conversation().getUuid()));
                 });
     }
 
-    private StreamContext openStreamContext(String deviceId, String conversationUuid) {
+    private StreamContext openStreamContext(String deviceId, String conversationUuid, String streamKey) {
         ChatConversationModel conversation = resolveConversation(conversationUuid, deviceId);
+        // EventSource cannot carry a JWT, so the per-conversation secret issued
+        // at /start is the credential here. A stale or foreign key must not
+        // attach to somebody else's live feed.
+        String expected = conversation.getStreamKey();
+        if (expected == null || expected.isBlank()) {
+            conversation = chatConversationDomain.ensureStreamKey(conversation.getId());
+            expected = conversation.getStreamKey();
+        }
+        if (streamKey == null || !expected.equals(streamKey)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Invalid chat stream key.");
+        }
         chatConversationDomain.onClientConnected(conversation);
 
         List<ChatMessageModel> missed = chatMessageDomain.replay(conversation.getId(), null);
@@ -328,7 +379,7 @@ public class ChatService {
                         .build())
                 .toList();
         long watermark = missed.isEmpty() ? 0L : missed.get(missed.size() - 1).getId();
-        return new StreamContext(conversation, conversation.getDeviceId(), frames, watermark);
+        return new StreamContext(conversation, frames, watermark);
     }
 
     private String toJson(ChatMessageModel message) {
@@ -363,6 +414,31 @@ public class ChatService {
                         "No chat conversation for this device. Call /start first.", 404));
     }
 
+    /**
+     * Ownership gate for every client call. An account thread is reachable only
+     * by its owner (the gateway-forwarded username); an anonymous thread only
+     * by a signed-out caller on the same device. Without this, a second account
+     * on one browser could post into, read or close the first account's thread
+     * simply by knowing its uuid.
+     */
+    private void assertCallerOwns(ChatConversationModel conversation, String callerUsername, String deviceId) {
+        if (!callerOwns(conversation, callerUsername, deviceId)) {
+            throw new ApplicationException("This conversation belongs to another participant.", 403);
+        }
+    }
+
+    private boolean callerOwns(ChatConversationModel conversation, String callerUsername, String deviceId) {
+        String owner = conversation.getOwnerUsername();
+        boolean signedIn = callerUsername != null && !callerUsername.isBlank();
+        if (owner != null && !owner.isBlank()) {
+            return signedIn && owner.equals(callerUsername.trim());
+        }
+        if (signedIn) {
+            return false;
+        }
+        return deviceId == null || deviceId.isBlank() || deviceId.equals(conversation.getDeviceId());
+    }
+
     private ChatConversationModel resolveConversationQuietly(String uuid, String deviceId) {
         Optional<ChatConversationModel> found = uuid != null && !uuid.isBlank()
                 ? chatConversationDomain.findByUuid(uuid)
@@ -371,7 +447,7 @@ public class ChatService {
     }
 
     /** Everything the opened stream needs, resolved once off the event loop. */
-    private record StreamContext(ChatConversationModel conversation, String deviceId,
+    private record StreamContext(ChatConversationModel conversation,
             List<ServerSentEvent<String>> replay, long watermark) {
     }
 }

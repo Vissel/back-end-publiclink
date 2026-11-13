@@ -20,8 +20,15 @@ public class ChatStartResponse {
 
     private ChatConversationResponse conversation;
 
-    /** NEW / DEVICE_ID / FINGERPRINT / IP. */
+    /** NEW / DEVICE_ID / FINGERPRINT / IP / ACCOUNT. */
     private String recognition;
+
+    /**
+     * Capability secret for this conversation's event stream. The widget puts it
+     * in the stream URL; it is per conversation, so two accounts sharing one
+     * browser can never join each other's live feed.
+     */
+    private String streamKey;
 
     /** True when an earlier thread was picked up instead of started fresh. */
     private boolean resumed;

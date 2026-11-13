@@ -4,6 +4,7 @@ import com.qrpublic.apartment.adapter.template.Result;
 import com.qrpublic.apartment.user.core.UserServiceCore;
 import com.qrpublic.apartment.user.entity.ProfileEntity;
 import com.qrpublic.apartment.user.entity.UserAuthEntity;
+import com.qrpublic.apartment.user.entity.UserAvatarEntity;
 import com.qrpublic.apartment.user.entity.UserEntity;
 import com.qrpublic.apartment.user.exception.UserDeleteException;
 import com.qrpublic.apartment.user.exception.UserErrorEnum;
@@ -11,12 +12,14 @@ import com.qrpublic.apartment.user.exception.UserNotFoundException;
 import com.qrpublic.apartment.user.model.User;
 import com.qrpublic.apartment.user.model.UserType;
 import com.qrpublic.apartment.user.repository.UserAuthEntityRepository;
+import com.qrpublic.apartment.user.repository.UserAvatarRepository;
 import com.qrpublic.apartment.user.repository.UserEntityRepository;
 import com.qrpublic.apartment.user.service.request.ChangePasswordRequest;
 import com.qrpublic.apartment.user.service.request.CreateUserAuthRequest;
 import com.qrpublic.apartment.user.service.request.UserCreateRequest;
 import com.qrpublic.apartment.user.service.request.UserDeleteRequest;
 import com.qrpublic.apartment.user.service.request.UserUpdateRequest;
+import com.qrpublic.apartment.user.service.response.AvatarResponse;
 import com.qrpublic.apartment.user.service.response.ChangePasswordResponse;
 import com.qrpublic.apartment.user.service.response.CreateUserAuthResponse;
 import com.qrpublic.apartment.user.service.response.FoundUserResponse;
@@ -36,11 +39,14 @@ import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
 
 import java.security.SecureRandom;
+import java.sql.Timestamp;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.function.Consumer;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -55,6 +61,9 @@ public class UserServiceImpl implements UserService {
 
     @Autowired
     private UserAuthEntityRepository userAuthEntityRepository;
+
+    @Autowired
+    private UserAvatarRepository userAvatarRepository;
 
     @Autowired
     UserServiceCore userServiceCore;
@@ -128,9 +137,127 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
+    public Mono<Result<UserCreateResponse>> generateAccount(String userName, String fullName, String role) {
+        return Mono.fromCallable(() -> transactionTemplate.execute(status -> doGenerateAccount(userName, fullName, role)))
+                .subscribeOn(Schedulers.boundedElastic());
+    }
+
+    /**
+     * Create-or-reset without ever handing the generated password to the
+     * caller: the account holder picks the real password through the setup
+     * link. Existing users keep their role unless one is supplied.
+     */
+    protected Result<UserCreateResponse> doGenerateAccount(String userName, String fullName, String role) {
+        if (StringUtils.isBlank(userName)) {
+            return Result.error(400, "Username is required");
+        }
+        String generatedPassword = generateFirstPassword();
+        String effectiveRole = StringUtils.isNotBlank(role) ? role : UserType.BUYER.name();
+
+        return userEntityRepository.findByUsername(userName)
+                .map(existing -> {
+                    existing.setPassword(passwordEncoder.encode(generatedPassword));
+                    existing.setMustChangePassword(true);
+                    existing.setIsActive(true);
+                    if (StringUtils.isNotBlank(fullName)) {
+                        existing.setFullName(fullName);
+                    }
+                    userEntityRepository.save(existing);
+                    log.info("Password invalidated for existing account [{}], setup link required", userName);
+
+                    UserCreateResponse response = new UserCreateResponse();
+                    response.setUserName(existing.getUsername());
+                    response.setFullName(existing.getFullName());
+                    response.setRole(existing.getRole());
+                    return success(response);
+                })
+                .orElseGet(() -> {
+                    User user = new User();
+                    user.setUsername(userName);
+                    user.setPlainTextPassword(generatedPassword);
+                    user.setFullName(fullName);
+                    user.setRole(effectiveRole);
+                    user.setIsActive(true);
+                    user.setMustChangePassword(true);
+                    UserEntity saved = createNewUser(user);
+                    log.info("Generated account [{}] role [{}], first password {} (masked)",
+                            userName, effectiveRole, PasswordMasker.maskPassword(generatedPassword));
+
+                    UserCreateResponse response = new UserCreateResponse();
+                    response.setUserName(saved.getUsername());
+                    response.setFullName(saved.getFullName());
+                    response.setRole(saved.getRole());
+                    return success(response);
+                });
+    }
+
+    @Override
     public Mono<Result<ChangePasswordResponse>> changePassword(ChangePasswordRequest changePasswordRequest) {
         return Mono.fromCallable(() -> transactionTemplate.execute(status -> doChangePassword(changePasswordRequest)))
                 .subscribeOn(Schedulers.boundedElastic());
+    }
+
+    /**
+     * A data URL of a base64 image, capped so an avatar row stays small: the
+     * browser resizes to 256x256 before uploading, 400k base64 characters is
+     * roughly 300 KB of image and is far above what a square photo needs.
+     */
+    private static final Pattern AVATAR_DATA_URL = Pattern
+            .compile("^data:image/(png|jpeg|webp);base64,([A-Za-z0-9+/=]+)$");
+    private static final int AVATAR_MAX_BASE64_LENGTH = 400_000;
+
+    @Override
+    public Mono<Result<AvatarResponse>> findAvatar(String userName) {
+        return Mono.fromCallable(() -> {
+            if (StringUtils.isBlank(userName)) {
+                return Result.<AvatarResponse>error(401, "Authentication is required.");
+            }
+            String dataUrl = userAvatarRepository.findById(userName)
+                    .map(UserServiceImpl::toDataUrl)
+                    .orElse(null);
+            return Result.success(new AvatarResponse(userName, dataUrl));
+        }).subscribeOn(Schedulers.boundedElastic());
+    }
+
+    @Override
+    public Mono<Result<AvatarResponse>> saveAvatar(String userName, String dataUrl) {
+        return Mono.fromCallable(() -> transactionTemplate.execute(status -> doSaveAvatar(userName, dataUrl)))
+                .subscribeOn(Schedulers.boundedElastic());
+    }
+
+    private Result<AvatarResponse> doSaveAvatar(String userName, String dataUrl) {
+        if (StringUtils.isBlank(userName)) {
+            return Result.error(401, "Authentication is required.");
+        }
+        // Blank payload means "delete my picture", matching the dialog's action.
+        if (StringUtils.isBlank(dataUrl)) {
+            userAvatarRepository.deleteById(userName);
+            return Result.success(new AvatarResponse(userName, null));
+        }
+        Matcher matcher = AVATAR_DATA_URL.matcher(dataUrl);
+        if (!matcher.matches()) {
+            return Result.error(400, "Avatar must be a base64 png, jpeg or webp data URL.");
+        }
+        String payload = matcher.group(2);
+        if (payload.length() > AVATAR_MAX_BASE64_LENGTH) {
+            return Result.error(413, "Avatar is too large. Upload a 256x256 image.");
+        }
+
+        UserAvatarEntity avatar = userAvatarRepository.findById(userName)
+                .orElseGet(() -> {
+                    UserAvatarEntity created = new UserAvatarEntity();
+                    created.setUsername(userName);
+                    return created;
+                });
+        avatar.setContentType("image/" + matcher.group(1));
+        avatar.setData(payload);
+        avatar.setUpdatedAt(new Timestamp(System.currentTimeMillis()));
+        userAvatarRepository.save(avatar);
+        return Result.success(new AvatarResponse(userName, toDataUrl(avatar)));
+    }
+
+    private static String toDataUrl(UserAvatarEntity avatar) {
+        return avatar.getData() == null ? null : avatar.getContentType() + ";base64," + avatar.getData();
     }
 
     protected Result<RegisterAdminResponse> doRegisterAdmin(String userName, String role) {

@@ -67,6 +67,18 @@
     <changeSet id="023" author="thach">
         <sqlFile path="db/changelog/changeset-023-create-transfer-info.sql"/>
     </changeSet>
+    <changeSet id="024" author="thach">
+        <sqlFile path="db/changelog/changeset-024-update-payment-plan-catalog.sql"/>
+    </changeSet>
+    <changeSet id="025" author="thach">
+        <sqlFile path="db/changelog/changeset-025-create-yoga-class.sql"/>
+    </changeSet>
+    <changeSet id="026" author="thach">
+        <sqlFile path="db/changelog/changeset-026-create-yoga-booking.sql"/>
+    </changeSet>
+    <changeSet id="027" author="thach">
+        <sqlFile path="db/changelog/changeset-027-create-seller-payment-plan.sql"/>
+    </changeSet>
     <!-- Chat tables moved to the chat-app module, which owns the chat_schema.
          publiclink-app stays the sole DDL owner of publiclink-db.
     <changeSet id="021" author="thach">

@@ -98,13 +98,13 @@ public class PageController {
     @GetMapping("/getSaleUrl")
     public Mono<SaleUrlResponse> getSaleUrl(@RequestParam String requestUuid) {
         return Mono.fromCallable(() -> {
-                    SaleEnvDTO dto = envService.getSaleEnvironmentByRequestUuid(requestUuid);
-                    return SaleUrlResponse.builder()
-                            .sellerName(dto.getSellerName())
-                            .publicLink(dto.getPublicLink())
-                            .envState(dto.isEnvStatus() ? EnvStateEnum.ACTIVE.name() : EnvStateEnum.INACTIVE.name())
-                            .build();
-                })
+            SaleEnvDTO dto = envService.getSaleEnvironmentByRequestUuid(requestUuid);
+            return SaleUrlResponse.builder()
+                    .sellerName(dto.getSellerName())
+                    .publicLink(dto.getPublicLink())
+                    .envState(dto.isEnvStatus() ? EnvStateEnum.ACTIVE.name() : EnvStateEnum.INACTIVE.name())
+                    .build();
+        })
                 .subscribeOn(Schedulers.boundedElastic())
                 .onErrorResume(ResourceNotFoundException.class, e -> Mono.empty());
     }

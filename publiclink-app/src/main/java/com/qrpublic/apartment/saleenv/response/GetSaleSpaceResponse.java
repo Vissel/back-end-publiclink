@@ -20,4 +20,10 @@ public class GetSaleSpaceResponse extends BaseResponse {
 
     private Boolean isSellerView;
     private int availableAmount;
+
+    /**
+     * STANDARD or YOGA_BOOKING (from the first product). The frontend renders
+     * the yoga calendar instead of the order form when YOGA_BOOKING.
+     */
+    private String productType;
 }

@@ -145,6 +145,9 @@ public class CoreProductService {
         product.setProductName(productModel.getProductName());
         product.setTotal_amount(productModel.getQuantity());
         product.setPrice(productModel.getPrice());
+        if (productModel.getProductType() != null && !productModel.getProductType().isBlank()) {
+            product.setProductType(productModel.getProductType());
+        }
         product.setRequest(requestEntity);
 
         // Handle image relationships

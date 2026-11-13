@@ -41,6 +41,15 @@ public class ChatConversationResponse {
     /** True while the newest message is still waiting for the administrator. */
     private boolean awaitingAdmin;
 
+    /** Guest messages the administrator has not opened; drives the inbox badge. */
+    private Integer unreadCount;
+
+    /** Signed-in account behind the thread; null for an anonymous visitor. */
+    private String ownerUsername;
+
+    /** Human name shown in the console instead of "Guest #tag" when known. */
+    private String ownerDisplayName;
+
     /** Preview of the latest message, truncated for list rendering. */
     private String lastMessagePreview;
 }

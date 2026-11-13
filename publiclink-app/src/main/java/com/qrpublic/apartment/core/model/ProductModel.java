@@ -16,5 +16,8 @@ public class ProductModel {
 
     private int totalQuantity;
 
+    /** STANDARD | YOGA_BOOKING; null defaults to STANDARD on persist */
+    private String productType;
+
     private List<PictureModel> pictureModels;
 }

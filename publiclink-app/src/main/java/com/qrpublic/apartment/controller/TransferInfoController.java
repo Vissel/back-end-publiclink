@@ -29,42 +29,42 @@ import reactor.core.scheduler.Schedulers;
 @RequestMapping("/api/v1/transferInfo")
 public class TransferInfoController {
 
-    @Autowired
-    private TransferInfoService transferInfoService;
+        @Autowired
+        private TransferInfoService transferInfoService;
 
-    @GetMapping("/list")
-    public Mono<ResponseEntity<TransferInfoListResponse>> list(
-            @RequestHeader(value = HeaderConstant.USER_ID_HEADER, defaultValue = "") String username,
-            @RequestParam(required = false) String status) {
-        return Mono.fromCallable(() -> transferInfoService.list(username, status))
-                .subscribeOn(Schedulers.boundedElastic())
-                .flatMap(ResponseEntityConvertor::convertToMonoResponseEntity);
-    }
+        @GetMapping("/list")
+        public Mono<ResponseEntity<TransferInfoListResponse>> list(
+                        @RequestHeader(value = HeaderConstant.USER_ID_HEADER, defaultValue = "") String username,
+                        @RequestParam(required = false) String status) {
+                return Mono.fromCallable(() -> transferInfoService.list(username, status))
+                                .subscribeOn(Schedulers.boundedElastic())
+                                .flatMap(ResponseEntityConvertor::convertToMonoResponseEntity);
+        }
 
-    @PostMapping("/create")
-    public Mono<ResponseEntity<TransferInfoListResponse.TransferItem>> create(
-            @RequestHeader(value = HeaderConstant.USER_ID_HEADER, defaultValue = "") String username,
-            @Valid @RequestBody CreateTransferInfoRequest request) {
-        return Mono.fromCallable(() -> transferInfoService.create(username, request))
-                .subscribeOn(Schedulers.boundedElastic())
-                .flatMap(ResponseEntityConvertor::convertToMonoResponseEntity);
-    }
+        @PostMapping("/create")
+        public Mono<ResponseEntity<TransferInfoListResponse.TransferItem>> create(
+                        @RequestHeader(value = HeaderConstant.USER_ID_HEADER, defaultValue = "") String username,
+                        @Valid @RequestBody CreateTransferInfoRequest request) {
+                return Mono.fromCallable(() -> transferInfoService.create(username, request))
+                                .subscribeOn(Schedulers.boundedElastic())
+                                .flatMap(ResponseEntityConvertor::convertToMonoResponseEntity);
+        }
 
-    @PostMapping("/setDefault")
-    public Mono<ResponseEntity<Void>> setDefault(
-            @RequestHeader(value = HeaderConstant.USER_ID_HEADER, defaultValue = "") String username,
-            @RequestBody TransferCodeRequest request) {
-        return Mono.fromCallable(() -> transferInfoService.setDefault(username, request.getTransferCode()))
-                .subscribeOn(Schedulers.boundedElastic())
-                .flatMap(ResponseEntityConvertor::convertToMonoResponseEntity);
-    }
+        @PostMapping("/setDefault")
+        public Mono<ResponseEntity<Void>> setDefault(
+                        @RequestHeader(value = HeaderConstant.USER_ID_HEADER, defaultValue = "") String username,
+                        @RequestBody TransferCodeRequest request) {
+                return Mono.fromCallable(() -> transferInfoService.setDefault(username, request.getTransferCode()))
+                                .subscribeOn(Schedulers.boundedElastic())
+                                .flatMap(ResponseEntityConvertor::convertToMonoResponseEntity);
+        }
 
-    @PostMapping("/remove")
-    public Mono<ResponseEntity<Void>> remove(
-            @RequestHeader(value = HeaderConstant.USER_ID_HEADER, defaultValue = "") String username,
-            @RequestBody TransferCodeRequest request) {
-        return Mono.fromCallable(() -> transferInfoService.remove(username, request.getTransferCode()))
-                .subscribeOn(Schedulers.boundedElastic())
-                .flatMap(ResponseEntityConvertor::convertToMonoResponseEntity);
-    }
+        @PostMapping("/remove")
+        public Mono<ResponseEntity<Void>> remove(
+                        @RequestHeader(value = HeaderConstant.USER_ID_HEADER, defaultValue = "") String username,
+                        @RequestBody TransferCodeRequest request) {
+                return Mono.fromCallable(() -> transferInfoService.remove(username, request.getTransferCode()))
+                                .subscribeOn(Schedulers.boundedElastic())
+                                .flatMap(ResponseEntityConvertor::convertToMonoResponseEntity);
+        }
 }

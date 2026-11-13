@@ -37,7 +37,8 @@ public class AdminService {
      * @param createEnvironmentRequest
      * @return
      */
-    public Mono<ResponseEntity<CreateEnvironmentResponse>> createSaleEnvironment(CreateEnvironmentRequest createEnvironmentRequest) {
+    public Mono<ResponseEntity<CreateEnvironmentResponse>> createSaleEnvironment(
+            CreateEnvironmentRequest createEnvironmentRequest) {
         return Mono.fromCallable(() -> saleEnvironmentService.generateSaleEnvironment(createEnvironmentRequest))
                 .subscribeOn(Schedulers.boundedElastic())
                 .map(responseDTO -> {
@@ -49,8 +50,8 @@ public class AdminService {
                     response.setUrlString(response.buildUrlString());
                     return ResponseEntity.ok(response);
                 })
-                .onErrorMap(throwable ->
-                        new EnvironmentCreationException("Failed to create sale environment. Please try again later."));
+                .onErrorMap(throwable -> new EnvironmentCreationException(
+                        "Failed to create sale environment. Please try again later."));
     }
 
     /**
@@ -63,7 +64,8 @@ public class AdminService {
                 .flatMap(result -> returnResult(result, result.getErrorMessage()));
     }
 
-    public Mono<ListEnvironmentResponse> getSaleEnvironment(Pagination<ListEnvironmentRequest> listEnvironmentRequestPagination) {
+    public Mono<ListEnvironmentResponse> getSaleEnvironment(
+            Pagination<ListEnvironmentRequest> listEnvironmentRequestPagination) {
         return saleEnvironmentService.getEnvironments(listEnvironmentRequestPagination)
                 .flatMap(result -> returnResult(result, "Can not get list environment"));
     }

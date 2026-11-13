@@ -108,11 +108,14 @@ public class CoreChatService {
     // ----------------------------------------------------------- conversation
 
     @Transactional
-    public ChatConversationModel createConversation(String deviceId) {
+    public ChatConversationModel createConversation(String deviceId, String ownerUsername, String ownerDisplayName) {
         ChatConversation conversation = new ChatConversation();
         conversation.setUuid(UUID.randomUUID().toString());
         conversation.setDeviceId(deviceId);
         conversation.setStatus(ChatConversationStatus.ACTIVE);
+        conversation.setOwnerUsername(ownerUsername);
+        conversation.setOwnerDisplayName(ownerDisplayName);
+        conversation.setStreamKey(UUID.randomUUID().toString());
         conversation.setCreatedAt(Timestamp.from(Instant.now()));
         conversation.setUpdatedAt(Timestamp.from(Instant.now()));
         ChatConversation saved = chatConversationRepository.save(conversation);
@@ -120,6 +123,33 @@ public class CoreChatService {
         // The tag is derived from the primary key, so it can only be set after insert.
         saved.setClientTag(buildClientTag(saved.getId()));
         return toModel(chatConversationRepository.save(saved), false);
+    }
+
+    /**
+     * Threads created before account identity existed have no stream key; mint
+     * one on first use so the capability check never has a null to compare.
+     */
+    @Transactional
+    public ChatConversationModel ensureStreamKey(Long conversationId) {
+        ChatConversation conversation = chatConversationRepository.findById(conversationId)
+                .orElseThrow(() -> new IllegalStateException("Conversation not found: " + conversationId));
+        if (conversation.getStreamKey() == null || conversation.getStreamKey().isBlank()) {
+            conversation.setStreamKey(UUID.randomUUID().toString());
+            conversation = chatConversationRepository.save(conversation);
+        }
+        return toModel(conversation, false);
+    }
+
+    /** Keeps the console's human name in step with the account's profile. */
+    @Transactional
+    public void updateOwnerDisplayName(Long conversationId, String displayName) {
+        chatConversationRepository.findById(conversationId).ifPresent(conversation -> {
+            if (displayName == null || displayName.equals(conversation.getOwnerDisplayName())) {
+                return;
+            }
+            conversation.setOwnerDisplayName(displayName);
+            chatConversationRepository.save(conversation);
+        });
     }
 
     @Transactional(readOnly = true)
@@ -149,6 +179,35 @@ public class CoreChatService {
     public Optional<ChatConversationModel> findLatestConversationByDeviceId(String deviceId) {
         List<ChatConversation> list = chatConversationRepository.findByDeviceIdOrderByIdDesc(deviceId);
         return list.isEmpty() ? Optional.empty() : Optional.of(toModel(list.get(0), false));
+    }
+
+    /**
+     * Newest anonymous thread of a device. Account threads are excluded: they
+     * belong to a username, and a device id is shared by every account that
+     * signs in on the same browser.
+     */
+    @Transactional(readOnly = true)
+    public Optional<ChatConversationModel> findLatestAnonymousConversationByDeviceId(String deviceId) {
+        return chatConversationRepository.findTop1ByDeviceIdAndOwnerUsernameIsNullOrderByIdDesc(deviceId)
+                .map(c -> toModel(c, false));
+    }
+
+    /** Newest thread of a signed-in account, closed ones included for resume checks. */
+    @Transactional(readOnly = true)
+    public Optional<ChatConversationModel> findLatestConversationByOwner(String ownerUsername) {
+        return chatConversationRepository.findTop1ByOwnerUsernameOrderByIdDesc(ownerUsername)
+                .map(c -> toModel(c, false));
+    }
+
+    /**
+     * True when some signed-in account has chatted on this device. Anonymous
+     * fingerprint matching skips such devices so a signed-out visitor cannot
+     * latch onto an account's device row and overwrite its fingerprint, IP hash
+     * or visit counter.
+     */
+    @Transactional(readOnly = true)
+    public boolean deviceHasOwnedConversation(String deviceId) {
+        return chatConversationRepository.existsByDeviceIdAndOwnerUsernameIsNotNull(deviceId);
     }
 
     @Transactional(readOnly = true)
@@ -185,6 +244,32 @@ public class CoreChatService {
             conversation.setLastMessageAt(now);
             conversation.setUpdatedAt(now);
             conversation.setStatus(ChatConversationStatus.ACTIVE);
+            chatConversationRepository.save(conversation);
+        });
+    }
+
+    /**
+     * One more guest message the administrator has not read.
+     *
+     * A concurrent lost update is possible but harmless: the badge is only an
+     * attention hint, and opening the thread zeroes it anyway.
+     */
+    @Transactional
+    public void incrementUnread(Long conversationId) {
+        chatConversationRepository.findById(conversationId).ifPresent(conversation -> {
+            conversation.setUnreadCount(conversation.getUnreadCount() + 1);
+            chatConversationRepository.save(conversation);
+        });
+    }
+
+    /** The administrator opened the thread: the badge is cleared. */
+    @Transactional
+    public void resetUnread(Long conversationId) {
+        chatConversationRepository.findById(conversationId).ifPresent(conversation -> {
+            if (conversation.getUnreadCount() == 0) {
+                return;
+            }
+            conversation.setUnreadCount(0);
             chatConversationRepository.save(conversation);
         });
     }
@@ -342,6 +427,10 @@ public class CoreChatService {
         model.setClientTag(conversation.getClientTag());
         model.setCreatedAt(conversation.getCreatedAt());
         model.setLastMessageAt(conversation.getLastMessageAt());
+        model.setUnreadCount(conversation.getUnreadCount());
+        model.setOwnerUsername(conversation.getOwnerUsername());
+        model.setOwnerDisplayName(conversation.getOwnerDisplayName());
+        model.setStreamKey(conversation.getStreamKey());
         if (withCounters) {
             model.setClientMessageCount(
                     chatMessageRepository.countByConversationAndDirection(conversation.getId(),

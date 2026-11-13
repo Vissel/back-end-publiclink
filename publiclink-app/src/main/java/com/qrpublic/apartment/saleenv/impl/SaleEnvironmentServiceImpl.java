@@ -112,6 +112,9 @@ public class SaleEnvironmentServiceImpl implements SaleEnvironmentService {
     @Autowired
     private com.qrpublic.apartment.domain.paymentplan.PaymentPlanService paymentPlanService;
 
+    @Autowired
+    private com.qrpublic.apartment.core.service.CoreTimezoneService coreTimezoneService;
+
     @Override
     public SaleEnvironment generateSaleEnvironment(Request request) {
         log.info("Creating sale environment.");
@@ -162,8 +165,10 @@ public class SaleEnvironmentServiceImpl implements SaleEnvironmentService {
         Request requestEntity = coreRequestService.getRequestByUuid(requestObject.getRequestUuid()).orElseThrow(
                 () -> new ResourceNotFoundException("Request not found with UUID: " + requestObject.getRequestUuid()));
 
-        // Gate on the payment plan quota before anything is written
-        paymentPlanService.consumeQuotaOrThrow(requestObject.getSellerRequest().getUsername());
+        // Gate on the payment plan window + quota before anything is written.
+        // The returned deadline caps the public link lifetime below.
+        com.qrpublic.apartment.core.model.PlanGateModel planGate = paymentPlanService
+                .consumeQuotaOrThrow(requestObject.getSellerRequest().getUsername());
         if (requestObject.getProductRequest() != null) {
             log.info("Step 2: Validating business rules");
             validateProductCreationRequest(requestObject.getProductRequest());
@@ -173,8 +178,8 @@ public class SaleEnvironmentServiceImpl implements SaleEnvironmentService {
         // Create SaleEnvironment
         SaleEnvironment env = new SaleEnvironment();
         env.setRequest(requestEntity);
-        // Generate public link by username + requestID
-        final LinkModel linkModel = generatePublicLink(requestObject);
+        // Generate public link by username + requestID, never past the plan end
+        final LinkModel linkModel = generatePublicLink(requestObject, planGate.getDeadline());
         final String publicLink = linkModel.getToken();
         log.debug("Generated public link: {}", publicLink);
         env.setPublicLink(publicLink);
@@ -190,6 +195,7 @@ public class SaleEnvironmentServiceImpl implements SaleEnvironmentService {
         productModel.setQuantity(productRequest.getQuantity());
         productModel.setUnit(Currency.getInstance("VND").getCurrencyCode());
         productModel.setPrice(productRequest.getPrice());
+        productModel.setProductType(productRequest.getProductType());
         // productModel.setTotalQuantity(productRequest.getQuantity() *
         // productRequest.getPrice());
         productModel.setPictureModels(
@@ -341,12 +347,33 @@ public class SaleEnvironmentServiceImpl implements SaleEnvironmentService {
         return requestDTO;
     }
 
-    private LinkModel generatePublicLink(CreateEnvironmentRequest requestObj) {
+    /**
+     * Build the public link token. The requested duration comes from the client
+     * and is therefore treated as an upper wish only: the effective expiry is
+     * clamped to the paid plan deadline, so a link can never outlive the plan
+     * even if the caller posts a huge durationHours.
+     */
+    private LinkModel generatePublicLink(CreateEnvironmentRequest requestObj, java.util.Date planDeadline) {
         final String uuid = requestObj.getRequestUuid();
         final String sellerUsername = requestObj.getSellerRequest().getUsername();
-        final long validTimeMillis = requestObj.getSellerRequest().getPrice().getDurationHours() * ONE_HOUR_MILI;
-        return linkService.generateSecureUrl(uuid,
-                Map.of(LinkConstant.PARAM_USERNAME, sellerUsername), validTimeMillis);
+        final long requestedMillis = requestObj.getSellerRequest().getPrice().getDurationHours() * ONE_HOUR_MILI;
+
+        final java.util.Date now = coreTimezoneService.getNow();
+        java.util.Date expiry = new java.util.Date(now.getTime() + requestedMillis);
+        if (planDeadline != null && expiry.after(planDeadline)) {
+            log.info("Clamping public link expiry for [{}] from {} to plan deadline {}",
+                    sellerUsername, expiry, planDeadline);
+            expiry = planDeadline;
+        }
+        if (!expiry.after(now)) {
+            throw new com.qrpublic.apartment.exception.ApplicationException(
+                    "Your payment plan has ended. You cannot create more product links. "
+                            + "Please contact admin via chat or buy a new plan.",
+                    403);
+        }
+
+        return linkService.generateSecureUrlUntil(uuid,
+                Map.of(LinkConstant.PARAM_USERNAME, sellerUsername), expiry);
     }
 
     private LinkModel generateReqAuthLink(RequestDTO requestDTO) {

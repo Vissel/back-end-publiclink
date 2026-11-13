@@ -70,6 +70,12 @@ public class SecurityConfig {
                                 // (/chat/admin/v1/chat/**) is intentionally absent, so it stays behind
                                 // the JWT requirement below.
                                 "/chat/api/v1/chat/**",
+                                // One exception on the admin side: EventSource cannot send an
+                                // Authorization header, so the console stream is opened with a
+                                // single-use, sixty-second ticket that chat-app issued over this
+                                // very gateway and validates itself. Everything else under
+                                // /chat/admin/** still requires the JWT.
+                                "/chat/admin/v1/chat/stream",
                                 "/publiclink/api/v1/publish/**")// temporary allow user creation without auth for
                                                                 // testing
                         .permitAll()
@@ -83,6 +89,11 @@ public class SecurityConfig {
                         // runs with method security disabled)
                         .pathMatchers("/publiclink/admin/v1/**")
                         .hasAnyAuthority("Admin", "Badminton_Admin")
+                        // Own profile picture for the header account menu. Must be
+                        // matched BEFORE the generic /api/v1/user/** permit-all rule
+                        // below, which exists for the server-to-server user calls.
+                        .pathMatchers("/api/v1/user/avatar")
+                        .authenticated()
                         .pathMatchers("/api/v1/user/**")
                         .permitAll()
                         .anyExchange().authenticated())

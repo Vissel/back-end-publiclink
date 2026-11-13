@@ -3,13 +3,17 @@ package com.qrpublic.apartment.chat.service;
 import com.qrpublic.apartment.chat.convertor.ChatConvertor;
 import com.qrpublic.apartment.chat.request.AdminChatReplyRequest;
 import com.qrpublic.apartment.chat.request.ChatTypingRequest;
+import com.qrpublic.apartment.chat.request.PushSubscriptionRequest;
 import com.qrpublic.apartment.chat.response.AdminConversationListResponse;
 import com.qrpublic.apartment.chat.response.ChatConversationResponse;
 import com.qrpublic.apartment.chat.response.ChatHistoryResponse;
 import com.qrpublic.apartment.chat.response.ChatMessageResponse;
+import com.qrpublic.apartment.chat.response.StreamTicketResponse;
+import com.qrpublic.apartment.chat.response.VapidPublicKeyResponse;
 import com.qrpublic.apartment.chat.core.model.ChatConversationModel;
 import com.qrpublic.apartment.chat.core.model.ChatMessageModel;
 import com.qrpublic.apartment.chat.domain.ChatConversationDomain;
+import com.qrpublic.apartment.chat.domain.AdminPushDomain;
 import com.qrpublic.apartment.chat.domain.ChatEventPublisher;
 import com.qrpublic.apartment.chat.domain.ChatMessageDomain;
 import com.qrpublic.apartment.chat.domain.ZaloBridgeDomain;
@@ -26,6 +30,10 @@ import org.springframework.util.Assert;
 import reactor.core.publisher.Flux;
 
 import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Administrator console (Mode B) of the chat bridge: the inbox the support team
@@ -60,11 +68,25 @@ public class AdminChatService {
     @Autowired
     ZaloBridgeDomain zaloBridgeDomain;
 
+    @Autowired
+    AdminPushDomain adminPushDomain;
+
     @Value("${chat.history-limit:500}")
     private int historyLimit;
 
     @Value("${chat.max-message-length:2000}")
     private int maxMessageLength;
+
+    /** How long a stream ticket survives before it is useless. */
+    @Value("${chat.stream-ticket-ttl-seconds:60}")
+    private long streamTicketTtlSeconds;
+
+    /**
+     * Issued tickets: token to expiry instant in millis. In memory on purpose -
+     * a restart only forces the console to ask for a new ticket, and a ticket
+     * that outlived a restart would be a credential nobody can revoke.
+     */
+    private final Map<String, Long> streamTickets = new ConcurrentHashMap<>();
 
     /**
      * Inbox page: every conversation with counters, plus live connection totals.
@@ -85,8 +107,12 @@ public class AdminChatService {
             @Override
             public AdminConversationListResponse process() {
                 List<ChatConversationModel> conversations = chatConversationDomain.listForAdmin(page, size);
+                // The preview needs the last message of each thread; the inbox is
+                // small and this call now runs on load and on reconnect only, not
+                // on a four-second timer.
                 List<ChatConversationResponse> items = conversations.stream()
-                        .map(AdminChatService::toResponse)
+                        .map(conversation -> ChatConvertor.toConversationResponse(conversation, null, null,
+                                chatMessageDomain.lastMessage(conversation.getId()).orElse(null)))
                         .toList();
 
                 AdminConversationListResponse response = new AdminConversationListResponse();
@@ -119,6 +145,11 @@ public class AdminChatService {
             public ChatHistoryResponse process() {
                 ChatConversationModel conversation = findConversation(conversationUuid);
                 List<ChatMessageModel> messages = chatMessageDomain.listMessages(conversation.getId());
+
+                // Opening the thread is what marks it read, WhatsApp style; every
+                // console then drops the badge for this conversation.
+                chatConversationDomain.markRead(conversation.getId())
+                        .ifPresent(chatEventPublisher::publishConversation);
 
                 ChatHistoryResponse response = new ChatHistoryResponse();
                 response.setConversationUuid(conversation.getUuid());
@@ -182,7 +213,7 @@ public class AdminChatService {
             @Override
             public Void process() {
                 ChatConversationModel conversation = findConversation(request.getConversationUuid());
-                chatMessageDomain.publishTyping(conversation.getDeviceId(), conversation.getUuid(),
+                chatMessageDomain.publishTyping(conversation.getUuid(),
                         SOURCE_ADMIN, Boolean.TRUE.equals(request.getTyping()));
                 return null;
             }
@@ -218,12 +249,123 @@ public class AdminChatService {
         return chatEventPublisher.adminStream();
     }
 
+    /**
+     * Hands out the single-use credential for the event stream. The call itself
+     * is JWT-guarded by the gateway, which is what makes the ticket meaningful.
+     */
+    public Result<StreamTicketResponse> issueStreamTicket() {
+        return chatServiceTemplate.execute(new ProcessCallback<Void, StreamTicketResponse>() {
+            @Override
+            public Void getRequest() {
+                return null;
+            }
+
+            @Override
+            public void preProcess(Void request) {
+                // No input to validate: the caller is identified by the JWT.
+            }
+
+            @Override
+            public StreamTicketResponse process() {
+                purgeExpiredTickets();
+                String ticket = UUID.randomUUID().toString();
+                streamTickets.put(ticket, System.currentTimeMillis() + TimeUnit.SECONDS.toMillis(streamTicketTtlSeconds));
+                log.info("Issued a chat stream ticket, {} outstanding", streamTickets.size());
+                return new StreamTicketResponse(ticket, streamTicketTtlSeconds);
+            }
+        });
+    }
+
+    /**
+     * Consumes a ticket: true for the first presentation of a live one only.
+     * The stream route is the sole exception to gateway JWT protection, so this
+     * check is the authentication of that endpoint.
+     */
+    public boolean authorizeStream(String ticket) {
+        if (ticket == null || ticket.isBlank()) {
+            return false;
+        }
+        Long expiry = streamTickets.remove(ticket);
+        return expiry != null && expiry > System.currentTimeMillis();
+    }
+
+    private void purgeExpiredTickets() {
+        long now = System.currentTimeMillis();
+        streamTickets.values().removeIf(expiry -> expiry <= now);
+    }
+
+    /**
+     * Registers this browser for background notifications. The administrator is
+     * the gateway-forwarded username, never a value from the body, so a browser
+     * cannot subscribe somebody else's account.
+     */
+    public Result<Void> subscribePush(PushSubscriptionRequest request, String adminUsername) {
+        return chatServiceTemplate.execute(new ProcessCallback<PushSubscriptionRequest, Void>() {
+            @Override
+            public PushSubscriptionRequest getRequest() {
+                return request;
+            }
+
+            @Override
+            public void preProcess(PushSubscriptionRequest req) {
+                Assert.notNull(req, "Subscription is required.");
+                Assert.hasText(req.getEndpoint(), "Push endpoint is required.");
+                Assert.notNull(req.getKeys(), "Push subscription keys are required.");
+                Assert.hasText(adminUsername, "An authenticated administrator is required.");
+            }
+
+            @Override
+            public Void process() {
+                adminPushDomain.subscribe(adminUsername, request.getEndpoint(),
+                        request.getKeys().getP256dh(), request.getKeys().getAuth());
+                return null;
+            }
+        });
+    }
+
+    /** The browser unsubscribed itself (permission revoked, profile cleared). */
+    public Result<Void> unsubscribePush(String endpoint) {
+        return chatServiceTemplate.execute(new ProcessCallback<String, Void>() {
+            @Override
+            public String getRequest() {
+                return endpoint;
+            }
+
+            @Override
+            public void preProcess(String value) {
+                Assert.hasText(value, "Push endpoint is required.");
+            }
+
+            @Override
+            public Void process() {
+                adminPushDomain.unsubscribe(endpoint);
+                return null;
+            }
+        });
+    }
+
+    /** Lets the console decide whether to offer the notification switch at all. */
+    public Result<VapidPublicKeyResponse> vapidPublicKey() {
+        return chatServiceTemplate.execute(new ProcessCallback<Void, VapidPublicKeyResponse>() {
+            @Override
+            public Void getRequest() {
+                return null;
+            }
+
+            @Override
+            public void preProcess(Void request) {
+                // No input: this only reports server configuration.
+            }
+
+            @Override
+            public VapidPublicKeyResponse process() {
+                return new VapidPublicKeyResponse(adminPushDomain.getPublicKey(), adminPushDomain.isConfigured());
+            }
+        });
+    }
+
     private ChatConversationModel findConversation(String uuid) {
         return chatConversationDomain.findByUuid(uuid)
                 .orElseThrow(() -> new ApplicationException("Conversation not found: " + uuid, 404));
-    }
-
-    private static ChatConversationResponse toResponse(ChatConversationModel conversation) {
-        return ChatConvertor.toConversationResponse(conversation);
     }
 }

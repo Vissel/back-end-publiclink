@@ -6,6 +6,7 @@ import com.qrpublic.apartment.user.service.request.CreateUserAuthRequest;
 import com.qrpublic.apartment.user.service.request.UserCreateRequest;
 import com.qrpublic.apartment.user.service.request.UserDeleteRequest;
 import com.qrpublic.apartment.user.service.request.UserUpdateRequest;
+import com.qrpublic.apartment.user.service.response.AvatarResponse;
 import com.qrpublic.apartment.user.service.response.ChangePasswordResponse;
 import com.qrpublic.apartment.user.service.response.CreateUserAuthResponse;
 import com.qrpublic.apartment.user.service.response.FoundUserResponse;
@@ -31,6 +32,19 @@ public interface UserService {
 
     Mono<Result<RegisterAdminResponse>> resetChangeTicket(String userName);
 
+    /**
+     * Create an account with a generated first password (never returned) or
+     * reset an existing one the same way and re-arm must-change-password.
+     * The real password is set later via the single-use setup link.
+     */
+    Mono<Result<UserCreateResponse>> generateAccount(String userName, String fullName, String role);
+
     Mono<Result<ChangePasswordResponse>> changePassword(ChangePasswordRequest changePasswordRequest);
+
+    /** Own profile picture; a success with a null dataUrl means "none uploaded". */
+    Mono<Result<AvatarResponse>> findAvatar(String userName);
+
+    /** Replace, or with a blank dataUrl delete, the own profile picture. */
+    Mono<Result<AvatarResponse>> saveAvatar(String userName, String dataUrl);
 
 }

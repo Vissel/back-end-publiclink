@@ -98,8 +98,8 @@ public class PasswordLinkListener {
                 msg.setText(("Yêu cầu đặt lại mật khẩu / Set up your account:\n\n"
                         + "Username: " + event.getUsername() + "\n\n"
                         + (reset
-                            ? "Your password was reset by an administrator. Choose a new password here:\n"
-                            : "A seller gave you a yoga payment plan. Choose your password here:\n")
+                                ? "Your password was reset by an administrator. Choose a new password here:\n"
+                                : "A seller gave you a yoga payment plan. Choose your password here:\n")
                         + absoluteLink + "\n\n"
                         + "The link works once and expires within 48 hours.\n"));
                 mailSender.send(msg);

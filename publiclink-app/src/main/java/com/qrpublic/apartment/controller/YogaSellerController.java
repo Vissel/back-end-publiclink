@@ -36,97 +36,97 @@ import java.util.List;
 @RequestMapping("/api/v1/yoga/seller")
 public class YogaSellerController {
 
-    @Autowired
-    private YogaSellerService yogaSellerService;
+        @Autowired
+        private YogaSellerService yogaSellerService;
 
-    @GetMapping("/environments")
-    public Mono<ResponseEntity<List<YogaEnvModel>>> myYogaEnvironments(
-            @RequestHeader(value = HeaderConstant.USER_ID_HEADER, defaultValue = "") String seller) {
-        return Mono.fromCallable(() -> yogaSellerService.myYogaEnvironments(seller))
-                .subscribeOn(Schedulers.boundedElastic())
-                .flatMap(ResponseEntityConvertor::convertToMonoResponseEntity);
-    }
+        @GetMapping("/environments")
+        public Mono<ResponseEntity<List<YogaEnvModel>>> myYogaEnvironments(
+                        @RequestHeader(value = HeaderConstant.USER_ID_HEADER, defaultValue = "") String seller) {
+                return Mono.fromCallable(() -> yogaSellerService.myYogaEnvironments(seller))
+                                .subscribeOn(Schedulers.boundedElastic())
+                                .flatMap(ResponseEntityConvertor::convertToMonoResponseEntity);
+        }
 
-    @GetMapping("/class/list")
-    public Mono<ResponseEntity<List<YogaClassModel>>> listClasses(
-            @RequestParam String token,
-            @RequestHeader(value = HeaderConstant.USER_ID_HEADER, defaultValue = "") String seller) {
-        return Mono.fromCallable(() -> yogaSellerService.listClasses(token, seller))
-                .subscribeOn(Schedulers.boundedElastic())
-                .flatMap(ResponseEntityConvertor::convertToMonoResponseEntity);
-    }
+        @GetMapping("/class/list")
+        public Mono<ResponseEntity<List<YogaClassModel>>> listClasses(
+                        @RequestParam String token,
+                        @RequestHeader(value = HeaderConstant.USER_ID_HEADER, defaultValue = "") String seller) {
+                return Mono.fromCallable(() -> yogaSellerService.listClasses(token, seller))
+                                .subscribeOn(Schedulers.boundedElastic())
+                                .flatMap(ResponseEntityConvertor::convertToMonoResponseEntity);
+        }
 
-    @PostMapping("/class/upsert")
-    public Mono<ResponseEntity<YogaResultResponse<YogaClassModel>>> upsertClass(
-            @RequestBody YogaClassUpsertRequest request,
-            @RequestHeader(value = HeaderConstant.USER_ID_HEADER, defaultValue = "") String seller) {
-        return Mono.fromCallable(() -> yogaSellerService.upsertClass(request, seller))
-                .subscribeOn(Schedulers.boundedElastic())
-                .flatMap(ResponseEntityConvertor::convertToMonoResponseEntity);
-    }
+        @PostMapping("/class/upsert")
+        public Mono<ResponseEntity<YogaResultResponse<YogaClassModel>>> upsertClass(
+                        @RequestBody YogaClassUpsertRequest request,
+                        @RequestHeader(value = HeaderConstant.USER_ID_HEADER, defaultValue = "") String seller) {
+                return Mono.fromCallable(() -> yogaSellerService.upsertClass(request, seller))
+                                .subscribeOn(Schedulers.boundedElastic())
+                                .flatMap(ResponseEntityConvertor::convertToMonoResponseEntity);
+        }
 
-    @PostMapping("/class/delete")
-    public Mono<ResponseEntity<Void>> deleteClass(
-            @RequestParam String token,
-            @RequestParam String classCode,
-            @RequestHeader(value = HeaderConstant.USER_ID_HEADER, defaultValue = "") String seller) {
-        return Mono.fromCallable(() -> yogaSellerService.deleteClass(token, classCode, seller))
-                .subscribeOn(Schedulers.boundedElastic())
-                .flatMap(ResponseEntityConvertor::convertToMonoResponseEntity);
-    }
+        @PostMapping("/class/delete")
+        public Mono<ResponseEntity<Void>> deleteClass(
+                        @RequestParam String token,
+                        @RequestParam String classCode,
+                        @RequestHeader(value = HeaderConstant.USER_ID_HEADER, defaultValue = "") String seller) {
+                return Mono.fromCallable(() -> yogaSellerService.deleteClass(token, classCode, seller))
+                                .subscribeOn(Schedulers.boundedElastic())
+                                .flatMap(ResponseEntityConvertor::convertToMonoResponseEntity);
+        }
 
-    @GetMapping("/plan/list")
-    public Mono<ResponseEntity<List<SellerPlanModel>>> listPlans(
-            @RequestParam String token,
-            @RequestHeader(value = HeaderConstant.USER_ID_HEADER, defaultValue = "") String seller) {
-        return Mono.fromCallable(() -> yogaSellerService.listPlans(token, seller))
-                .subscribeOn(Schedulers.boundedElastic())
-                .flatMap(ResponseEntityConvertor::convertToMonoResponseEntity);
-    }
+        @GetMapping("/plan/list")
+        public Mono<ResponseEntity<List<SellerPlanModel>>> listPlans(
+                        @RequestParam String token,
+                        @RequestHeader(value = HeaderConstant.USER_ID_HEADER, defaultValue = "") String seller) {
+                return Mono.fromCallable(() -> yogaSellerService.listPlans(token, seller))
+                                .subscribeOn(Schedulers.boundedElastic())
+                                .flatMap(ResponseEntityConvertor::convertToMonoResponseEntity);
+        }
 
-    @PostMapping("/plan/create")
-    public Mono<ResponseEntity<YogaResultResponse<SellerPlanModel>>> createPlan(
-            @RequestBody SellerPlanUpsertRequest request,
-            @RequestHeader(value = HeaderConstant.USER_ID_HEADER, defaultValue = "") String seller) {
-        return Mono.fromCallable(() -> yogaSellerService.createPlan(request, seller))
-                .subscribeOn(Schedulers.boundedElastic())
-                .flatMap(ResponseEntityConvertor::convertToMonoResponseEntity);
-    }
+        @PostMapping("/plan/create")
+        public Mono<ResponseEntity<YogaResultResponse<SellerPlanModel>>> createPlan(
+                        @RequestBody SellerPlanUpsertRequest request,
+                        @RequestHeader(value = HeaderConstant.USER_ID_HEADER, defaultValue = "") String seller) {
+                return Mono.fromCallable(() -> yogaSellerService.createPlan(request, seller))
+                                .subscribeOn(Schedulers.boundedElastic())
+                                .flatMap(ResponseEntityConvertor::convertToMonoResponseEntity);
+        }
 
-    @PostMapping("/plan/update")
-    public Mono<ResponseEntity<YogaResultResponse<SellerPlanModel>>> updatePlan(
-            @RequestBody SellerPlanUpsertRequest request,
-            @RequestHeader(value = HeaderConstant.USER_ID_HEADER, defaultValue = "") String seller) {
-        return Mono.fromCallable(() -> yogaSellerService.updatePlan(request, seller))
-                .subscribeOn(Schedulers.boundedElastic())
-                .flatMap(ResponseEntityConvertor::convertToMonoResponseEntity);
-    }
+        @PostMapping("/plan/update")
+        public Mono<ResponseEntity<YogaResultResponse<SellerPlanModel>>> updatePlan(
+                        @RequestBody SellerPlanUpsertRequest request,
+                        @RequestHeader(value = HeaderConstant.USER_ID_HEADER, defaultValue = "") String seller) {
+                return Mono.fromCallable(() -> yogaSellerService.updatePlan(request, seller))
+                                .subscribeOn(Schedulers.boundedElastic())
+                                .flatMap(ResponseEntityConvertor::convertToMonoResponseEntity);
+        }
 
-    @PostMapping("/plan/resend")
-    public Mono<ResponseEntity<YogaResultResponse<SellerPlanModel>>> resendPlanLink(
-            @RequestParam String token,
-            @RequestParam String sellerPlanCode,
-            @RequestHeader(value = HeaderConstant.USER_ID_HEADER, defaultValue = "") String seller) {
-        return Mono.fromCallable(() -> yogaSellerService.resendPlanLink(token, sellerPlanCode, seller))
-                .subscribeOn(Schedulers.boundedElastic())
-                .flatMap(ResponseEntityConvertor::convertToMonoResponseEntity);
-    }
+        @PostMapping("/plan/resend")
+        public Mono<ResponseEntity<YogaResultResponse<SellerPlanModel>>> resendPlanLink(
+                        @RequestParam String token,
+                        @RequestParam String sellerPlanCode,
+                        @RequestHeader(value = HeaderConstant.USER_ID_HEADER, defaultValue = "") String seller) {
+                return Mono.fromCallable(() -> yogaSellerService.resendPlanLink(token, sellerPlanCode, seller))
+                                .subscribeOn(Schedulers.boundedElastic())
+                                .flatMap(ResponseEntityConvertor::convertToMonoResponseEntity);
+        }
 
-    @PostMapping("/booking/list")
-    public Mono<ResponseEntity<List<YogaBookingModel>>> listBookings(
-            @RequestBody YogaRangeRequest request,
-            @RequestHeader(value = HeaderConstant.USER_ID_HEADER, defaultValue = "") String seller) {
-        return Mono.fromCallable(() -> yogaSellerService.listBookings(request, seller))
-                .subscribeOn(Schedulers.boundedElastic())
-                .flatMap(ResponseEntityConvertor::convertToMonoResponseEntity);
-    }
+        @PostMapping("/booking/list")
+        public Mono<ResponseEntity<List<YogaBookingModel>>> listBookings(
+                        @RequestBody YogaRangeRequest request,
+                        @RequestHeader(value = HeaderConstant.USER_ID_HEADER, defaultValue = "") String seller) {
+                return Mono.fromCallable(() -> yogaSellerService.listBookings(request, seller))
+                                .subscribeOn(Schedulers.boundedElastic())
+                                .flatMap(ResponseEntityConvertor::convertToMonoResponseEntity);
+        }
 
-    @PostMapping("/booking/toggle")
-    public Mono<ResponseEntity<YogaResultResponse<YogaBookingModel>>> toggleBooking(
-            @RequestBody YogaBookingToggleRequest request,
-            @RequestHeader(value = HeaderConstant.USER_ID_HEADER, defaultValue = "") String seller) {
-        return Mono.fromCallable(() -> yogaSellerService.toggleBooking(request, seller))
-                .subscribeOn(Schedulers.boundedElastic())
-                .flatMap(ResponseEntityConvertor::convertToMonoResponseEntity);
-    }
+        @PostMapping("/booking/toggle")
+        public Mono<ResponseEntity<YogaResultResponse<YogaBookingModel>>> toggleBooking(
+                        @RequestBody YogaBookingToggleRequest request,
+                        @RequestHeader(value = HeaderConstant.USER_ID_HEADER, defaultValue = "") String seller) {
+                return Mono.fromCallable(() -> yogaSellerService.toggleBooking(request, seller))
+                                .subscribeOn(Schedulers.boundedElastic())
+                                .flatMap(ResponseEntityConvertor::convertToMonoResponseEntity);
+        }
 }

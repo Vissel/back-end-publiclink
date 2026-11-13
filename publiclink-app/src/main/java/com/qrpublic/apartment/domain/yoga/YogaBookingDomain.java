@@ -87,8 +87,7 @@ public class YogaBookingDomain {
         if (classes.isEmpty()) {
             return List.of();
         }
-        Map<String, Integer> bookedCounts =
-                coreYogaBookingService.countBookedByEnvRange(env.getEnvId(), from, to);
+        Map<String, Integer> bookedCounts = coreYogaBookingService.countBookedByEnvRange(env.getEnvId(), from, to);
         Map<String, YogaBookingModel> myBookings = callerIsSeller || callerUsername == null
                 ? Map.of()
                 : coreYogaBookingService.findOpenByBuyerInRange(env.getEnvId(), callerUsername, from, to);
@@ -131,10 +130,10 @@ public class YogaBookingDomain {
     /**
      * Reserve one slot. The identity decision tree:
      * - seller caller: books on behalf of a plan buyer (PLAN, no buyer
-     *   password needed) or a walk-in name (PAY_AS_YOU_GO);
+     * password needed) or a walk-in name (PAY_AS_YOU_GO);
      * - buyer caller with an ACTIVE plan in this env: PLAN, requires the
-     *   password-set account (authenticationMethod BASIC) and one day per
-     *   date;
+     * password-set account (authenticationMethod BASIC) and one day per
+     * date;
      * - anyone else: PAY_AS_YOU_GO with a required buyer name.
      */
     @Transactional
@@ -302,7 +301,8 @@ public class YogaBookingDomain {
                     List.of(env.getSellerUsername()),
                     "New yoga booking",
                     booking.getTitle() + " on " + booking.getDate() + " " + booking.getStartTime()
-                            + " — " + (booking.getBuyerName() != null ? booking.getBuyerName() : booking.getBuyerUsername())
+                            + " — "
+                            + (booking.getBuyerName() != null ? booking.getBuyerName() : booking.getBuyerUsername())
                             + " (" + booking.getPaymentMode() + ")",
                     "YOGA_BOOKING",
                     booking.getBuyerUsername() != null ? booking.getBuyerUsername() : env.getSellerUsername());

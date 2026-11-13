@@ -14,7 +14,9 @@ import java.math.BigDecimal;
 public class YogaEnvModel {
     private String envId;
     private String requestUUID;
-    /** the sale environment public link token; the yoga endpoints take it as token */
+    /**
+     * the sale environment public link token; the yoga endpoints take it as token
+     */
     private String publicLink;
     private String sellerUsername;
     private boolean active;

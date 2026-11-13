@@ -162,8 +162,7 @@ public class SellerPaymentPlanDomain {
     }
 
     private void provisionBuyerAccount(String buyerUsername, String buyerName) {
-        Optional<com.qrpublic.apartment.entity.User> local =
-                coreUserService.findUserEntityByUsername(buyerUsername);
+        Optional<com.qrpublic.apartment.entity.User> local = coreUserService.findUserEntityByUsername(buyerUsername);
         if (local.isPresent()) {
             // returning buyer: keep the local row, just re-arm the account
             GenerateAccountRequest request = new GenerateAccountRequest();

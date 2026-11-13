@@ -63,8 +63,8 @@ public class YogaService {
                     @Override
                     public YogaOccurrencesResponse process() {
                         LocalDate weekStart = parseDateOrThisMonday(request.getWeekStart());
-                        List<YogaOccurrenceModel> items =
-                                yogaBookingDomain.calendar(request.getToken(), weekStart, callerUsername);
+                        List<YogaOccurrenceModel> items = yogaBookingDomain.calendar(request.getToken(), weekStart,
+                                callerUsername);
                         boolean sellerView = isSeller(request.getToken(), callerUsername);
                         YogaOccurrencesResponse response = YogaOccurrencesResponse.of(items, sellerView);
                         attachEnvMeta(response, request.getToken());

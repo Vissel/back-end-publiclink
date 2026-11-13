@@ -48,7 +48,9 @@ public class YogaEnvAccess {
         return env;
     }
 
-    /** Write access (booking): live link + active environment + not past deadline. */
+    /**
+     * Write access (booking): live link + active environment + not past deadline.
+     */
     public YogaEnvModel resolveForBooking(String token) {
         if (token == null || token.isBlank() || !linkService.validateLink(token)) {
             throw new ApplicationException("Invalid or expired link.", 401);

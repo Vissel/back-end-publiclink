@@ -34,56 +34,56 @@ import reactor.core.scheduler.Schedulers;
 @RequestMapping("/api/v1/publish/yoga")
 public class YogaPublicController {
 
-    @Autowired
-    private YogaService yogaService;
+        @Autowired
+        private YogaService yogaService;
 
-    @PostMapping("/calendar")
-    public Mono<ResponseEntity<YogaOccurrencesResponse>> calendar(
-            @RequestBody YogaCalendarRequest request,
-            @RequestHeader(value = HeaderConstant.USER_ID_HEADER, defaultValue = "") String caller) {
-        return Mono.fromCallable(() -> yogaService.calendar(request, caller))
-                .subscribeOn(Schedulers.boundedElastic())
-                .flatMap(ResponseEntityConvertor::convertToMonoResponseEntity);
-    }
+        @PostMapping("/calendar")
+        public Mono<ResponseEntity<YogaOccurrencesResponse>> calendar(
+                        @RequestBody YogaCalendarRequest request,
+                        @RequestHeader(value = HeaderConstant.USER_ID_HEADER, defaultValue = "") String caller) {
+                return Mono.fromCallable(() -> yogaService.calendar(request, caller))
+                                .subscribeOn(Schedulers.boundedElastic())
+                                .flatMap(ResponseEntityConvertor::convertToMonoResponseEntity);
+        }
 
-    @PostMapping("/classes")
-    public Mono<ResponseEntity<YogaOccurrencesResponse>> classes(
-            @RequestBody YogaRangeRequest request,
-            @RequestHeader(value = HeaderConstant.USER_ID_HEADER, defaultValue = "") String caller) {
-        return Mono.fromCallable(() -> yogaService.classes(request, caller))
-                .subscribeOn(Schedulers.boundedElastic())
-                .flatMap(ResponseEntityConvertor::convertToMonoResponseEntity);
-    }
+        @PostMapping("/classes")
+        public Mono<ResponseEntity<YogaOccurrencesResponse>> classes(
+                        @RequestBody YogaRangeRequest request,
+                        @RequestHeader(value = HeaderConstant.USER_ID_HEADER, defaultValue = "") String caller) {
+                return Mono.fromCallable(() -> yogaService.classes(request, caller))
+                                .subscribeOn(Schedulers.boundedElastic())
+                                .flatMap(ResponseEntityConvertor::convertToMonoResponseEntity);
+        }
 
-    @PostMapping("/book")
-    public Mono<ResponseEntity<YogaResultResponse<YogaBookingModel>>> book(
-            @RequestBody YogaBookRequest request,
-            @RequestHeader(value = HeaderConstant.USER_ID_HEADER, defaultValue = "") String caller) {
-        return Mono.fromCallable(() -> yogaService.book(request, caller))
-                .subscribeOn(Schedulers.boundedElastic())
-                .flatMap(ResponseEntityConvertor::convertToMonoResponseEntity);
-    }
+        @PostMapping("/book")
+        public Mono<ResponseEntity<YogaResultResponse<YogaBookingModel>>> book(
+                        @RequestBody YogaBookRequest request,
+                        @RequestHeader(value = HeaderConstant.USER_ID_HEADER, defaultValue = "") String caller) {
+                return Mono.fromCallable(() -> yogaService.book(request, caller))
+                                .subscribeOn(Schedulers.boundedElastic())
+                                .flatMap(ResponseEntityConvertor::convertToMonoResponseEntity);
+        }
 
-    @PostMapping("/cancel")
-    public Mono<ResponseEntity<YogaResultResponse<YogaBookingModel>>> cancel(
-            @RequestBody YogaCancelRequest request,
-            @RequestHeader(value = HeaderConstant.USER_ID_HEADER, defaultValue = "") String caller) {
-        return Mono.fromCallable(() -> yogaService.cancel(request, caller))
-                .subscribeOn(Schedulers.boundedElastic())
-                .flatMap(ResponseEntityConvertor::convertToMonoResponseEntity);
-    }
+        @PostMapping("/cancel")
+        public Mono<ResponseEntity<YogaResultResponse<YogaBookingModel>>> cancel(
+                        @RequestBody YogaCancelRequest request,
+                        @RequestHeader(value = HeaderConstant.USER_ID_HEADER, defaultValue = "") String caller) {
+                return Mono.fromCallable(() -> yogaService.cancel(request, caller))
+                                .subscribeOn(Schedulers.boundedElastic())
+                                .flatMap(ResponseEntityConvertor::convertToMonoResponseEntity);
+        }
 
-    @PostMapping("/setup/info")
-    public Mono<ResponseEntity<BuyerSetupInfoResponse>> setupInfo(@RequestBody BuyerSetupRequest request) {
-        return Mono.fromCallable(() -> yogaService.setupInfo(request))
-                .subscribeOn(Schedulers.boundedElastic())
-                .flatMap(ResponseEntityConvertor::convertToMonoResponseEntity);
-    }
+        @PostMapping("/setup/info")
+        public Mono<ResponseEntity<BuyerSetupInfoResponse>> setupInfo(@RequestBody BuyerSetupRequest request) {
+                return Mono.fromCallable(() -> yogaService.setupInfo(request))
+                                .subscribeOn(Schedulers.boundedElastic())
+                                .flatMap(ResponseEntityConvertor::convertToMonoResponseEntity);
+        }
 
-    @PostMapping("/setup/complete")
-    public Mono<ResponseEntity<Void>> setupComplete(@RequestBody BuyerSetupRequest request) {
-        return Mono.fromCallable(() -> yogaService.setupComplete(request))
-                .subscribeOn(Schedulers.boundedElastic())
-                .flatMap(ResponseEntityConvertor::convertToMonoResponseEntity);
-    }
+        @PostMapping("/setup/complete")
+        public Mono<ResponseEntity<Void>> setupComplete(@RequestBody BuyerSetupRequest request) {
+                return Mono.fromCallable(() -> yogaService.setupComplete(request))
+                                .subscribeOn(Schedulers.boundedElastic())
+                                .flatMap(ResponseEntityConvertor::convertToMonoResponseEntity);
+        }
 }

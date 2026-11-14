@@ -79,6 +79,12 @@
     <changeSet id="027" author="thach">
         <sqlFile path="db/changelog/changeset-027-create-seller-payment-plan.sql"/>
     </changeSet>
+    <changeSet id="028" author="thach">
+        <sqlFile path="db/changelog/changeset-028-add-payment-qr.sql"/>
+    </changeSet>
+    <changeSet id="029" author="thach">
+        <sqlFile path="db/changelog/changeset-029-add-will-started-at.sql"/>
+    </changeSet>
     <!-- Chat tables moved to the chat-app module, which owns the chat_schema.
          publiclink-app stays the sole DDL owner of publiclink-db.
     <changeSet id="021" author="thach">

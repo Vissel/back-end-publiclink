@@ -13,6 +13,8 @@ public class CreateTransferInfoRequest {
     /** BANK | EWALLET | OTHER */
     private String type = "BANK";
     private String transferNumber;
+    /** NAPAS BIN of the picked bank, used to build the VietQR Quick Link */
+    private String bankBin;
     private String accountName;
     /** base64 data URI, same convention as picture data */
     private String qrImage;

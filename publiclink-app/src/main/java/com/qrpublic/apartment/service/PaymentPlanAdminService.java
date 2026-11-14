@@ -3,15 +3,18 @@ package com.qrpublic.apartment.service;
 import com.qrpublic.apartment.core.model.PaymentPlanModel;
 import com.qrpublic.apartment.core.model.PlanUserModel;
 import com.qrpublic.apartment.domain.paymentplan.PaymentPlanService;
+import com.qrpublic.apartment.domain.paymentplan.event.PaymentCreatedEvent;
 import com.qrpublic.apartment.exception.ApplicationException;
 import com.qrpublic.apartment.paymentplan.request.ApprovePlanRequest;
 import com.qrpublic.apartment.paymentplan.request.CheckPlanRequest;
+import com.qrpublic.apartment.paymentplan.request.CreateCatalogPlanRequest;
 import com.qrpublic.apartment.paymentplan.request.CreateSellerPlanRequest;
 import com.qrpublic.apartment.paymentplan.request.ListPlanUserRequest;
 import com.qrpublic.apartment.paymentplan.request.MarkPaidRequest;
 import com.qrpublic.apartment.paymentplan.request.RejectPlanRequest;
 import com.qrpublic.apartment.paymentplan.response.CheckPlanResponse;
 import com.qrpublic.apartment.paymentplan.response.CreateSellerPlanResponse;
+import com.qrpublic.apartment.paymentplan.response.CreatedPlanResponse;
 import com.qrpublic.apartment.paymentplan.response.ListPlanUserResponse;
 import com.qrpublic.apartment.paymentplan.response.PlanCatalogResponse;
 import com.qrpublic.apartment.requestmodel.Pagination;
@@ -39,6 +42,39 @@ public class PaymentPlanAdminService {
     @Autowired
     private PublicLinkServiceTemplate publicLinkServiceTemplate;
 
+    @Autowired
+    private org.springframework.context.ApplicationEventPublisher eventPublisher;
+
+    /**
+     * Create a catalog plan. Deliberately takes no seller: the plan stands on
+     * its own and is linked afterwards by createSellerPlan.
+     */
+    public Result<CreatedPlanResponse> createCatalogPlan(CreateCatalogPlanRequest request) {
+        return publicLinkServiceTemplate
+                .execute(new ProcessCallback<CreateCatalogPlanRequest, CreatedPlanResponse>() {
+                    @Override
+                    public CreateCatalogPlanRequest getRequest() {
+                        return request;
+                    }
+
+                    @Override
+                    public void preProcess(CreateCatalogPlanRequest req) {
+                        Assert.notNull(req.getFee(), "Plan fee is required.");
+                        // Zero is a free plan and legitimate; only a negative price
+                        // is meaningless. Days and links still have to exist.
+                        Assert.isTrue(req.getFee().signum() >= 0,
+                                "Plan fee must not be negative. Use 0 for a free plan.");
+                        Assert.isTrue(req.getPlanDay() > 0, "Plan days must be greater than zero.");
+                        Assert.isTrue(req.getEnvCount() > 0, "Environment count must be greater than zero.");
+                    }
+
+                    @Override
+                    public CreatedPlanResponse process() {
+                        return paymentPlanService.createCatalogPlan(request);
+                    }
+                });
+    }
+
     public Result<CreateSellerPlanResponse> createSellerPlan(CreateSellerPlanRequest request, String adminUsername) {
         return publicLinkServiceTemplate
                 .execute(new ProcessCallback<CreateSellerPlanRequest, CreateSellerPlanResponse>() {
@@ -50,15 +86,22 @@ public class PaymentPlanAdminService {
                     @Override
                     public void preProcess(CreateSellerPlanRequest req) {
                         Assert.hasText(req.getUsername(), "Seller username is required.");
+                        Assert.hasText(req.getPlanCode(), "A plan must be selected. Create the plan first.");
                         Assert.hasText(adminUsername, "Admin identity is required.");
-                        boolean hasPlanCode = req.getPlanCode() != null && !req.getPlanCode().isBlank();
-                        boolean hasNewPlan = req.getNewPlan() != null && req.getNewPlan().getFee() != null;
-                        Assert.isTrue(hasPlanCode || hasNewPlan, "Either an existing plan or a new plan is required.");
                     }
 
                     @Override
                     public CreateSellerPlanResponse process() {
-                        return paymentPlanService.createSellerPlan(request, adminUsername);
+                        CreateSellerPlanResponse response = paymentPlanService.createSellerPlan(request, adminUsername);
+                        // The assignment + payment are committed by the domain call above;
+                        // hand off to GenerateQRDomain to build and store the VietQR QR.
+                        eventPublisher.publishEvent(new PaymentCreatedEvent(
+                                response.getPaymentCode(),
+                                response.getFee(),
+                                request.getUsername(),
+                                response.getFee().toPlainString() + "VND " + response.getPlanDay() + "D",
+                                adminUsername));
+                        return response;
                     }
                 });
     }

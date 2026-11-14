@@ -58,8 +58,8 @@ public class CoreTransferInfoService {
      */
     @Transactional
     public TransferInfo create(String ownerUsername, String ownerTypeHint, String transferIssuer,
-            String issuerFullName, String type, String transferNumber, String accountName, String qrImage,
-            String defaultMessage, boolean setDefault) {
+            String issuerFullName, String type, String transferNumber, String bankBin, String accountName,
+            String qrImage, String defaultMessage, boolean setDefault) {
         String ownerType = resolveOwnerType(ownerUsername, ownerTypeHint);
         boolean isFirst = transferInfoRepository.findActiveByOwner(ownerUsername).isEmpty();
         if (setDefault || isFirst) {
@@ -74,6 +74,7 @@ public class CoreTransferInfoService {
         info.setIssuerFullName(issuerFullName);
         info.setType(type);
         info.setTransferNumber(transferNumber);
+        info.setBankBin(bankBin);
         info.setAccountName(accountName);
         info.setQrImage(qrImage);
         info.setDefaultMessage(defaultMessage);

@@ -38,6 +38,13 @@ public class SaleEnvironment {
     @Column(name = "will_ended_at")
     private Timestamp willEndedAt;
 
+    /**
+     * When the sale window opens. Null on rows created before the window
+     * feature, which means "started as soon as it was created".
+     */
+    @Column(name = "will_started_at")
+    private Timestamp willStartedAt;
+
     @OneToMany(mappedBy = "saleEnvironment", cascade = CascadeType.ALL)
     @OrderBy(value = "orderedAt DESC")
     private List<Order> listOrder;

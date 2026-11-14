@@ -48,6 +48,9 @@ public class OrderImpl implements OrderService {
     @Autowired
     PublicLinkServiceTemplate publicLinkServiceTemplate;
 
+    @Autowired
+    com.qrpublic.apartment.core.service.CoreTimezoneService coreTimezoneService;
+
     private final TransactionTemplate transactionTemplate;
 
     public OrderImpl(PlatformTransactionManager transactionManager) {
@@ -139,6 +142,18 @@ public class OrderImpl implements OrderService {
                     // 2. Check environment is active
                     if (!env.isState()) {
                         throw new ApplicationException("Environment is inactive", 400);
+                    }
+
+                    // 3. Check the sale window itself. state is only flipped hourly
+                    // by the scheduler and the seller can move willEndedAt (close
+                    // early), so the timestamps compared against DB time are the
+                    // precise gate here.
+                    final java.sql.Timestamp nowTs = new java.sql.Timestamp(coreTimezoneService.getNow().getTime());
+                    if (env.getWillStartedAt() != null && env.getWillStartedAt().after(nowTs)) {
+                        throw new ApplicationException("This sale has not started yet.", 400);
+                    }
+                    if (env.getWillEndedAt() != null && !env.getWillEndedAt().after(nowTs)) {
+                        throw new ApplicationException("This sale has ended.", 400);
                     }
 
                     // 4. Check product stock with write lock — ensure at least one product has

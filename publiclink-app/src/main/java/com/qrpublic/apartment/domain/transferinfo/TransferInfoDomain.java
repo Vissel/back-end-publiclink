@@ -43,7 +43,7 @@ public class TransferInfoDomain {
                 username,
                 request.getOwnerHint(),
                 request.getTransferIssuer(), request.getIssuerFullName(),
-                request.getType(), request.getTransferNumber(), request.getAccountName(),
+                request.getType(), request.getTransferNumber(), request.getBankBin(), request.getAccountName(),
                 request.getQrImage(), request.getDefaultMessage(), request.isSetDefault())));
     }
 

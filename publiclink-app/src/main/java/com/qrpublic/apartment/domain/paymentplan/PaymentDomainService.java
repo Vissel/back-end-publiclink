@@ -97,6 +97,8 @@ public class PaymentDomainService {
         response.setAmount(payment.getAmount());
         response.setCurrency(payment.getCurrency());
         response.setStatus(payment.getStatus());
+        response.setQrUrl(payment.getQrUrl());
+        response.setQrAddInfo(payment.getQrAddInfo());
 
         if (payment.getPlan() != null) {
             response.setFee(payment.getPlan().getFee());

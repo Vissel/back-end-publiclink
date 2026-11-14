@@ -23,6 +23,9 @@ public class PaymentInfoResponse {
     private String status;
     private String estimatedActiveDate;
     private String estimatedEndDate;
+    /** VietQR Quick Link image URL generated for this payment */
+    private String qrUrl;
+    private String qrAddInfo;
     private List<TransferItem> transferInfos;
 
     @Data

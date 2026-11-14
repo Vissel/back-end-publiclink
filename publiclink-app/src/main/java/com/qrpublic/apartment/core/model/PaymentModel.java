@@ -19,6 +19,9 @@ public class PaymentModel {
     /** CREATE | WAITING_CONFIRM | CONFIRMED | PAID | REJECTED */
     private String status;
     private String paymentUrl;
+    /** VietQR Quick Link image URL for the seller payment page */
+    private String qrUrl;
+    private String qrAddInfo;
     /** admin who created the payment */
     private String createdBy;
     private String sellerEmail;

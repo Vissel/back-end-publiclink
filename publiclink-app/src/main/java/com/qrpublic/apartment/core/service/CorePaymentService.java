@@ -61,6 +61,18 @@ public class CorePaymentService {
         paymentRepository.save(payment);
     }
 
+    /**
+     * Persist the generated VietQR Quick Link against the payment code so the
+     * seller payment page can load it later.
+     */
+    @Transactional
+    public void updateQr(String paymentCode, String qrUrl, String qrAddInfo) {
+        Payment payment = getEntityByCode(paymentCode);
+        payment.setQrUrl(qrUrl);
+        payment.setQrAddInfo(qrAddInfo);
+        paymentRepository.save(payment);
+    }
+
     @Transactional(readOnly = true)
     public PaymentModel findPaymentByCode(String paymentCode) {
         return toModel(getEntityByCode(paymentCode));
@@ -148,6 +160,8 @@ public class CorePaymentService {
                 .currency(payment.getCurrency())
                 .status(payment.getStatus())
                 .paymentUrl(payment.getPaymentUrl())
+                .qrUrl(payment.getQrUrl())
+                .qrAddInfo(payment.getQrAddInfo())
                 .createdBy(payment.getCreatedBy())
                 .sellerEmail(payment.getSellerEmail())
                 .sellerPhone(payment.getSellerPhone())

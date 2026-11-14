@@ -3,12 +3,10 @@ package com.qrpublic.apartment.paymentplan.request;
 import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 
-import java.math.BigDecimal;
-
 /**
- * Admin creates a payment plan assignment for one seller.
- * Either an existing catalog plan (planCode) or an inline new plan definition
- * is provided. Only usernames travel on the wire, never DB ids.
+ * Links an existing catalog plan to one seller, which is what starts the
+ * payment flow. The plan itself is created separately and independently of any
+ * user, so only the plan code travels here together with the seller username.
  */
 @Data
 public class CreateSellerPlanRequest {
@@ -17,14 +15,4 @@ public class CreateSellerPlanRequest {
     private String username;
 
     private String planCode;
-
-    private NewPlan newPlan;
-
-    @Data
-    public static class NewPlan {
-        private BigDecimal fee;
-        private int planDay;
-        private int envCount = 1;
-        private String description;
-    }
 }

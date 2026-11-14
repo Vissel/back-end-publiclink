@@ -3,10 +3,12 @@ package com.qrpublic.apartment.controller;
 import com.qrpublic.apartment.constant.HeaderConstant;
 import com.qrpublic.apartment.paymentplan.request.ApprovePlanRequest;
 import com.qrpublic.apartment.paymentplan.request.CheckPlanRequest;
+import com.qrpublic.apartment.paymentplan.request.CreateCatalogPlanRequest;
 import com.qrpublic.apartment.paymentplan.request.ListPlanUserRequest;
 import com.qrpublic.apartment.paymentplan.request.MarkPaidRequest;
 import com.qrpublic.apartment.paymentplan.request.RejectPlanRequest;
 import com.qrpublic.apartment.paymentplan.response.CheckPlanResponse;
+import com.qrpublic.apartment.paymentplan.response.CreatedPlanResponse;
 import com.qrpublic.apartment.paymentplan.response.ListPlanUserResponse;
 import com.qrpublic.apartment.paymentplan.response.PlanCatalogResponse;
 import com.qrpublic.apartment.requestmodel.Pagination;
@@ -36,6 +38,18 @@ public class PaymentPlanAdminController {
 
     @Autowired
     private PaymentPlanAdminService paymentPlanAdminService;
+
+    /**
+     * Create a payment plan in the catalog. No seller is required: the plan
+     * exists on its own and can be linked to one later, from this same dialog
+     * or afterwards.
+     */
+    @PostMapping("/create")
+    public Mono<ResponseEntity<CreatedPlanResponse>> create(@RequestBody CreateCatalogPlanRequest request) {
+        return Mono.fromCallable(() -> paymentPlanAdminService.createCatalogPlan(request))
+                .subscribeOn(Schedulers.boundedElastic())
+                .flatMap(ResponseEntityConvertor::convertToMonoResponseEntity);
+    }
 
     /**
      * Quota gate in front of the Generate Product Link second screen.

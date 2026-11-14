@@ -42,6 +42,19 @@ public class Payment {
     private String paymentUrl;
 
     /**
+     * VietQR Quick Link image URL generated for this payment, linked to the
+     * payment code; the seller payment page renders it directly.
+     */
+    @Column(name = "qr_url", length = 1000)
+    private String qrUrl;
+
+    /**
+     * Transfer content (username + plan) baked into the QR addInfo.
+     */
+    @Column(name = "qr_add_info", length = 100)
+    private String qrAddInfo;
+
+    /**
      * Admin username that created this payment (who sent the plan to seller).
      */
     @Column(name = "created_by", length = 50)

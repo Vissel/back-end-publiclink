@@ -96,6 +96,9 @@ public class CoreYogaEnvironmentService {
                                 .sellerUsername(request.getSellerName())
                                 .active(env.isState())
                                 .willEndedAtMillis(env.getWillEndedAt() != null ? env.getWillEndedAt().getTime() : null)
+                                .willStartedAtMillis(
+                                                env.getWillStartedAt() != null ? env.getWillStartedAt().getTime()
+                                                                : null)
                                 .productType(productType)
                                 .productName(first != null ? first.getProductName() : null)
                                 .dropInPrice(dropInPrice)

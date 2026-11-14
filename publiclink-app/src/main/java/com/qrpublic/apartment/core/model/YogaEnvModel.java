@@ -22,6 +22,11 @@ public class YogaEnvModel {
     private boolean active;
     /** epoch millis of sale_environment.will_ended_at (precise lifetime signal) */
     private Long willEndedAtMillis;
+    /**
+     * epoch millis of sale_environment.will_started_at; null means it opened on
+     * creation
+     */
+    private Long willStartedAtMillis;
     private String productType;
     private String productName;
     /** drop-in price per class for pay-as-you-go buyers */

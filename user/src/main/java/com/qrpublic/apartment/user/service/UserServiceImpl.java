@@ -257,8 +257,18 @@ public class UserServiceImpl implements UserService {
         return Result.success(new AvatarResponse(userName, toDataUrl(avatar)));
     }
 
+    /**
+     * Rebuilds the data URL the browser sent: the row keeps the MIME type and
+     * the bare payload apart, so the {@code data:} scheme has to be put back.
+     * Without it the value is a relative URL, the img request 404s and the
+     * header silently falls back to the initials.
+     */
     private static String toDataUrl(UserAvatarEntity avatar) {
-        return avatar.getData() == null ? null : avatar.getContentType() + ";base64," + avatar.getData();
+        if (avatar.getData() == null) {
+            return null;
+        }
+        String contentType = StringUtils.isBlank(avatar.getContentType()) ? "image/jpeg" : avatar.getContentType();
+        return "data:" + contentType + ";base64," + avatar.getData();
     }
 
     protected Result<RegisterAdminResponse> doRegisterAdmin(String userName, String role) {

@@ -13,4 +13,16 @@ public class CreateEnvironmentRequest {
     @NotBlank
     private String requestUuid;
     private CreateProductRequest productRequest;
+
+    /**
+     * Optional epoch millis: when the sale window opens. Blank or in the past
+     * means "starts now"; a future value schedules the sale.
+     */
+    private Long startAt;
+
+    /**
+     * Optional epoch millis: when the sale window closes. Blank falls back to
+     * now + price.durationHours. Never accepted past the paid plan end.
+     */
+    private Long endAt;
 }

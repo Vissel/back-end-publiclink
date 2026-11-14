@@ -8,8 +8,10 @@ import com.qrpublic.apartment.core.model.PlanUserModel;
 import com.qrpublic.apartment.core.service.CorePaymentPlanService;
 import com.qrpublic.apartment.core.service.CorePaymentService;
 import com.qrpublic.apartment.exception.ApplicationException;
+import com.qrpublic.apartment.paymentplan.request.CreateCatalogPlanRequest;
 import com.qrpublic.apartment.paymentplan.request.CreateSellerPlanRequest;
 import com.qrpublic.apartment.paymentplan.response.CreateSellerPlanResponse;
+import com.qrpublic.apartment.paymentplan.response.CreatedPlanResponse;
 import com.qrpublic.apartment.service.LinkService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -44,16 +46,38 @@ public class PaymentPlanService {
     private long paymentLinkExpiryMillis;
 
     /**
-     * Create a plan assignment + payment record for a seller, generate the
-     * payment URL and return it to the admin to send manually. Single
-     * transaction so assignment and payment are always consistent.
+     * Create a catalog plan on its own. No seller is involved and no payment is
+     * produced; linking it to a seller is the separate assignSeller step.
+     */
+    @Transactional
+    public CreatedPlanResponse createCatalogPlan(CreateCatalogPlanRequest request) {
+        int envCount = request.getEnvCount() > 0 ? request.getEnvCount() : 1;
+        com.qrpublic.apartment.core.model.PaymentPlanModel plan = corePaymentPlanService.createPlan(
+                request.getFee(), request.getPlanDay(), envCount, request.getDescription());
+
+        CreatedPlanResponse response = new CreatedPlanResponse();
+        response.setPlanCode(plan.getPlanCode());
+        response.setFee(plan.getFee());
+        response.setPlanDay(plan.getPlanDay());
+        response.setEnvCount(plan.getEnvCount());
+        response.setDescription(plan.getDescription());
+        response.setPlanState(plan.getPlanState());
+        return response;
+    }
+
+    /**
+     * Link an existing plan to a seller: creates the assignment plus the payment
+     * record in CREATE state, generates the payment URL and returns it for the
+     * admin to send manually. Single transaction so assignment and payment are
+     * always consistent.
      *
      * @param adminUsername authenticated admin (X-User-ID); the payment page
      *                      shows this admin's transfer accounts
      */
     @Transactional
     public CreateSellerPlanResponse createSellerPlan(CreateSellerPlanRequest request, String adminUsername) {
-        PlanUserModel assignment = resolveAssignment(request);
+        PlanUserModel assignment = corePaymentPlanService.createAssignment(
+                request.getUsername(), request.getPlanCode());
 
         BigDecimal fee = assignment.getFee();
         PaymentModel payment = corePaymentService.createPayment(
@@ -78,19 +102,6 @@ public class PaymentPlanService {
         response.setEnvCount(assignment.getEnvQuota());
         response.setStatus(payment.getStatus());
         return response;
-    }
-
-    private PlanUserModel resolveAssignment(CreateSellerPlanRequest request) {
-        if (request.getPlanCode() != null && !request.getPlanCode().isBlank()) {
-            return corePaymentPlanService.createAssignment(request.getUsername(), request.getPlanCode());
-        }
-        CreateSellerPlanRequest.NewPlan newPlan = request.getNewPlan();
-        if (newPlan == null || newPlan.getFee() == null || newPlan.getPlanDay() <= 0) {
-            throw new ApplicationException("Either planCode or a valid newPlan is required.", 400);
-        }
-        int envCount = newPlan.getEnvCount() > 0 ? newPlan.getEnvCount() : 1;
-        return corePaymentPlanService.createAssignmentWithNewPlan(
-                request.getUsername(), newPlan.getFee(), newPlan.getPlanDay(), envCount, newPlan.getDescription());
     }
 
     /**

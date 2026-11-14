@@ -165,10 +165,23 @@ public class SaleEnvironmentServiceImpl implements SaleEnvironmentService {
         Request requestEntity = coreRequestService.getRequestByUuid(requestObject.getRequestUuid()).orElseThrow(
                 () -> new ResourceNotFoundException("Request not found with UUID: " + requestObject.getRequestUuid()));
 
-        // Gate on the payment plan window + quota before anything is written.
-        // The returned deadline caps the public link lifetime below.
-        com.qrpublic.apartment.core.model.PlanGateModel planGate = paymentPlanService
-                .consumeQuotaOrThrow(requestObject.getSellerRequest().getUsername());
+        // Read-only gate first: it reports the plan window and its deadline
+        // without spending a link slot, so a refused window below cannot leave
+        // the seller with one environment less and nothing to show for it.
+        final String sellerUsername = requestObject.getSellerRequest().getUsername();
+        final com.qrpublic.apartment.core.model.PlanGateModel planPreview = paymentPlanService.evaluate(sellerUsername);
+        if (!planPreview.isAllowed()) {
+            log.warn("Refused environment creation for [{}]: {}", sellerUsername, planPreview.getReason());
+            throw new com.qrpublic.apartment.exception.ApplicationException(planPreview.getMessage(), 403);
+        }
+
+        // Resolve the chosen sale window against the plan deadline. Pure
+        // validation: nothing has been written yet at this point.
+        final SaleWindow window = resolveWindow(requestObject, planPreview.getDeadline());
+
+        // Quota is only consumed once the window is known to be acceptable.
+        paymentPlanService.consumeQuotaOrThrow(sellerUsername);
+
         if (requestObject.getProductRequest() != null) {
             log.info("Step 2: Validating business rules");
             validateProductCreationRequest(requestObject.getProductRequest());
@@ -178,13 +191,14 @@ public class SaleEnvironmentServiceImpl implements SaleEnvironmentService {
         // Create SaleEnvironment
         SaleEnvironment env = new SaleEnvironment();
         env.setRequest(requestEntity);
-        // Generate public link by username + requestID, never past the plan end
-        final LinkModel linkModel = generatePublicLink(requestObject, planGate.getDeadline());
-        final String publicLink = linkModel.getToken();
-        log.debug("Generated public link: {}", publicLink);
-        env.setPublicLink(publicLink);
-        env.setWillEndedAt(
-                linkModel.getExpire() != null ? new java.sql.Timestamp(linkModel.getExpire().getTime()) : null);
+        final LinkModel linkModel = linkService.generateSecureUrlUntil(
+                requestObject.getRequestUuid(),
+                Map.of(LinkConstant.PARAM_USERNAME, sellerUsername),
+                window.end());
+        log.debug("Generated public link for sale window [{} .. {}]", window.start(), window.end());
+        env.setPublicLink(linkModel.getToken());
+        env.setWillStartedAt(new java.sql.Timestamp(window.start().getTime()));
+        env.setWillEndedAt(new java.sql.Timestamp(window.end().getTime()));
         env.setState(true);
         return repo.save(env);
     }
@@ -348,32 +362,77 @@ public class SaleEnvironmentServiceImpl implements SaleEnvironmentService {
     }
 
     /**
-     * Build the public link token. The requested duration comes from the client
-     * and is therefore treated as an upper wish only: the effective expiry is
-     * clamped to the paid plan deadline, so a link can never outlive the plan
-     * even if the caller posts a huge durationHours.
+     * The resolved sale window: start is never in the past, end never past the
+     * plan.
      */
-    private LinkModel generatePublicLink(CreateEnvironmentRequest requestObj, java.util.Date planDeadline) {
-        final String uuid = requestObj.getRequestUuid();
-        final String sellerUsername = requestObj.getSellerRequest().getUsername();
-        final long requestedMillis = requestObj.getSellerRequest().getPrice().getDurationHours() * ONE_HOUR_MILI;
+    private record SaleWindow(java.util.Date start, java.util.Date end) {
+    }
 
+    /**
+     * Resolve the sale window the caller asked for. Both dates come from the
+     * client and are therefore treated as wishes only:
+     * <ul>
+     * <li>start - defaults to now, and a start in the past is pulled up to now;
+     * a future start schedules the sale (orders are refused until then).</li>
+     * <li>end - defaults to now + price.durationHours, clamped to the paid plan
+     * deadline exactly as before. When the caller picks an explicit end, it is
+     * <b>rejected</b> rather than silently shortened if it lands after the plan
+     * end, so the seller sees why the choice was refused.</li>
+     * </ul>
+     * The public link token is then minted to expire at that end instant, and
+     * the window itself is enforced again at order time.
+     */
+    private SaleWindow resolveWindow(CreateEnvironmentRequest requestObj, java.util.Date planDeadline) {
+        final String sellerUsername = requestObj.getSellerRequest().getUsername();
         final java.util.Date now = coreTimezoneService.getNow();
-        java.util.Date expiry = new java.util.Date(now.getTime() + requestedMillis);
-        if (planDeadline != null && expiry.after(planDeadline)) {
-            log.info("Clamping public link expiry for [{}] from {} to plan deadline {}",
-                    sellerUsername, expiry, planDeadline);
-            expiry = planDeadline;
+
+        java.util.Date start = requestObj.getStartAt() != null ? new java.util.Date(requestObj.getStartAt()) : now;
+        if (start.before(now)) {
+            log.info("Sale window start for [{}] is in the past, starting now instead", sellerUsername);
+            start = now;
         }
-        if (!expiry.after(now)) {
+
+        java.util.Date end;
+        if (requestObj.getEndAt() != null) {
+            end = new java.util.Date(requestObj.getEndAt());
+            if (planDeadline != null && end.after(planDeadline)) {
+                throw new com.qrpublic.apartment.exception.ApplicationException(
+                        "The end time cannot be after the plan end ("
+                                + DateUtils.dateToLocalTimeString(planDeadline) + ").",
+                        400);
+            }
+        } else {
+            if (requestObj.getSellerRequest().getPrice() == null
+                    || requestObj.getSellerRequest().getPrice().getDurationHours() <= 0) {
+                throw new com.qrpublic.apartment.exception.ApplicationException(
+                        "Either endAt or price.durationHours is required.", 400);
+            }
+            final long requestedMillis = requestObj.getSellerRequest().getPrice().getDurationHours() * ONE_HOUR_MILI;
+            end = new java.util.Date(now.getTime() + requestedMillis);
+            if (planDeadline != null && end.after(planDeadline)) {
+                log.info("Clamping public link expiry for [{}] from {} to plan deadline {}",
+                        sellerUsername, end, planDeadline);
+                end = planDeadline;
+            }
+        }
+
+        if (!end.after(start)) {
+            throw new com.qrpublic.apartment.exception.ApplicationException(
+                    "The end time must be after the start time.", 400);
+        }
+        if (!end.after(now)) {
             throw new com.qrpublic.apartment.exception.ApplicationException(
                     "Your payment plan has ended. You cannot create more product links. "
                             + "Please contact admin via chat or buy a new plan.",
                     403);
         }
-
-        return linkService.generateSecureUrlUntil(uuid,
-                Map.of(LinkConstant.PARAM_USERNAME, sellerUsername), expiry);
+        if (planDeadline != null && start.after(planDeadline)) {
+            throw new com.qrpublic.apartment.exception.ApplicationException(
+                    "The start time cannot be after the plan end ("
+                            + DateUtils.dateToLocalTimeString(planDeadline) + ").",
+                    400);
+        }
+        return new SaleWindow(start, end);
     }
 
     private LinkModel generateReqAuthLink(RequestDTO requestDTO) {

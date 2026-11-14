@@ -61,37 +61,34 @@ public class CorePaymentPlanService {
                 .orElseThrow(() -> new ResourceNotFoundException("Payment plan not found: " + planCode));
     }
 
+    /**
+     * Append a catalog plan. Deliberately independent of any user: linking it
+     * to a seller is a separate, later action (createAssignment). A new row is
+     * always inserted so the caller gets the plan it just described instead of
+     * being silently pointed at a pre-existing identical one.
+     */
+    @Transactional
+    public PaymentPlanModel createPlan(BigDecimal fee, int planDay, int envCount, String description) {
+        PaymentPlan plan = new PaymentPlan();
+        plan.setPlanCode(UUID.randomUUID().toString());
+        plan.setFee(fee);
+        plan.setPlanDay(planDay);
+        plan.setEnvCount(envCount);
+        plan.setDescription(description);
+        plan.setPlanState("ACTIVE");
+        log.info("Created payment plan catalog entry fee={} day={} env={}", fee, planDay, envCount);
+        return toPlanModel(paymentPlanRepository.save(plan));
+    }
+
     // ------------------------------------------------------------ assignments
 
     /**
-     * Assign an existing catalog plan to a user. State starts at CREATE.
+     * Link an existing catalog plan to a user. State starts at CREATE.
      */
     @Transactional
     public PlanUserModel createAssignment(String username, String planCode) {
         PaymentPlan plan = paymentPlanRepository.findByPlanCode(planCode)
                 .orElseThrow(() -> new ResourceNotFoundException("Payment plan not found: " + planCode));
-        return toAssignmentModel(saveAssignment(coreUserService.getUserEntityByUsername(username), plan));
-    }
-
-    /**
-     * Assign an inline-defined plan. Reuses an identical ACTIVE catalog entry
-     * when it exists, otherwise appends a new one (3000 | 1 day | 1 link ...).
-     */
-    @Transactional
-    public PlanUserModel createAssignmentWithNewPlan(String username, BigDecimal fee, int planDay,
-            int envCount, String description) {
-        PaymentPlan plan = paymentPlanRepository.findActiveByFeeAndDayAndEnv(fee, planDay, envCount)
-                .orElseGet(() -> {
-                    PaymentPlan created = new PaymentPlan();
-                    created.setPlanCode(UUID.randomUUID().toString());
-                    created.setFee(fee);
-                    created.setPlanDay(planDay);
-                    created.setEnvCount(envCount);
-                    created.setDescription(description);
-                    created.setPlanState("ACTIVE");
-                    log.info("Appending payment plan catalog entry fee={} day={} env={}", fee, planDay, envCount);
-                    return paymentPlanRepository.save(created);
-                });
         return toAssignmentModel(saveAssignment(coreUserService.getUserEntityByUsername(username), plan));
     }
 

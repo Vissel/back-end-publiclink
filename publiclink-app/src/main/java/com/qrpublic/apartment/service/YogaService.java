@@ -62,7 +62,7 @@ public class YogaService {
 
                     @Override
                     public YogaOccurrencesResponse process() {
-                        LocalDate weekStart = parseDateOrThisMonday(request.getWeekStart());
+                        LocalDate weekStart = parseWindowStart(request.getWeekStart());
                         List<YogaOccurrenceModel> items = yogaBookingDomain.calendar(request.getToken(), weekStart,
                                 callerUsername);
                         boolean sellerView = isSeller(request.getToken(), callerUsername);
@@ -225,9 +225,10 @@ public class YogaService {
         }
     }
 
-    private LocalDate parseDateOrThisMonday(String value) {
+    private LocalDate parseWindowStart(String value) {
         LocalDate parsed = parseDate(value);
-        LocalDate base = parsed != null ? parsed : yogaEnvAccess.dbToday();
-        return base.with(java.time.temporal.TemporalAdjusters.previousOrSame(java.time.DayOfWeek.MONDAY));
+        // The window start is used as-is (a rolling 7-day span, today-centered
+        // on the client); it is deliberately NOT snapped to a Monday.
+        return parsed != null ? parsed : yogaEnvAccess.dbToday();
     }
 }

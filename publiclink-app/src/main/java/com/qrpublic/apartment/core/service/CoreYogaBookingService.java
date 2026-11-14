@@ -121,7 +121,7 @@ public class CoreYogaBookingService {
     public Map<String, Integer> countBookedByEnvRange(String envId, LocalDate from, LocalDate to) {
         Map<String, Integer> result = new HashMap<>();
         for (Object[] row : yogaBookingRepository.countBookedByEnvRange(envId, from, to)) {
-            result.put(slotKey((String) row[0], (java.sql.Date) row[1]), ((Number) row[2]).intValue());
+            result.put(slotKey((String) row[0], row[1]), ((Number) row[2]).intValue());
         }
         return result;
     }
@@ -138,8 +138,7 @@ public class CoreYogaBookingService {
             return result;
         }
         for (YogaBooking b : yogaBookingRepository.findOpenByBuyerInRange(envId, buyerUsername, from, to)) {
-            result.put(slotKey(b.getYogaClass().getClassCode(),
-                    java.sql.Date.valueOf(b.getBookingDate())), toModel(b));
+            result.put(slotKey(b.getYogaClass().getClassCode(), b.getBookingDate()), toModel(b));
         }
         return result;
     }
@@ -161,8 +160,16 @@ public class CoreYogaBookingService {
                 .orElseThrow(() -> new ResourceNotFoundException("Booking not found: " + bookingCode));
     }
 
-    public static String slotKey(String classCode, java.sql.Date date) {
-        return classCode + "|" + (date == null ? "" : date.toLocalDate().toString());
+    /**
+     * Calendar/list slot key. The projected booking date arrives as a
+     * java.time.LocalDate from Hibernate 6 (older drivers gave java.sql.Date),
+     * so both are normalised to the ISO yyyy-MM-dd string the domain uses.
+     */
+    public static String slotKey(String classCode, Object dateValue) {
+        String iso = dateValue instanceof java.sql.Date
+                ? ((java.sql.Date) dateValue).toLocalDate().toString()
+                : String.valueOf(dateValue);
+        return classCode + "|" + iso;
     }
 
     public YogaBookingModel toModel(YogaBooking entity) {

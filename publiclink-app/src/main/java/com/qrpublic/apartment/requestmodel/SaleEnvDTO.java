@@ -16,7 +16,15 @@ import java.util.List;
 public class SaleEnvDTO {
     private String createdAt;
     private String endedAt;
+    /**
+     * Planned closing instant of the sale window (sale_environment.will_ended_at).
+     */
     private String plannedEndedAt;
+    /**
+     * Planned opening instant; null on environments created before the window
+     * feature.
+     */
+    private String plannedStartedAt;
     private String sellerName;
     private String sellerLink;
     /**

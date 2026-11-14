@@ -15,6 +15,11 @@ public class SaleEnvironmentModel {
 
     private String createdAt;
     private String plannedEndedAt;
+    /**
+     * Planned opening instant; empty on environments created before the window
+     * feature.
+     */
+    private String plannedStartedAt;
 
     private SellerModel seller;
     private List<ProductModel> products;

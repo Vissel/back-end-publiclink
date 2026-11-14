@@ -74,6 +74,12 @@ public class YogaEnvAccess {
         if (!env.isActive()) {
             throw new ApplicationException("This product link is no longer active.", 410);
         }
+        // Same window rule as OrderImpl: a sale that has not opened yet takes no
+        // bookings, and one the seller closed early stops at willEndedAt rather
+        // than waiting for the hourly job to flip state.
+        if (env.getWillStartedAtMillis() != null && env.getWillStartedAtMillis() > System.currentTimeMillis()) {
+            throw new ApplicationException("This product link has not started yet.", 410);
+        }
         if (env.getWillEndedAtMillis() != null && env.getWillEndedAtMillis() < System.currentTimeMillis()) {
             throw new ApplicationException("This product link has ended.", 410);
         }

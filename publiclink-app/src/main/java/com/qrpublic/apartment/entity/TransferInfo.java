@@ -49,6 +49,13 @@ public class TransferInfo {
     @Column(name = "transfer_number", nullable = false, length = 50)
     private String transferNumber;
 
+    /**
+     * NAPAS BIN of the chosen bank (e.g. 970436), used as the VietQR BANK_ID.
+     * Nullable: rows created before the QR feature have no BIN.
+     */
+    @Column(name = "bank_bin", length = 20)
+    private String bankBin;
+
     @Column(name = "account_name", length = 100)
     private String accountName;
 

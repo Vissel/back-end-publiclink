@@ -196,6 +196,13 @@ public class SaleSpaceServiceImpl implements SaleSpaceService {
         response.setPlannedEndedAt(saleEnvironment.getWillEndedAt() != null
                 ? saleEnvironment.getWillEndedAt().toString()
                 : null);
+        response.setPlannedStartedAt(saleEnvironment.getWillStartedAt() != null
+                ? saleEnvironment.getWillStartedAt().toString()
+                : null);
+        // Computed here against DB time: the browser must not decide whether a
+        // scheduled sale has opened, and the order path applies the same rule.
+        response.setNotStartedYet(saleEnvironment.getWillStartedAt() != null && saleEnvironment.getWillStartedAt()
+                .after(new java.sql.Timestamp(coreTimezoneService.getNow().getTime())));
         response.setListOrder(toOrderDTOs(orders, saleEnvironment.getPublicLink()));
         response.setListProduct(toProductDTOs(products));
         response.setAvailableAmount(calculateAvailableAmount(products, orders));

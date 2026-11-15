@@ -241,6 +241,24 @@ public class YogaBookingDomain {
         return coreYogaBookingService.findByEnvAndRange(env.getEnvId(), from, to);
     }
 
+    /**
+     * Registered buyers of one occurrence, seller view only: the caller must
+     * own the page and the class must live on it, so one seller can never read
+     * another seller's buyer list.
+     */
+    @Transactional(readOnly = true)
+    public List<YogaBookingModel> attendees(String token, String classCode, LocalDate date, String callerUsername) {
+        if (date == null) {
+            throw new ApplicationException("A booking date is required.", 400);
+        }
+        YogaEnvModel env = yogaEnvAccess.resolveForSeller(token, callerUsername);
+        YogaClassModel yogaClass = coreYogaClassService.findByCode(classCode);
+        if (!env.getEnvId().equals(yogaClass.getEnvId())) {
+            throw new ApplicationException("Class does not belong to this page.", 403);
+        }
+        return coreYogaBookingService.findAttendeesBySlot(classCode, date);
+    }
+
     @Transactional
     public YogaBookingModel toggleBooking(String token, String sellerUsername, String bookingCode,
             boolean paid, boolean attended) {

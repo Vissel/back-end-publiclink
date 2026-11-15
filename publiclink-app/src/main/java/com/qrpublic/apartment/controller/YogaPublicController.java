@@ -7,6 +7,7 @@ import com.qrpublic.apartment.yoga.request.BuyerSetupRequest;
 import com.qrpublic.apartment.yoga.request.YogaBookRequest;
 import com.qrpublic.apartment.yoga.request.YogaCalendarRequest;
 import com.qrpublic.apartment.yoga.request.YogaCancelRequest;
+import com.qrpublic.apartment.yoga.request.YogaOccurrenceRequest;
 import com.qrpublic.apartment.yoga.request.YogaRangeRequest;
 import com.qrpublic.apartment.yoga.response.BuyerSetupInfoResponse;
 import com.qrpublic.apartment.yoga.response.YogaOccurrencesResponse;
@@ -22,6 +23,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
+
+import java.util.List;
 
 /**
  * Public yoga calendar + booking endpoints and the buyer setup page. These
@@ -69,6 +72,15 @@ public class YogaPublicController {
                         @RequestBody YogaCancelRequest request,
                         @RequestHeader(value = HeaderConstant.USER_ID_HEADER, defaultValue = "") String caller) {
                 return Mono.fromCallable(() -> yogaService.cancel(request, caller))
+                                .subscribeOn(Schedulers.boundedElastic())
+                                .flatMap(ResponseEntityConvertor::convertToMonoResponseEntity);
+        }
+
+        @PostMapping("/attendees")
+        public Mono<ResponseEntity<List<YogaBookingModel>>> attendees(
+                        @RequestBody YogaOccurrenceRequest request,
+                        @RequestHeader(value = HeaderConstant.USER_ID_HEADER, defaultValue = "") String caller) {
+                return Mono.fromCallable(() -> yogaService.attendees(request, caller))
                                 .subscribeOn(Schedulers.boundedElastic())
                                 .flatMap(ResponseEntityConvertor::convertToMonoResponseEntity);
         }

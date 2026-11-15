@@ -30,4 +30,10 @@ public class PaymentModel {
     private String paidAt;
     private String createdAt;
     private PaymentPlanModel plan;
+    /** days bought on top of the seller's running plan; null for a plan payment */
+    private Integer extendDays;
+    /** the window the extension buys: from (current plan end) ... */
+    private String extensionFrom;
+    /** ... to (new plan end) */
+    private String extensionTo;
 }

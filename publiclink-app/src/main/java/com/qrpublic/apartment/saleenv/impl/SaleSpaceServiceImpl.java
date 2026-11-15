@@ -8,6 +8,7 @@ import com.qrpublic.apartment.core.model.UserModel;
 import com.qrpublic.apartment.core.service.CoreRequestService;
 import com.qrpublic.apartment.core.service.CoreTimezoneService;
 import com.qrpublic.apartment.core.service.CoreUserService;
+import com.qrpublic.apartment.domain.transferinfo.EnvironmentTransferDomain;
 import com.qrpublic.apartment.entity.*;
 import com.qrpublic.apartment.exception.EnvironmentCreationException;
 import com.qrpublic.apartment.integration.SecurityCheckClient;
@@ -66,6 +67,9 @@ public class SaleSpaceServiceImpl implements SaleSpaceService {
 
     @Autowired
     SecurityCheckClient securityCheckClient;
+
+    @Autowired
+    EnvironmentTransferDomain environmentTransferDomain;
 
     @Override
     public Result<GetSaleSpaceResponse> getSaleSpace(String token, Map<String, Object> headers) {
@@ -209,6 +213,8 @@ public class SaleSpaceServiceImpl implements SaleSpaceService {
         response.setProductType(products.isEmpty() || products.get(0).getProductType() == null
                 ? "STANDARD"
                 : products.get(0).getProductType());
+        // Shown to everyone: the buyer needs it to pay, the seller to check it.
+        response.setTransferInfo(environmentTransferDomain.resolve(saleEnvironment));
         return response;
     }
 

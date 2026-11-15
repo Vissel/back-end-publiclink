@@ -11,5 +11,6 @@ public class UserModel {
     private String link;
     private String name;
     private String type;
+    private String email;
     private AuthenticationEnum authenticationEnum;
 }

@@ -23,9 +23,16 @@ public class PaymentInfoResponse {
     private String status;
     private String estimatedActiveDate;
     private String estimatedEndDate;
+    /** set when this payment buys extra days on a running plan */
+    private Integer extendDays;
     /** VietQR Quick Link image URL generated for this payment */
     private String qrUrl;
     private String qrAddInfo;
+    /**
+     * Payment URL token, handed to the self-service screen so it can confirm
+     * the transfer without parsing the payment URL.
+     */
+    private String paymentToken;
     private List<TransferItem> transferInfos;
 
     @Data

@@ -25,5 +25,7 @@ public class YogaBookingModel {
     private boolean paid;
     private boolean attended;
     private String bookedBy;
+    /** when the slot was reserved, yyyy-MM-dd HH:mm (seller buyer list) */
+    private String bookedAt;
     private String note;
 }

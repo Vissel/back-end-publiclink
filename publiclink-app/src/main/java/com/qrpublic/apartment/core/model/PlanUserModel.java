@@ -20,14 +20,20 @@ public class PlanUserModel {
     private int envQuota;
     private int usedCount;
     private int remaining;
-    /** CREATE | ACTIVE | DEACTIVE */
+    /** CREATE | ACTIVE | DEACTIVE | EXTENDED */
     private String planState;
     private String activeDate;
     private String endedDate;
+    /** days bought on top of another plan; non-null marks an extension order */
+    private Integer extendDays;
+    /** plan user code whose end date the extension adds its days to */
+    private String extendsPlanUserCode;
     private String createdAt;
     private String paymentCode;
     /** payment status of the linked payment record */
     private String paymentStatus;
+    /** payment URL of the linked payment record, relative to the app host */
+    private String paymentUrl;
     /** username of the admin who created the assignment */
     private String createdBy;
 }

@@ -16,6 +16,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.reactive.function.client.WebClientResponseException;
 
 import java.util.UUID;
 
@@ -122,12 +123,27 @@ public class PasswordSetupDomain {
             var result = operatedUserClient.changePassword(changeRequest)
                     .block(java.time.Duration.ofSeconds(10));
             if (result == null || !result.isSuccess()) {
-                // token was consumed for nothing: hand the buyer a fresh link
                 throw new ApplicationException(
-                        "Could not store the new password. Request a new setup link and try again.", 502);
+                        "The account service refused the new password. It must be at least 8 characters.", 400);
             }
         } catch (ApplicationException e) {
             throw e;
+        } catch (WebClientResponseException e) {
+            // A 4xx here is the account service applying its password policy,
+            // not an outage. Reporting it as 502 told the buyer to retry
+            // forever; the status is passed through so the page can explain,
+            // and the failed transaction rolls the token back, so the same
+            // link is still usable.
+            int status = e.getStatusCode().value();
+            log.warn("User service rejected the new password for [{}]: {} {}", token.getUsername(), status,
+                    e.getResponseBodyAsString());
+            if (status == 404) {
+                throw new ApplicationException(
+                        "This account no longer exists. Ask the seller to create the plan again.", 404);
+            }
+            throw new ApplicationException(
+                    "The new password was rejected. It must be at least 8 characters.",
+                    status >= 400 && status < 500 ? status : 502);
         } catch (Exception e) {
             log.error("User service changePassword failed for [{}]: {}", token.getUsername(), e.getMessage());
             throw new ApplicationException(

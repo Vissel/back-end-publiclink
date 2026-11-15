@@ -16,7 +16,9 @@ import com.qrpublic.apartment.saleenv.SellerService;
 import com.qrpublic.apartment.saleenv.request.ExportAllRequest;
 import com.qrpublic.apartment.saleenv.request.ExportReportRequest;
 import com.qrpublic.apartment.saleenv.request.ListSellerRequestsRequest;
+import com.qrpublic.apartment.saleenv.request.UpdateEnvironmentTransferRequest;
 import com.qrpublic.apartment.saleenv.request.UpdateEnvironmentWindowRequest;
+import com.qrpublic.apartment.saleenv.response.EnvTransferInfoDTO;
 import com.qrpublic.apartment.saleenv.response.ListSellerRequestResponse;
 import com.qrpublic.apartment.service.LinkService;
 import com.qrpublic.apartment.service.NotificationService;
@@ -78,9 +80,9 @@ public class SellerPageController {
     }
 
     /**
-     * Seller edit of the sale window: move the closing time earlier, or close
-     * the sale now. The end can never be pushed later, so it stays inside the
-     * paid plan window; ownership is checked against X-User-ID.
+     * Seller edit of the sale window: move the closing time earlier, close the
+     * sale now, or extend it up to the end of the paid plan (which re-issues the
+     * public link). Ownership is checked against X-User-ID.
      */
     @PostMapping("/environment/updateWindow")
     public Mono<ResponseEntity<SaleEnvDTO>> updateEnvironmentWindow(
@@ -88,6 +90,21 @@ public class SellerPageController {
             @RequestBody UpdateEnvironmentWindowRequest request) {
         return Mono
                 .fromCallable(() -> ResponseEntity.ok(sellerService.updateEnvironmentWindow(request, sellerUsername)))
+                .subscribeOn(Schedulers.boundedElastic());
+    }
+
+    /**
+     * Seller shows one of their own transfer accounts on the sale page, or
+     * hides it again (blank transferCode). Ownership is checked against
+     * X-User-ID; the body is empty after a detach.
+     */
+    @PostMapping("/environment/transferInfo")
+    public Mono<ResponseEntity<EnvTransferInfoDTO>> updateEnvironmentTransferInfo(
+            @RequestHeader(value = "X-User-ID", defaultValue = "") String sellerUsername,
+            @Valid @RequestBody UpdateEnvironmentTransferRequest request) {
+        return Mono
+                .fromCallable(() -> ResponseEntity
+                        .ok(sellerService.updateEnvironmentTransferInfo(request, sellerUsername)))
                 .subscribeOn(Schedulers.boundedElastic());
     }
 

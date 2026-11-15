@@ -4,13 +4,17 @@ import com.qrpublic.apartment.constant.HeaderConstant;
 import com.qrpublic.apartment.paymentplan.request.ApprovePlanRequest;
 import com.qrpublic.apartment.paymentplan.request.CheckPlanRequest;
 import com.qrpublic.apartment.paymentplan.request.CreateCatalogPlanRequest;
+import com.qrpublic.apartment.paymentplan.request.ExtendPlanRequest;
 import com.qrpublic.apartment.paymentplan.request.ListPlanUserRequest;
 import com.qrpublic.apartment.paymentplan.request.MarkPaidRequest;
+import com.qrpublic.apartment.paymentplan.request.RegenerateLinkRequest;
 import com.qrpublic.apartment.paymentplan.request.RejectPlanRequest;
 import com.qrpublic.apartment.paymentplan.response.CheckPlanResponse;
 import com.qrpublic.apartment.paymentplan.response.CreatedPlanResponse;
+import com.qrpublic.apartment.paymentplan.response.ExtendPlanResponse;
 import com.qrpublic.apartment.paymentplan.response.ListPlanUserResponse;
 import com.qrpublic.apartment.paymentplan.response.PlanCatalogResponse;
+import com.qrpublic.apartment.paymentplan.response.RegenerateLinkResponse;
 import com.qrpublic.apartment.requestmodel.Pagination;
 import com.qrpublic.apartment.service.PaymentPlanAdminService;
 import com.qrpublic.apartment.template.ResponseEntityConvertor;
@@ -104,11 +108,43 @@ public class PaymentPlanAdminController {
                 .flatMap(ResponseEntityConvertor::convertToMonoResponseEntity);
     }
 
+    /**
+     * Money received: the selected payments go to PAID and their plans start
+     * on the given activation date, which moves them out of the "Waiting for
+     * pay" table and into the active plan list.
+     */
     @PostMapping("/payment/markPaid")
-    public Mono<ResponseEntity<Void>> markPaid(
+    public Mono<ResponseEntity<Integer>> markPaid(
             @RequestBody MarkPaidRequest request,
             @RequestHeader(value = HeaderConstant.USER_ID_HEADER, defaultValue = "admin") String adminUsername) {
         return Mono.fromCallable(() -> paymentPlanAdminService.markPaid(request, adminUsername))
+                .subscribeOn(Schedulers.boundedElastic())
+                .flatMap(ResponseEntityConvertor::convertToMonoResponseEntity);
+    }
+
+    /**
+     * Re-issues the payment URL of the selected plans. Used by the "Waiting for
+     * pay" table when a seller lost the link or the previous one expired.
+     */
+    @PostMapping("/payment/regenerateLink")
+    public Mono<ResponseEntity<RegenerateLinkResponse>> regeneratePaymentLink(
+            @RequestBody RegenerateLinkRequest request) {
+        return Mono.fromCallable(() -> paymentPlanAdminService.regeneratePaymentLink(request))
+                .subscribeOn(Schedulers.boundedElastic())
+                .flatMap(ResponseEntityConvertor::convertToMonoResponseEntity);
+    }
+
+    /**
+     * Sells extra days on a running plan: creates an extension order in the
+     * "Waiting for pay" queue together with its own payment link, priced at the
+     * plan's daily rate. The plan's end date only moves when that order is
+     * marked paid.
+     */
+    @PostMapping("/extend")
+    public Mono<ResponseEntity<ExtendPlanResponse>> extendPlan(
+            @RequestBody ExtendPlanRequest request,
+            @RequestHeader(value = HeaderConstant.USER_ID_HEADER, defaultValue = "admin") String adminUsername) {
+        return Mono.fromCallable(() -> paymentPlanAdminService.extendPlan(request, adminUsername))
                 .subscribeOn(Schedulers.boundedElastic())
                 .flatMap(ResponseEntityConvertor::convertToMonoResponseEntity);
     }

@@ -12,6 +12,7 @@ import com.qrpublic.apartment.yoga.request.BuyerSetupRequest;
 import com.qrpublic.apartment.yoga.request.YogaBookRequest;
 import com.qrpublic.apartment.yoga.request.YogaCalendarRequest;
 import com.qrpublic.apartment.yoga.request.YogaCancelRequest;
+import com.qrpublic.apartment.yoga.request.YogaOccurrenceRequest;
 import com.qrpublic.apartment.yoga.request.YogaRangeRequest;
 import com.qrpublic.apartment.yoga.response.BuyerSetupInfoResponse;
 import com.qrpublic.apartment.yoga.response.YogaOccurrencesResponse;
@@ -143,6 +144,34 @@ public class YogaService {
                         boolean sellerView = isSeller(request.getToken(), callerUsername);
                         return YogaResultResponse.of(yogaBookingDomain.cancel(
                                 request.getToken(), request.getBookingCode(), callerUsername, sellerView));
+                    }
+                });
+    }
+
+    /**
+     * Seller buyer list behind a clicked class cell. The domain asserts page
+     * ownership, so a non-owner caller gets 403 rather than someone else's
+     * buyers.
+     */
+    public Result<List<YogaBookingModel>> attendees(YogaOccurrenceRequest request, String callerUsername) {
+        return publicLinkServiceTemplate
+                .execute(new ProcessCallback<YogaOccurrenceRequest, List<YogaBookingModel>>() {
+                    @Override
+                    public YogaOccurrenceRequest getRequest() {
+                        return request;
+                    }
+
+                    @Override
+                    public void preProcess(YogaOccurrenceRequest req) {
+                        Assert.hasText(req.getToken(), "Link token is required.");
+                        Assert.hasText(req.getClassCode(), "A class must be selected.");
+                        Assert.hasText(req.getDate(), "A booking date is required.");
+                    }
+
+                    @Override
+                    public List<YogaBookingModel> process() {
+                        return yogaBookingDomain.attendees(request.getToken(), request.getClassCode(),
+                                parseDate(request.getDate()), callerUsername);
                     }
                 });
     }

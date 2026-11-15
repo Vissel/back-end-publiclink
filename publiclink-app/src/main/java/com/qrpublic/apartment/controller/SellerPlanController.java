@@ -2,15 +2,19 @@ package com.qrpublic.apartment.controller;
 
 import com.qrpublic.apartment.constant.HeaderConstant;
 import com.qrpublic.apartment.paymentplan.request.CheckPlanRequest;
+import com.qrpublic.apartment.paymentplan.request.SelectPlanRequest;
 import com.qrpublic.apartment.paymentplan.response.CheckPlanResponse;
 import com.qrpublic.apartment.paymentplan.response.ListPlanUserResponse;
+import com.qrpublic.apartment.paymentplan.response.SelfServiceStateResponse;
 import com.qrpublic.apartment.service.PaymentPlanAdminService;
+import com.qrpublic.apartment.service.SelfServicePlanService;
 import com.qrpublic.apartment.template.ResponseEntityConvertor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -28,6 +32,9 @@ public class SellerPlanController {
 
     @Autowired
     private PaymentPlanAdminService paymentPlanAdminService;
+
+    @Autowired
+    private SelfServicePlanService selfServicePlanService;
 
     @GetMapping("/myPlans")
     public Mono<ResponseEntity<ListPlanUserResponse>> myPlans(
@@ -47,6 +54,32 @@ public class SellerPlanController {
         CheckPlanRequest request = new CheckPlanRequest();
         request.setUsername(sellerUsername);
         return Mono.fromCallable(() -> paymentPlanAdminService.checkPlan(request))
+                .subscribeOn(Schedulers.boundedElastic())
+                .flatMap(ResponseEntityConvertor::convertToMonoResponseEntity);
+    }
+
+    /**
+     * Self-service plan purchase: the seller buys the selected catalog plan and
+     * immediately gets the transfer instructions. An order that is already open
+     * is handed back instead of a second one being created.
+     */
+    @PostMapping("/select")
+    public Mono<ResponseEntity<SelfServiceStateResponse>> selectPlan(
+            @RequestBody SelectPlanRequest request,
+            @RequestHeader(value = HeaderConstant.USER_ID_HEADER, defaultValue = "") String sellerUsername) {
+        return Mono.fromCallable(() -> selfServicePlanService.selectPlan(sellerUsername, request))
+                .subscribeOn(Schedulers.boundedElastic())
+                .flatMap(ResponseEntityConvertor::convertToMonoResponseEntity);
+    }
+
+    /**
+     * Onboarding state of the seller, polled by the plan screen while an admin
+     * verifies the transfer.
+     */
+    @GetMapping("/current")
+    public Mono<ResponseEntity<SelfServiceStateResponse>> current(
+            @RequestHeader(value = HeaderConstant.USER_ID_HEADER, defaultValue = "") String sellerUsername) {
+        return Mono.fromCallable(() -> selfServicePlanService.currentState(sellerUsername))
                 .subscribeOn(Schedulers.boundedElastic())
                 .flatMap(ResponseEntityConvertor::convertToMonoResponseEntity);
     }

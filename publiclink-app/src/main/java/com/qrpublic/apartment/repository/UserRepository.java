@@ -37,7 +37,7 @@ public interface UserRepository extends JpaRepository<User, String> {
         @Query("SELECT u FROM User u " +
                         "WHERE (:userName IS NULL OR u.userName LIKE CONCAT('%', :userName, '%')) " +
                         "AND (:name IS NULL OR u.name LIKE CONCAT('%', :name, '%')) " +
-                        "AND (:email IS NULL OR u.link LIKE CONCAT('%', :email, '%')) " +
+                        "AND (:email IS NULL OR u.email LIKE CONCAT('%', :email, '%')) " +
                         "AND (:type IS NULL OR u.type LIKE CONCAT('%', :type, '%'))")
         Page<User> findByFilters(
                         @Param("userName") String userName,

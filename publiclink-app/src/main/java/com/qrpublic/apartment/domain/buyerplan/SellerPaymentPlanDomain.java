@@ -2,6 +2,7 @@ package com.qrpublic.apartment.domain.buyerplan;
 
 import com.qrpublic.apartment.adapter.user.request.GenerateAccountRequest;
 import com.qrpublic.apartment.core.model.SellerPlanModel;
+import com.qrpublic.apartment.core.model.UserModel;
 import com.qrpublic.apartment.core.model.YogaEnvModel;
 import com.qrpublic.apartment.core.service.CoreSellerPaymentPlanService;
 import com.qrpublic.apartment.core.service.CoreUserService;
@@ -129,7 +130,10 @@ public class SellerPaymentPlanDomain {
         }
         GenerateAccountRequest request = new GenerateAccountRequest();
         request.setUserName(username);
-        request.setRole(null); // keep the existing role
+        // Sending null here let the account service provision a first-time login
+        // as BUYER, so a seller who had just paid authenticated fine and was
+        // then bounced straight back to the login page by the seller route guard.
+        request.setRole(resolveResetRole(username));
         try {
             var result = operatedUserClient.generateAccount(request)
                     .block(java.time.Duration.ofSeconds(10));
@@ -151,6 +155,27 @@ public class SellerPaymentPlanDomain {
                 com.qrpublic.apartment.core.service.CorePasswordSetupTokenService.PURPOSE_RESET,
                 null, adminUsername);
         return link.getAbsoluteLink();
+    }
+
+    /**
+     * The role the account service has to carry after a reset, taken from the
+     * publiclink user row the admin selected. {@code null} means "keep the
+     * stored role", which admin accounts need: their gateway authorities
+     * (Admin / Badminton_Admin) are not modelled by {@link UserType}.
+     */
+    private String resolveResetRole(String username) {
+        UserModel local = coreUserService.findByUsername(username);
+        String type = local == null ? null : local.getType();
+        if (type == null || type.isBlank()) {
+            return null;
+        }
+        if (type.trim().equalsIgnoreCase(UserType.SELLER.name())) {
+            return UserType.SELLER.name();
+        }
+        if (type.trim().equalsIgnoreCase(UserType.BUYER.name())) {
+            return UserType.BUYER.name();
+        }
+        return null;
     }
 
     private String findBuyerEmail(String username) {
@@ -241,7 +266,7 @@ public class SellerPaymentPlanDomain {
     }
 
     private boolean isPasswordSet(String username) {
-        com.qrpublic.apartment.core.model.UserModel user = coreUserService.findByUsername(username);
+        UserModel user = coreUserService.findByUsername(username);
         return user != null
                 && user.getAuthenticationEnum() == com.qrpublic.apartment.core.model.AuthenticationEnum.BASIC;
     }

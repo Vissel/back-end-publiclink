@@ -169,6 +169,9 @@ public class CorePaymentService {
                 .paidAt(DateUtils.dateToString(payment.getPaidAt()))
                 .createdAt(DateUtils.dateToString(payment.getCreatedAt()))
                 .plan(corePaymentPlanService.toPlanModel(assignment.getPlan()))
+                .extendDays(assignment.getExtendDays())
+                .extensionFrom(DateUtils.dateToString(assignment.getActiveDate()))
+                .extensionTo(DateUtils.dateToString(assignment.getEndedDate()))
                 .build();
     }
 }

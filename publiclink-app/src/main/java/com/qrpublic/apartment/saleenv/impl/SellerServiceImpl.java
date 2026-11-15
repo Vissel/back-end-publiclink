@@ -1,7 +1,11 @@
 package com.qrpublic.apartment.saleenv.impl;
 
 import com.qrpublic.apartment.constant.CommonConstant;
+import com.qrpublic.apartment.constant.LinkConstant;
+import com.qrpublic.apartment.core.model.LinkModel;
 import com.qrpublic.apartment.core.service.CoreTimezoneService;
+import com.qrpublic.apartment.domain.paymentplan.PaymentPlanService;
+import com.qrpublic.apartment.domain.transferinfo.EnvironmentTransferDomain;
 import com.qrpublic.apartment.entity.SaleEnvironment;
 import com.qrpublic.apartment.exception.ApplicationException;
 import com.qrpublic.apartment.exception.ResourceNotFoundException;
@@ -16,8 +20,11 @@ import com.qrpublic.apartment.saleenv.SellerService;
 import com.qrpublic.apartment.saleenv.convertor.SaleEnvConvertor;
 import com.qrpublic.apartment.saleenv.request.ExportReportRequest;
 import com.qrpublic.apartment.saleenv.request.ListSellerRequestsRequest;
+import com.qrpublic.apartment.saleenv.request.UpdateEnvironmentTransferRequest;
 import com.qrpublic.apartment.saleenv.request.UpdateEnvironmentWindowRequest;
+import com.qrpublic.apartment.saleenv.response.EnvTransferInfoDTO;
 import com.qrpublic.apartment.saleenv.response.ListSellerRequestResponse;
+import com.qrpublic.apartment.service.LinkService;
 import com.qrpublic.apartment.template.model.Result;
 import com.qrpublic.apartment.template.service.ProcessCallback;
 import com.qrpublic.apartment.template.service.PublicLinkServiceTemplate;
@@ -68,6 +75,15 @@ public class SellerServiceImpl implements SellerService {
 
     @Autowired
     private com.qrpublic.apartment.core.service.CoreSaleEnvironmentService coreSaleEnvironmentService;
+
+    @Autowired
+    private PaymentPlanService paymentPlanService;
+
+    @Autowired
+    private LinkService linkService;
+
+    @Autowired
+    private EnvironmentTransferDomain environmentTransferDomain;
 
     @Override
     public Result<ListSellerRequestResponse> listRequestEnvironment(
@@ -166,17 +182,24 @@ public class SellerServiceImpl implements SellerService {
     }
 
     /**
-     * Seller edit of the sale window: move the closing time earlier, or close
-     * the sale immediately. Deliberately outside PublicLinkServiceTemplate and
-     * throwing ApplicationException rather than returning a failed Result — a
-     * failed Result renders an empty body through ResponseEntityConvertor, which
-     * would hide the reason from the seller's edit dialog.
+     * Seller edit of the sale window: move the closing time earlier, close the
+     * sale immediately, or push the closing time later as far as the paid plan
+     * covers. Deliberately outside PublicLinkServiceTemplate and throwing
+     * ApplicationException rather than returning a failed Result — a failed
+     * Result renders an empty body through ResponseEntityConvertor, which would
+     * hide the reason from the seller's edit dialog.
      *
      * <p>
-     * The end can only move earlier, never later: the public link token was
-     * minted to expire at the original end, so a later value would promise
-     * validity the token cannot deliver. Shortening can never breach the plan
-     * end either, which creation already enforced.
+     * Extending re-issues the public link: the token inside the shared URL was
+     * minted to expire at the previous end, so it is rebuilt for the new one and
+     * keeps promising exactly what it delivers. The seller has to share the new
+     * address; the old one keeps working until the moment it always said it
+     * would stop.
+     *
+     * <p>
+     * Only a running sale can be edited. Once the closing time has passed the
+     * environment is closed for good, because {@code ended_at} is written by the
+     * scheduler's own update and is mapped updatable = false.
      */
     @Override
     @org.springframework.transaction.annotation.Transactional
@@ -198,16 +221,12 @@ public class SellerServiceImpl implements SellerService {
         }
 
         final java.sql.Timestamp now = new java.sql.Timestamp(coreTimezoneService.getNow().getTime());
-        if (!env.isState() || (env.getWillEndedAt() != null && !env.getWillEndedAt().after(now))) {
+        final java.sql.Timestamp currentEnd = env.getWillEndedAt();
+        if (!env.isState() || (currentEnd != null && !currentEnd.after(now))) {
             throw new ApplicationException("This sale is already closed.", 400);
         }
 
         final java.sql.Timestamp newEnd = new java.sql.Timestamp(request.getEndAt());
-        if (env.getWillEndedAt() != null && newEnd.after(env.getWillEndedAt())) {
-            throw new ApplicationException("The end time cannot be later than the current planned end ("
-                    + DateUtils.dateToLocalTimeString(env.getWillEndedAt()) + ").", 400);
-        }
-
         if (!newEnd.after(now)) {
             // Closing now: flip state through the entity and stamp ended_at with
             // the scheduler's own update, because ended_at is mapped
@@ -216,12 +235,51 @@ public class SellerServiceImpl implements SellerService {
             env.setWillEndedAt(now);
             saleEnvironmentRepository.save(env);
             coreSaleEnvironmentService.expireEnvironment(env.getEnvId(), now);
-        } else {
-            env.setWillEndedAt(newEnd);
-            saleEnvironmentRepository.save(env);
+            log.info("Seller [{}] closed the sale [{}] immediately", sellerUsername, uuid);
+            return SaleEnvConvertor.buildEnvDTO(env).build();
         }
-        log.info("Seller [{}] moved the closing time of [{}] to {}", sellerUsername, uuid, env.getWillEndedAt());
+
+        if (currentEnd == null || newEnd.after(currentEnd)) {
+            // Extending: the only ceiling is what the seller has paid for, and
+            // the link has to outlive the end it was minted for.
+            enforcePlanCoverage(sellerUsername.trim(), newEnd);
+            final LinkModel linkModel = linkService.generateSecureUrlUntil(
+                    uuid, Map.of(LinkConstant.PARAM_USERNAME, owner), newEnd);
+            env.setPublicLink(linkModel.getToken());
+        }
+
+        env.setWillEndedAt(newEnd);
+        saleEnvironmentRepository.save(env);
+        log.info("Seller [{}] moved the closing time of [{}] to {}", sellerUsername, uuid, newEnd);
         return SaleEnvConvertor.buildEnvDTO(env).build();
+    }
+
+    @Override
+    public EnvTransferInfoDTO updateEnvironmentTransferInfo(UpdateEnvironmentTransferRequest request,
+            String sellerUsername) {
+        if (request == null) {
+            throw new ApplicationException("requestUuid is required.", 400);
+        }
+        return environmentTransferDomain.updateForSeller(request.getRequestUuid(), request.getTransferCode(),
+                sellerUsername);
+    }
+
+    /**
+     * Refuse an extended end that runs past the paid plan coverage. No coverage
+     * at all means the seller is off plan and has to talk to the admin; a
+     * coverage that stops short of the requested end means they asked for days
+     * they have not bought yet.
+     */
+    private void enforcePlanCoverage(String sellerUsername, java.sql.Timestamp newEnd) {
+        final java.util.Date coverage = paymentPlanService.planCoverageEnd(sellerUsername);
+        if (coverage == null) {
+            throw new ApplicationException("Your payment plan has ended, so this sale cannot be extended. "
+                    + "Please contact admin via chat or buy a new plan.", 403);
+        }
+        if (newEnd.getTime() > coverage.getTime()) {
+            throw new ApplicationException("The end time cannot be later than your plan end ("
+                    + DateUtils.dateToLocalTimeString(coverage) + ").", 400);
+        }
     }
 
     private static List<OrderDTO> buildOrderDTOs(List<com.qrpublic.apartment.entity.Order> listOrder) {

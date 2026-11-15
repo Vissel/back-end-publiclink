@@ -53,6 +53,16 @@ public interface YogaBookingRepository extends JpaRepository<YogaBooking, Long> 
                         @Param("buyerUsername") String buyerUsername);
 
         /**
+         * The registered buyers of one occurrence (seller drill-down from a
+         * calendar cell). Cancelled rows are excluded.
+         */
+        @Query("SELECT b FROM YogaBooking b JOIN b.yogaClass c WHERE c.classCode = :classCode"
+                        + " AND b.bookingDate = :bookingDate AND b.status = 'BOOKED'"
+                        + " ORDER BY b.buyerName ASC, b.bookingId ASC")
+        List<YogaBooking> findAttendeesBySlot(@Param("classCode") String classCode,
+                        @Param("bookingDate") LocalDate bookingDate);
+
+        /**
          * Seller booking list for one environment inside a date window.
          */
         @Query("SELECT b FROM YogaBooking b JOIN b.yogaClass c JOIN c.saleEnvironment se"

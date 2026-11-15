@@ -6,10 +6,10 @@ import lombok.Data;
 
 /**
  * Seller edit of an already created sale environment: the closing time may be
- * moved earlier ("close the sale now / sooner") but never later, because the
- * public link token was minted to expire at the original end and cannot be
- * lengthened without regenerating it. The plan-end constraint therefore stays
- * satisfied on its own.
+ * moved earlier, the sale closed immediately, or pushed later as far as the
+ * paid plan covers. A later end is bounded by the plan because the public link
+ * is re-minted for it, so the link keeps expiring exactly when the sale does;
+ * it also means the public address of the sale changes.
  */
 @Data
 public class UpdateEnvironmentWindowRequest {

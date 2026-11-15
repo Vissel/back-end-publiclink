@@ -24,13 +24,19 @@ public class ListPlanUserResponse {
         private int envQuota;
         private int usedCount;
         private int remaining;
-        /** CREATE | ACTIVE | DEACTIVE */
+        /** CREATE | ACTIVE | DEACTIVE | EXTENDED */
         private String planState;
         private String activeDate;
         private String endedDate;
+        /** days bought on another plan; set on an extension order row */
+        private Integer extendDays;
+        /** the plan this extension order adds its days to */
+        private String extendsPlanUserCode;
         private String createdAt;
         private String paymentCode;
         /** CREATE | WAITING_CONFIRM | CONFIRMED | PAID | REJECTED */
         private String paymentStatus;
+        /** relative payment URL, e.g. /payment?token=... */
+        private String paymentUrl;
     }
 }

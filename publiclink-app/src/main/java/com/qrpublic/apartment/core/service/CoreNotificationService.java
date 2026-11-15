@@ -29,6 +29,17 @@ public class CoreNotificationService {
     @Transactional
     public void notifyUsernames(List<String> usernames, String title, String message,
             String targetType, String createdBy) {
+        notifyUsernames(usernames, title, message, targetType, createdBy, null, null);
+    }
+
+    /**
+     * Same as above, but the notification also points at the record it talks
+     * about (e.g. referenceType PAYMENT + the payment code), so the admin
+     * console can render that record and act on it from the notification.
+     */
+    @Transactional
+    public void notifyUsernames(List<String> usernames, String title, String message,
+            String targetType, String createdBy, String referenceType, String referenceCode) {
         if (usernames == null || usernames.isEmpty()) {
             log.warn("No notification recipient for title [{}], skipping", title);
             return;
@@ -39,6 +50,8 @@ public class CoreNotificationService {
         notification.setMessage(message);
         notification.setTargetType(targetType);
         notification.setCreatedBy(createdBy);
+        notification.setReferenceType(referenceType);
+        notification.setReferenceCode(referenceCode);
         Notification saved = notificationRepository.save(notification);
 
         List<NotificationRecipient> recipients = new ArrayList<>();

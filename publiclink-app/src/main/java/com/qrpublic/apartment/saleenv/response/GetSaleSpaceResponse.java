@@ -36,4 +36,10 @@ public class GetSaleSpaceResponse extends BaseResponse {
      * the yoga calendar instead of the order form when YOGA_BOOKING.
      */
     private String productType;
+
+    /**
+     * Transfer account the seller (or an admin) chose to show so buyers can
+     * pay; null when none is attached or the account was removed since.
+     */
+    private EnvTransferInfoDTO transferInfo;
 }

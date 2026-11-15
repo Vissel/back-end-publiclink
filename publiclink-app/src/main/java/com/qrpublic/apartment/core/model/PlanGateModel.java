@@ -30,4 +30,11 @@ public class PlanGateModel {
     private String endedDate;
     /** absolute plan end; a generated link must never outlive this */
     private Date deadline;
+    /**
+     * Latest paid moment across every ACTIVE plan, quota ignored. Creating a
+     * link is bounded by {@link #deadline} (the plan the slot comes from),
+     * while stretching an existing sale window is bounded by this: it may
+     * legally reach a later plan the seller also paid for.
+     */
+    private String coverageEndedDate;
 }

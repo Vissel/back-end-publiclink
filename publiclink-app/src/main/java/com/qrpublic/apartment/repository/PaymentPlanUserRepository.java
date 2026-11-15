@@ -58,6 +58,14 @@ public interface PaymentPlanUserRepository extends JpaRepository<PaymentPlanUser
                         "WHERE u.userName = :username AND ppu.planState = 'ACTIVE' ORDER BY ppu.createdAt DESC")
         List<PaymentPlanUser> findActiveByUserName(@Param("username") String username);
 
+        /**
+         * Every assignment of one seller, newest first. The self-service screen
+         * reads this to tell "nothing bought yet" from "order waiting for pay".
+         */
+        @Query("SELECT ppu FROM PaymentPlanUser ppu JOIN ppu.user u " +
+                        "WHERE u.userName = :username ORDER BY ppu.createdAt DESC")
+        List<PaymentPlanUser> findAllByUserName(@Param("username") String username);
+
         @Lock(LockModeType.PESSIMISTIC_WRITE)
         @Query("SELECT ppu FROM PaymentPlanUser ppu JOIN ppu.user u " +
                         "WHERE u.userName = :username AND ppu.planState = 'ACTIVE' " +

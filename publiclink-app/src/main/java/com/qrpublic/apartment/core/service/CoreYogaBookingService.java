@@ -14,6 +14,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.sql.Timestamp;
 import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -32,6 +33,8 @@ public class CoreYogaBookingService {
     public static final String STATUS_CANCELLED = "CANCELLED";
     public static final String MODE_PLAN = "PLAN";
     public static final String MODE_PAY_AS_YOU_GO = "PAY_AS_YOU_GO";
+
+    private static final DateTimeFormatter BOOKED_AT_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
 
     @Autowired
     private YogaBookingRepository yogaBookingRepository;
@@ -150,6 +153,17 @@ public class CoreYogaBookingService {
                 .toList();
     }
 
+    /**
+     * Registered buyers of one occurrence, newest name first: the seller
+     * drill-down behind a calendar cell.
+     */
+    @Transactional(readOnly = true)
+    public List<YogaBookingModel> findAttendeesBySlot(String classCode, LocalDate date) {
+        return yogaBookingRepository.findAttendeesBySlot(classCode, date).stream()
+                .map(this::toModel)
+                .toList();
+    }
+
     @Transactional(readOnly = true)
     public long countPlanBookingsOnDate(String buyerUsername, LocalDate date) {
         return yogaBookingRepository.countPlanBookingsOnDate(buyerUsername, date);
@@ -190,6 +204,9 @@ public class CoreYogaBookingService {
                 .paid(entity.isPaid())
                 .attended(entity.isAttended())
                 .bookedBy(entity.getBookedBy())
+                .bookedAt(entity.getCreatedAt() == null
+                        ? null
+                        : BOOKED_AT_FORMAT.format(entity.getCreatedAt().toLocalDateTime()))
                 .note(entity.getNote())
                 .build();
     }

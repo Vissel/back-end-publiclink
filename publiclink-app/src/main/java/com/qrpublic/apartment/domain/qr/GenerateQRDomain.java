@@ -22,8 +22,8 @@ import java.util.Locale;
  * stores it against the payment code, so the seller payment page can render it.
  *
  * Quick Link form (no API account needed):
- *   https://img.vietqr.io/image/{BANK_ID}-{ACCOUNT_NO}-{TEMPLATE}.png
- *       ?amount={SO_TIEN}&addInfo={NOI_DUNG}&accountName={TEN_CHU_TK}
+ * https://img.vietqr.io/image/{BANK_ID}-{ACCOUNT_NO}-{TEMPLATE}.png
+ * ?amount={SO_TIEN}&addInfo={NOI_DUNG}&accountName={TEN_CHU_TK}
  *
  * The receiving account is the admin's default transfer_info row (the one set
  * in admin settings). Runs as a listener on PaymentCreatedEvent, i.e. after the
@@ -102,12 +102,15 @@ public class GenerateQRDomain {
     }
 
     /**
-     * Transfer content: seller name + plan, no diacritics, no special chars,
-     * no spaces, capped at 50 characters per the VietQR addInfo constraint.
+     * Transfer content: seller name + plan, ASCII only, capped at 50 characters
+     * per the VietQR addInfo constraint. Spaces are kept and every other
+     * separator collapses into one, so the banking app shows
+     * "MICRO10 10000 VND 7Days" instead of a run-on string; urlEncode already
+     * sends blanks as %20 the way VietQR's own examples do.
      */
     private String buildAddInfo(String username, String planLabel) {
         String raw = (username == null ? "" : username) + " " + (planLabel == null ? "" : planLabel);
-        String cleaned = upperNoDiacritics(raw).replaceAll("[^A-Z0-9]", "");
+        String cleaned = upperNoDiacritics(raw).replaceAll("[^A-Z0-9]+", " ").trim();
         if (cleaned.isBlank()) {
             cleaned = "THANHTOAN";
         }

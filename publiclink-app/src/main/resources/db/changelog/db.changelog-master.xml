@@ -85,6 +85,18 @@
     <changeSet id="029" author="thach">
         <sqlFile path="db/changelog/changeset-029-add-will-started-at.sql"/>
     </changeSet>
+    <changeSet id="030" author="thach">
+        <sqlFile path="db/changelog/changeset-030-add-plan-extension.sql"/>
+    </changeSet>
+    <changeSet id="031" author="thach">
+        <sqlFile path="db/changelog/changeset-031-add-env-transfer-code.sql"/>
+    </changeSet>
+    <changeSet id="032" author="thach">
+        <sqlFile path="db/changelog/changeset-032-add-notification-reference.sql"/>
+    </changeSet>
+    <changeSet id="033" author="thach">
+        <sqlFile path="db/changelog/changeset-033-add-user-email.sql"/>
+    </changeSet>
     <!-- Chat tables moved to the chat-app module, which owns the chat_schema.
          publiclink-app stays the sole DDL owner of publiclink-db.
     <changeSet id="021" author="thach">

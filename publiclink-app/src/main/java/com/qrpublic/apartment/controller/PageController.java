@@ -7,7 +7,10 @@ import com.qrpublic.apartment.paymentplan.request.PaymentConfirmRequest;
 import com.qrpublic.apartment.paymentplan.request.PaymentInfoRequest;
 import com.qrpublic.apartment.paymentplan.response.PaymentConfirmResponse;
 import com.qrpublic.apartment.paymentplan.response.PaymentInfoResponse;
+import com.qrpublic.apartment.paymentplan.response.PlanCatalogResponse;
 import com.qrpublic.apartment.service.PaymentPlanPublicService;
+import com.qrpublic.apartment.service.SelfRegisterService;
+import com.qrpublic.apartment.service.SelfServicePlanService;
 import com.qrpublic.apartment.requestmodel.SaleEnvDTO;
 import com.qrpublic.apartment.saleenv.SaleEnvironmentService;
 import com.qrpublic.apartment.saleenv.SaleSpaceService;
@@ -22,7 +25,9 @@ import com.qrpublic.apartment.template.ResponseEntityConvertor;
 import com.qrpublic.apartment.template.model.Result;
 import com.qrpublic.apartment.user.PubUserService;
 import com.qrpublic.apartment.user.request.SellerRegisterRequest;
+import com.qrpublic.apartment.user.request.SelfRegisterRequest;
 import com.qrpublic.apartment.user.response.SellerRegisterResponse;
+import com.qrpublic.apartment.user.response.SelfRegisterResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
@@ -53,6 +58,12 @@ public class PageController {
 
     @Autowired
     PaymentPlanPublicService paymentPlanPublicService;
+
+    @Autowired
+    SelfRegisterService selfRegisterService;
+
+    @Autowired
+    SelfServicePlanService selfServicePlanService;
 
     @GetMapping("/testGet")
     public Mono<ResponseEntity<String>> index() {
@@ -133,6 +144,27 @@ public class PageController {
     @PostMapping("/register")
     Mono<ResponseEntity<SellerRegisterResponse>> register(@RequestBody SellerRegisterRequest request) {
         return pubUserService.registerNewSeller(request);
+    }
+
+    /**
+     * Open self-registration: a visitor creates their own seller account
+     * without an admin invitation. 200 created, 409 username taken, 400 bad
+     * input, 503 the account service could not be reached.
+     */
+    @PostMapping("/self-register")
+    Mono<ResponseEntity<SelfRegisterResponse>> selfRegister(@RequestBody SelfRegisterRequest request) {
+        return selfRegisterService.selfRegister(request);
+    }
+
+    /**
+     * Plans on sale, public so the register screen can show what a seller
+     * gets for their money before asking for an email address.
+     */
+    @GetMapping("/plans")
+    public Mono<ResponseEntity<PlanCatalogResponse>> plans() {
+        return Mono.fromCallable(() -> selfServicePlanService.publicCatalog())
+                .subscribeOn(Schedulers.boundedElastic())
+                .flatMap(ResponseEntityConvertor::convertToMonoResponseEntity);
     }
 
     /**

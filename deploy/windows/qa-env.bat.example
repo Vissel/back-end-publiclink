@@ -1,0 +1,46 @@
+@echo off
+REM ---------------------------------------------------------------------------
+REM PublicLink QA - shared environment for this Windows machine.
+REM
+REM Copy to qa-env.bat (same folder) and fill in every empty value.
+REM qa-env.bat is called by setenv.bat (Tomcat / gateway WAR), start-user.bat
+REM and start-chat.bat, so all three services receive the same values.
+REM Never commit the filled-in copy: it carries signing keys and passwords.
+REM
+REM   WIN_IP = this Windows machine's LAN IP  (ipconfig -> IPv4 Address)
+REM   MAC_IP = the Mac's LAN IP, where publiclink-app QA runs
+REM ---------------------------------------------------------------------------
+
+REM -- Shared secrets ----------------------------------------------------------
+REM Must be the SAME value as JWT_KEY on the Mac (publiclink-app QA), otherwise
+REM every token the gateway issues is rejected downstream.
+set JWT_KEY=
+
+REM -- RSA key pair (paths on THIS machine) ------------------------------------
+REM Copy auth260222.pem + pubauth.pem from
+REM apiGateway/src/main/resources/auth-service/ to C:\publiclink\keys first.
+REM RsaService/UserConfig read them with java.nio.file.Paths - must be absolute.
+set RSA_PRIVATE_KEY_PATH=C:\publiclink\keys\auth260222.pem
+set RSA_PUBKEY_PATH=C:\publiclink\keys\pubauth.pem
+
+REM -- Middleware (local on this Windows machine) ------------------------------
+set RABBITMQ_HOST=127.0.0.1
+set RABBITMQ_PORT=5672
+REM Dedicated QA account, not guest: guest only works from localhost and the
+REM Mac's publiclink-app joins the same broker remotely (README step 4).
+set RABBITMQ_USERNAME=publiclink
+set RABBITMQ_PASSWORD=
+set REDIS_HOST=127.0.0.1
+set REDIS_PORT=6379
+
+REM -- Inter-service URLs ------------------------------------------------------
+REM Gateway -> publiclink-app QA on the Mac. Replace MAC_IP with the real IP.
+set PUBLICLINK_SERVICE_URL=http://MAC_IP:9080
+REM Gateway -> user and chat-app, both local on this machine
+set USER_SERVICE_URL=http://127.0.0.1:8082
+set CHAT_SERVICE_URL=http://127.0.0.1:9090
+
+REM -- Binding -----------------------------------------------------------------
+REM Lets the Mac reach user (8082) and chat-app (9090). The gateway WAR is
+REM served by Tomcat's connector, which binds all interfaces by itself.
+set SERVER_ADDRESS=0.0.0.0

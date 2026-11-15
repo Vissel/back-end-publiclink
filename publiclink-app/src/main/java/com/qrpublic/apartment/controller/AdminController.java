@@ -2,6 +2,7 @@ package com.qrpublic.apartment.controller;
 
 import com.qrpublic.apartment.model.SellerDTO;
 import com.qrpublic.apartment.constant.HeaderConstant;
+import com.qrpublic.apartment.domain.transferinfo.EnvironmentTransferDomain;
 import com.qrpublic.apartment.model.notification.SellerEnvironmentListResponse;
 import com.qrpublic.apartment.model.notification.SellerListResponse;
 import com.qrpublic.apartment.paymentplan.request.CreateSellerPlanRequest;
@@ -12,6 +13,8 @@ import com.qrpublic.apartment.requestmodel.SaleEnvDTO;
 import com.qrpublic.apartment.requestmodel.SendNotificationRequest;
 import com.qrpublic.apartment.saleenv.SaleEnvironmentService;
 import com.qrpublic.apartment.saleenv.request.ListEnvironmentRequest;
+import com.qrpublic.apartment.saleenv.request.UpdateEnvironmentTransferRequest;
+import com.qrpublic.apartment.saleenv.response.EnvTransferInfoDTO;
 import com.qrpublic.apartment.saleenv.response.ListEnvironmentResponse;
 import com.qrpublic.apartment.service.AdminService;
 import com.qrpublic.apartment.service.NotificationService;
@@ -56,6 +59,9 @@ public class AdminController {
 
         @Autowired
         YogaAdminService yogaAdminService;
+
+        @Autowired
+        EnvironmentTransferDomain environmentTransferDomain;
 
         /**
          * Display environment list for administrator to manage, including the link
@@ -148,6 +154,20 @@ public class AdminController {
                 return envService.extendAuthLink(requestUuid)
                                 .map(ResponseEntity::ok)
                                 .defaultIfEmpty(ResponseEntity.notFound().build());
+        }
+
+        /**
+         * Admin shows one of the admin's own transfer accounts on a seller's sale
+         * page, or hides it again (blank transferCode). Same seller feature, admin
+         * side; the body is empty after a detach.
+         */
+        @PostMapping("/environment/transferInfo")
+        public Mono<ResponseEntity<EnvTransferInfoDTO>> updateEnvironmentTransferInfo(
+                        @Valid @RequestBody UpdateEnvironmentTransferRequest request,
+                        @RequestHeader(value = HeaderConstant.USER_ID_HEADER, defaultValue = "") String adminUsername) {
+                return Mono.fromCallable(() -> ResponseEntity.ok(environmentTransferDomain.updateForAdmin(
+                                request.getRequestUuid(), request.getTransferCode(), adminUsername)))
+                                .subscribeOn(Schedulers.boundedElastic());
         }
 
         /**

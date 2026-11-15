@@ -2,12 +2,19 @@ package com.qrpublic.apartment.paymentplan.request;
 
 import lombok.Data;
 
+import java.util.List;
+
 /**
- * Admin confirms the money really arrived: payment -> PAID and a bill record
- * is created from it.
+ * Admin confirms the money really arrived for every selected assignment:
+ * each linked payment goes to PAID and a bill record is created from it, and
+ * an assignment that is still in CREATE starts running from {@code activeDate}.
+ * Selections travel as plan user codes, the same identifier the setup tables
+ * and the approve / reject actions use.
  */
 @Data
 public class MarkPaidRequest {
-    private String paymentCode;
+    private List<String> planUserCodes;
     private String note;
+    /** yyyy-MM-dd, blank means "today" */
+    private String activeDate;
 }

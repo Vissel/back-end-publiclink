@@ -76,8 +76,7 @@ public class PubUserServiceImpl implements PubUserService {
                 Pageable pageable = PageRequest.of(
                         getRequest().getPage(),
                         getRequest().getSize(),
-                        Sort.by(Sort.Order.asc("userName"))
-                );
+                        Sort.by(Sort.Order.asc("userName")));
 
                 Page<User> resultPage;
                 if (filter != null) {
@@ -103,7 +102,7 @@ public class PubUserServiceImpl implements PubUserService {
                 GetUserResponse resp = new GetUserResponse();
                 resp.setUsername(user.getUserName());
                 resp.setName(user.getName());
-                resp.setEmail(null);
+                resp.setEmail(user.getEmail());
                 resp.setRole(user.getType());
                 return resp;
             }
@@ -117,7 +116,8 @@ public class PubUserServiceImpl implements PubUserService {
         sellerDTO.setLink(request.getProfileLink());
         sellerDTO.setName(request.getName());
         final String requestUuid = request.getReqUuid();
-        Assert.isTrue(StringUtils.isNotBlank(requestUuid), String.format("Request uuid is required. Request uuid: %s", requestUuid));
+        Assert.isTrue(StringUtils.isNotBlank(requestUuid),
+                String.format("Request uuid is required. Request uuid: %s", requestUuid));
         return operatedUserClient.findUserByUsername(new FindUserRequest(sellerDTO.getUsername()))
 
                 .flatMap(findUserResponse -> {
@@ -126,30 +126,35 @@ public class PubUserServiceImpl implements PubUserService {
                         SellerRegisterResponse conflict = new SellerRegisterResponse();
                         conflict.setMessage("User already exists");
                         conflict.setReqUuid(requestUuid);
-                        return Mono.just(ResponseEntity.status(HttpStatus.CONFLICT).<SellerRegisterResponse>body(conflict));
+                        return Mono.just(
+                                ResponseEntity.status(HttpStatus.CONFLICT).<SellerRegisterResponse>body(conflict));
                     }
 
                     // user exists in user-service → update user
                     return operatedUserClient.updateUser(toUserRegisterRequestForUpdate(request))
                             .flatMap(updateResult -> {
                                 if (!updateResult.isSuccess()) {
-                                    String errMsg = updateResult.getErrorMessage() != null ? updateResult.getErrorMessage() : "Failed to update user";
-                                    log.error("User service update failed for [{}]: {}", sellerDTO.getUsername(), errMsg);
+                                    String errMsg = updateResult.getErrorMessage() != null
+                                            ? updateResult.getErrorMessage()
+                                            : "Failed to update user";
+                                    log.error("User service update failed for [{}]: {}", sellerDTO.getUsername(),
+                                            errMsg);
                                     SellerRegisterResponse response = new SellerRegisterResponse();
                                     response.setReqUuid(requestUuid);
                                     response.setMessage(errMsg);
-                                    return Mono.just(ResponseEntity.badRequest().<SellerRegisterResponse>body(response));
+                                    return Mono
+                                            .just(ResponseEntity.badRequest().<SellerRegisterResponse>body(response));
                                 }
 
                                 // Update successful → update authenticationMethod to BASIC in local DB
                                 return Mono.fromCallable(() -> {
-                                            User existingUser = coreUserService.findSeller(sellerDTO);
-                                            if (existingUser != null) {
-                                                coreUserService.updateUserWithAuthentication(
-                                                        existingUser);
-                                            }
-                                            return existingUser;
-                                        })
+                                    User existingUser = coreUserService.findSeller(sellerDTO);
+                                    if (existingUser != null) {
+                                        coreUserService.updateUserWithAuthentication(
+                                                existingUser);
+                                    }
+                                    return existingUser;
+                                })
                                         .subscribeOn(Schedulers.boundedElastic())
                                         .map(updatedUser -> {
                                             SellerRegisterResponse response = new SellerRegisterResponse();
@@ -178,54 +183,54 @@ public class PubUserServiceImpl implements PubUserService {
 
     @Override
     public Result<GetUserResponse> getUserInfo(GetSellerRequest getSellerRequest) {
-        return
-                publicLinkServiceTemplate.execute(new ProcessCallback<GetSellerRequest, GetUserResponse>() {
-                    @Override
-                    public GetSellerRequest getRequest() {
-                        return getSellerRequest;
-                    }
+        return publicLinkServiceTemplate.execute(new ProcessCallback<GetSellerRequest, GetUserResponse>() {
+            @Override
+            public GetSellerRequest getRequest() {
+                return getSellerRequest;
+            }
 
-                    @Override
-                    public void preProcess(GetSellerRequest request) {
-                        // 0. Validate request's properties
-                        Assert.notNull(getSellerRequest, "GetSellerRequest cannot be null");
-                        Assert.hasText(getSellerRequest.getUsername(), "Username is required");
-                    }
+            @Override
+            public void preProcess(GetSellerRequest request) {
+                // 0. Validate request's properties
+                Assert.notNull(getSellerRequest, "GetSellerRequest cannot be null");
+                Assert.hasText(getSellerRequest.getUsername(), "Username is required");
+            }
 
-                    @Override
-                    public GetUserResponse process() {
-                        // 1. Convert getSellerRequest to sellerDTO
-                        SellerDTO sellerDTO = new SellerDTO();
-                        sellerDTO.setUsername(getSellerRequest.getUsername());
+            @Override
+            public GetUserResponse process() {
+                // 1. Convert getSellerRequest to sellerDTO
+                SellerDTO sellerDTO = new SellerDTO();
+                sellerDTO.setUsername(getSellerRequest.getUsername());
 
-                        // 2. Pass to findSeller as argument
-                        User user = coreUserService.findSeller(sellerDTO);
+                // 2. Pass to findSeller as argument
+                User user = coreUserService.findSeller(sellerDTO);
 
-                        if (user == null) {
-                            throw new ResourceNotFoundException("User not found: " + sellerDTO.getUsername());
-                        }
+                if (user == null) {
+                    throw new ResourceNotFoundException("User not found: " + sellerDTO.getUsername());
+                }
 
-                        // Build response from User entity
-                        GetUserResponse response = new GetUserResponse();
-                        response.setUsername(user.getUserName());
-                        response.setName(user.getName());
-                        response.setEmail(null);
-                        response.setRole(user.getType());
+                // Build response from User entity
+                GetUserResponse response = new GetUserResponse();
+                response.setUsername(user.getUserName());
+                response.setName(user.getName());
+                response.setEmail(user.getEmail());
+                response.setRole(user.getType());
 
-                        return response;
-                    }
-                });
-
+                return response;
+            }
+        });
 
     }
 
-    public Mono<? extends ResponseEntity<SellerRegisterResponse>> createNewSellerUser(SellerDTO sellerDTO, String requestUuid) {
+    public Mono<? extends ResponseEntity<SellerRegisterResponse>> createNewSellerUser(SellerDTO sellerDTO,
+            String requestUuid) {
         UserRegisterRequest registerRequest = toUserRegisterRequest(sellerDTO);
 
         return operatedUserClient.createUser(registerRequest)
                 .flatMap(result -> {
                     if (!result.isSuccess()) {
-                        String errMsg = result.getErrorMessage() != null ? result.getErrorMessage() : "Unknown error from user service";
+                        String errMsg = result.getErrorMessage() != null ? result.getErrorMessage()
+                                : "Unknown error from user service";
                         log.error("User service rejected create for [{}]: {}", sellerDTO.getUsername(), errMsg);
                         SellerRegisterResponse response = new SellerRegisterResponse();
                         response.setReqUuid(requestUuid);
@@ -236,7 +241,8 @@ public class PubUserServiceImpl implements PubUserService {
                     return Mono.fromCallable(() -> coreUserService.createNewUser(sellerDTO))
                             .subscribeOn(Schedulers.boundedElastic())
                             .map(userModel -> {
-                                SellerRegisterResponse response = buildSellerRegisterResponse(requestUuid, result.getData().getPassword(), userModel);
+                                SellerRegisterResponse response = buildSellerRegisterResponse(requestUuid,
+                                        result.getData().getPassword(), userModel);
                                 return ResponseEntity.<SellerRegisterResponse>ok(response);
                             })
                             .onErrorResume(ex -> {
@@ -245,14 +251,17 @@ public class PubUserServiceImpl implements PubUserService {
                                 UserRemoveRequest deleteRequest = new UserRemoveRequest();
                                 deleteRequest.setUserId(result.getData().getUserName());
                                 return operatedUserClient.deleteUser(deleteRequest)
-                                        .doOnSuccess(r -> log.info("Compensation succeeded for [{}]", sellerDTO.getUsername()))
-                                        .doOnError(compEx -> log.error("Compensation failed for [{}]: {}", sellerDTO.getUsername(), compEx.getMessage()))
+                                        .doOnSuccess(r -> log.info("Compensation succeeded for [{}]",
+                                                sellerDTO.getUsername()))
+                                        .doOnError(compEx -> log.error("Compensation failed for [{}]: {}",
+                                                sellerDTO.getUsername(), compEx.getMessage()))
                                         .then(Mono.<ResponseEntity<SellerRegisterResponse>>error(ex));
                             });
                 });
     }
 
-    private SellerRegisterResponse buildSellerRegisterResponse(String requestUuid, String password, UserModel userModel) {
+    private SellerRegisterResponse buildSellerRegisterResponse(String requestUuid, String password,
+            UserModel userModel) {
         SellerRegisterResponse response = new SellerRegisterResponse();
         response.setReqUuid(requestUuid);
         response.setUsername(userModel.getUsername());

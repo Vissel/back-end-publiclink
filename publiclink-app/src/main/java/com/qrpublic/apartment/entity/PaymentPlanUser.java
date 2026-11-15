@@ -44,6 +44,20 @@ public class PaymentPlanUser {
     @Column(name = "ended_date")
     private Timestamp endedDate;
 
+    /**
+     * Days bought on top of an already running plan. Non-null marks this row as
+     * an extension order: it grants no environment slot of its own, and paying
+     * it grows {@code extendsPlanUserCode}'s end date instead.
+     */
+    @Column(name = "extend_days")
+    private Integer extendDays;
+
+    /**
+     * plan_user_code of the assignment this extension adds its days to.
+     */
+    @Column(name = "extends_plan_user_code", length = 36)
+    private String extendsPlanUserCode;
+
     @Column(name = "created_at", updatable = false, insertable = false)
     private Timestamp createdAt;
 

@@ -163,6 +163,12 @@ public class UserServiceImpl implements UserService {
                     if (StringUtils.isNotBlank(fullName)) {
                         existing.setFullName(fullName);
                     }
+                    // The caller knows the real role (a seller reset from the user
+                    // list arrives as SELLER); applying it also repairs rows that
+                    // an earlier role-less reset defaulted to BUYER.
+                    if (StringUtils.isNotBlank(role)) {
+                        existing.setRole(role);
+                    }
                     userEntityRepository.save(existing);
                     log.info("Password invalidated for existing account [{}], setup link required", userName);
 

@@ -23,6 +23,12 @@ public class User {
     private String link;
     private String type;
 
+    /**
+     * Contact email captured at self-registration; null for accounts the admin
+     * created by hand.
+     */
+    private String email;
+
     @Column(updatable = false, insertable = false)
     private Timestamp createdAt;
 

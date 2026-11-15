@@ -68,8 +68,11 @@ public class PaymentDomainService {
                 + ". Please verify and activate the plan.";
         // Recipients are addressed by username, and admins have no row in
         // publiclink-db.user, so the creating admin is the notification target.
+        // The notification points at the payment, so the bell dialog can show
+        // the amount / plan / contact and let the admin mark it paid in place.
         coreNotificationService.notifyUsernames(List.of(payment.getCreatedBy()),
-                "Payment confirmation received", message, "PAYMENT", payment.getUsername());
+                "Payment confirmation received", message, "PAYMENT", payment.getUsername(),
+                "PAYMENT", payment.getPaymentCode());
 
         PaymentConfirmResponse response = new PaymentConfirmResponse();
         response.setStatus(updated.getStatus());
@@ -109,6 +112,19 @@ public class PaymentDomainService {
             response.setEstimatedActiveDate(today.toString());
             response.setEstimatedEndDate(today.plusDays(payment.getPlan().getPlanDay()).toString());
         }
+        if (payment.getExtendDays() != null && payment.getExtendDays() > 0) {
+            // This link buys extra days on a plan that is already running, so
+            // the window of a fresh plan would be wrong: show the days on offer
+            // and the dates they are appended to, priced at the order amount.
+            response.setExtendDays(payment.getExtendDays());
+            response.setFee(payment.getAmount());
+            if (notBlank(payment.getExtensionFrom())) {
+                response.setEstimatedActiveDate(payment.getExtensionFrom());
+            }
+            if (notBlank(payment.getExtensionTo())) {
+                response.setEstimatedEndDate(payment.getExtensionTo());
+            }
+        }
 
         response.setTransferInfos(transferItemsOf(payment.getCreatedBy()));
         return response;
@@ -123,6 +139,10 @@ public class PaymentDomainService {
                 .filter(Objects::nonNull)
                 .map(this::toTransferItem)
                 .toList();
+    }
+
+    private boolean notBlank(String value) {
+        return value != null && !value.isBlank();
     }
 
     private PaymentInfoResponse.TransferItem toTransferItem(TransferInfoModel model) {

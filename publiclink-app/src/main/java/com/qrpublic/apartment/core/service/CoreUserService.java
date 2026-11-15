@@ -5,6 +5,7 @@ import com.qrpublic.apartment.core.model.AuthenticationEnum;
 import com.qrpublic.apartment.core.model.UserModel;
 import com.qrpublic.apartment.entity.User;
 import com.qrpublic.apartment.model.SellerDTO;
+import com.qrpublic.apartment.model.UserType;
 import com.qrpublic.apartment.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
@@ -78,6 +79,7 @@ public class CoreUserService {
         user.setUserName(sellerDTO.getUsername());
         user.setLink(sellerDTO.getLink());
         user.setName(sellerDTO.getName());
+        user.setEmail(sellerDTO.getEmail());
         user.setType(sellerDTO.getUserType().name());
         userRepo.save(user);
 
@@ -86,6 +88,32 @@ public class CoreUserService {
                 .link(user.getLink())
                 .name(user.getName())
                 .type(user.getType())
+                .email(user.getEmail())
+                .build();
+    }
+
+    /**
+     * Local row of a self-registered seller. The account already holds the
+     * password the user typed, so it is BASIC from the start; the invite flow
+     * keeps using createNewUser, which leaves the method null until the
+     * seller finishes the setup link.
+     */
+    @Transactional
+    public UserModel createSelfRegisteredSeller(String username, String name, String email) {
+        User user = new User();
+        user.setUserName(username);
+        user.setName(name);
+        user.setEmail(email);
+        user.setType(UserType.SELLER.name());
+        user.setAuthenticationMethod(AuthenticationEnum.BASIC.name());
+        userRepo.save(user);
+
+        return UserModel.builder()
+                .username(user.getUserName())
+                .name(user.getName())
+                .type(user.getType())
+                .email(user.getEmail())
+                .authenticationEnum(AuthenticationEnum.BASIC)
                 .build();
     }
 
@@ -103,6 +131,7 @@ public class CoreUserService {
                 .link(user.getLink())
                 .name(user.getName())
                 .type(user.getType())
+                .email(user.getEmail())
                 .authenticationEnum(AuthenticationEnum.fromString(user.getAuthenticationMethod()))
                 .build()).orElse(null);
     }

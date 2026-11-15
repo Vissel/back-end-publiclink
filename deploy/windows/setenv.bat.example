@@ -1,0 +1,11 @@
+@echo off
+REM ---------------------------------------------------------------------------
+REM Tomcat environment hook for the apiGateway WAR.
+REM
+REM Tomcat runs %CATALINA_HOME%\bin\setenv.bat automatically before the JVM
+REM starts, so the gateway WAR inherits every qa-env.bat variable through the
+REM process environment. Install with:
+REM   copy setenv.bat.example %CATALINA_HOME%\bin\setenv.bat
+REM and fix the path below if you did not use C:\publiclink.
+REM ---------------------------------------------------------------------------
+call C:\publiclink\qa-env.bat

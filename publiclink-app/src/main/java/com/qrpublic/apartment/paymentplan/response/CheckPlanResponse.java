@@ -16,4 +16,9 @@ public class CheckPlanResponse {
     private String activeDate;
     /** paid plan end; a generated link is clamped to this instant */
     private String endedDate;
+    /**
+     * Latest paid moment whatever plan it comes from, quota ignored. The bound
+     * for extending an already created sale window, which uses no new slot.
+     */
+    private String coverageEndedDate;
 }

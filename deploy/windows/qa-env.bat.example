@@ -14,7 +14,7 @@ REM ---------------------------------------------------------------------------
 REM -- Shared secrets ----------------------------------------------------------
 REM Must be the SAME value as JWT_KEY on the Mac (publiclink-app QA), otherwise
 REM every token the gateway issues is rejected downstream.
-set JWT_KEY=
+set JWT_KEY=jAT/Y//Sq+dzEwtnaFBXqHSffulKj1CYq7ehGWrUdaQ=
 
 REM -- RSA key pair (paths on THIS machine) ------------------------------------
 REM Copy auth260222.pem + pubauth.pem from
@@ -28,19 +28,33 @@ set RABBITMQ_HOST=127.0.0.1
 set RABBITMQ_PORT=5672
 REM Dedicated QA account, not guest: guest only works from localhost and the
 REM Mac's publiclink-app joins the same broker remotely (README step 4).
-set RABBITMQ_USERNAME=publiclink
-set RABBITMQ_PASSWORD=
+set RABBITMQ_USERNAME=publiclink-user
+set RABBITMQ_PASSWORD=publiclink-user-password
 set REDIS_HOST=127.0.0.1
 set REDIS_PORT=6379
 
 REM -- Inter-service URLs ------------------------------------------------------
-REM Gateway -> publiclink-app QA on the Mac. Replace MAC_IP with the real IP.
-set PUBLICLINK_SERVICE_URL=http://MAC_IP:9080
+REM Gateway -> publiclink-app QA on the Mac, BY HOSTNAME: jade.local is the
+REM Mac's Bonjour name, so it keeps working when the Mac's IP changes.
+REM Windows must be able to resolve that name, which needs ONE of:
+REM   a) Bonjour for Windows - Apple's "Bonjour Print Services" installer, or
+REM      the Bonjour that comes with iTunes / Apple Devices. It gives the OS
+REM      mDNS, so *.local names resolve like they do on the Mac.
+REM   b) a hosts entry in C:\Windows\System32\drivers\etc\hosts (needs admin):
+REM        192.168.1.13   jade.local
+REM This LAN has no local DNS zone (the router hands out ISP DNS servers and no
+REM domain option), so plain "jade", "jade.lan" or "jade.home" do NOT resolve.
+REM Verify from this machine before starting the gateway:
+REM   ping jade.local
+REM   curl http://jade.local:9080/publiclink/api/v1/publish/getTimeZone
+REM start-gateway.bat runs that reachability check for you at startup.
+set PUBLICLINK_SERVICE_URL=http://jade.local:9080
 REM Gateway -> user and chat-app, both local on this machine
 set USER_SERVICE_URL=http://127.0.0.1:8082
 set CHAT_SERVICE_URL=http://127.0.0.1:9090
 
 REM -- Binding -----------------------------------------------------------------
-REM Lets the Mac reach user (8082) and chat-app (9090). The gateway WAR is
-REM served by Tomcat's connector, which binds all interfaces by itself.
+REM Lets the Mac reach the gateway (8080), user (8082) and chat-app (9090).
+REM All three run standalone and bind their own ports; Tomcat serves only the
+REM frontend SPA and needs none of these variables.
 set SERVER_ADDRESS=0.0.0.0

@@ -17,12 +17,15 @@ import com.qrpublic.apartment.saleenv.request.UpdateEnvironmentTransferRequest;
 import com.qrpublic.apartment.saleenv.response.EnvTransferInfoDTO;
 import com.qrpublic.apartment.saleenv.response.ListEnvironmentResponse;
 import com.qrpublic.apartment.service.AdminService;
+import com.qrpublic.apartment.service.AdminUserService;
 import com.qrpublic.apartment.service.NotificationService;
 import com.qrpublic.apartment.service.PaymentPlanAdminService;
 import com.qrpublic.apartment.service.RequestService;
 import com.qrpublic.apartment.service.YogaAdminService;
 import com.qrpublic.apartment.template.ResponseEntityConvertor;
+import com.qrpublic.apartment.user.request.AdminCreateUserRequest;
 import com.qrpublic.apartment.user.request.ListUserRequest;
+import com.qrpublic.apartment.user.response.AdminCreateUserResponse;
 import com.qrpublic.apartment.user.response.ListUserResponse;
 import com.qrpublic.apartment.yoga.request.ResetPasswordRequest;
 import com.qrpublic.apartment.yoga.response.ResetPasswordResponse;
@@ -59,6 +62,9 @@ public class AdminController {
 
         @Autowired
         YogaAdminService yogaAdminService;
+
+        @Autowired
+        AdminUserService adminUserService;
 
         @Autowired
         EnvironmentTransferDomain environmentTransferDomain;
@@ -195,6 +201,21 @@ public class AdminController {
                         @RequestBody ResetPasswordRequest request,
                         @RequestHeader(value = HeaderConstant.USER_ID_HEADER, defaultValue = "admin") String adminUsername) {
                 return Mono.fromCallable(() -> yogaAdminService.resetPassword(request, adminUsername))
+                                .subscribeOn(Schedulers.boundedElastic())
+                                .flatMap(ResponseEntityConvertor::convertToMonoResponseEntity);
+        }
+
+        /**
+         * Admin creates a seller or buyer account from the User List. The
+         * account service generates a password that is never returned; the
+         * response carries the single-use setup link for the admin to forward
+         * (and it is emailed too when an address was given).
+         */
+        @PostMapping("/user/create")
+        public Mono<ResponseEntity<AdminCreateUserResponse>> createUser(
+                        @RequestBody AdminCreateUserRequest request,
+                        @RequestHeader(value = HeaderConstant.USER_ID_HEADER, defaultValue = "admin") String adminUsername) {
+                return Mono.fromCallable(() -> adminUserService.createUser(request, adminUsername))
                                 .subscribeOn(Schedulers.boundedElastic())
                                 .flatMap(ResponseEntityConvertor::convertToMonoResponseEntity);
         }

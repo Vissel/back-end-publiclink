@@ -508,3 +508,4 @@ If Tomcat fails to start after the sed, the XML was mangled — inspect
 | `chat-app/` | Zalo chat bridge service — own schema `chat_schema`, own Liquibase changelog, port 9090 |
 | `frontend public/chat-sw.js` | service worker that turns chat pushes into system notifications (and stays quiet while a window is looking at the app) |
 | `deploy/publiclink.env.example` | env template (secrets empty by design — fill before first boot) |
+curl -X POST "http://127.0.0.1:8082/api/v1/user/admin/internal/registerUser" -H "Content-Type: application/json" -d "{\"userName\":\"admin\",\"role\":\"Admin\"}"

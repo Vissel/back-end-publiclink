@@ -3,6 +3,7 @@ package com.qrpublic.apartment.entity;
 import java.util.List;
 
 import jakarta.persistence.CascadeType;
+import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
@@ -35,6 +36,13 @@ public class Product {
 	private Double price;
 
 	private int total_amount;
+
+	/**
+	 * STANDARD (plain order link) or YOGA_BOOKING (calendar link).
+	 * Column added by changeset 025; defaults keep legacy rows STANDARD.
+	 */
+	@Column(name = "product_type")
+	private String productType = "STANDARD";
 
 	@ManyToOne(fetch = FetchType.LAZY)
 	@JoinColumn(name = "req_id")

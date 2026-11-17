@@ -45,7 +45,7 @@ public class CoreEnvironmentService {
 
     @Transactional
     public Page<SaleEnvironmentModel> getEnvironments(Pageable pageable, String createdAt, String createdBy,
-                                                      String sellerName, String requestUuid) {
+            String sellerName, String requestUuid) {
         Page<SaleEnvironment> resultPage = repo.findByFilters(createdAt, createdBy, sellerName, requestUuid, pageable);
         List<SaleEnvironmentModel> environmentModels = toEnvironmentModels(resultPage.getContent());
         return new PageImpl<>(environmentModels, pageable, resultPage.getTotalElements());
@@ -77,11 +77,12 @@ public class CoreEnvironmentService {
     }
 
     private SaleEnvironmentModel toModel(SaleEnvironment env, List<Order> orders, List<Product> products,
-                                         List<Pricing> pricings) {
+            List<Pricing> pricings) {
         SaleEnvironmentModel model = new SaleEnvironmentModel();
         model.setRequestUUID(env.getRequest().getReqUUID());
         model.setCreatedAt(Utils.formatTimeStamp(env.getCreatedAt()));
         model.setPlannedEndedAt(Utils.formatTimeStamp(env.getWillEndedAt()));
+        model.setPlannedStartedAt(Utils.formatTimeStamp(env.getWillStartedAt()));
         model.setPublicLink(env.getPublicLink());
         model.setEnvState(env.isState()
                 ? com.qrpublic.apartment.core.model.EnvStateEnum.ACTIVE

@@ -3,6 +3,7 @@ package com.qrpublic.apartment.user.controller;
 import com.qrpublic.apartment.adapter.authentication.request.FindUserRequest;
 import com.qrpublic.apartment.adapter.authentication.response.FindUserResponse;
 import com.qrpublic.apartment.adapter.template.Result;
+import com.qrpublic.apartment.adapter.user.request.GenerateAccountRequest;
 import com.qrpublic.apartment.adapter.user.request.UserChangePasswordRequest;
 import com.qrpublic.apartment.adapter.user.request.UserRegisterRequest;
 import com.qrpublic.apartment.adapter.user.request.UserRemoveRequest;
@@ -77,6 +78,29 @@ public class UserController {
                     int code = result.getErrorCode() > 0 ? result.getErrorCode() : 400;
                     return ResponseEntity.status(code)
                             .<Result<UserChangePasswordResponse>>body(Result.error(code, result.getErrorMessage()));
+                });
+    }
+
+    /**
+     * Create-or-reset an account with a generated password that is never
+     * returned; the setup link flow sets the real one. Used by publiclink-app
+     * for yoga buyer provisioning and admin password reset.
+     */
+    @PostMapping("/generateAccount")
+    public Mono<ResponseEntity<Result<UserRegisterResponse>>> generateAccount(
+            @Valid @RequestBody GenerateAccountRequest request) {
+        return userService.generateAccount(request.getUserName(), request.getFullName(), request.getRole())
+                .map(result -> {
+                    if (result.isSuccess()) {
+                        UserRegisterResponse resp = new UserRegisterResponse();
+                        resp.setUserName(result.getData().getUserName());
+                        resp.setRole(result.getData().getRole());
+                        resp.setMessage("Account ready; password must be set via the setup link");
+                        return ResponseEntity.ok(Result.success(resp));
+                    }
+                    int code = result.getErrorCode() > 0 ? result.getErrorCode() : 400;
+                    return ResponseEntity.status(code)
+                            .<Result<UserRegisterResponse>>body(Result.error(code, result.getErrorMessage()));
                 });
     }
 

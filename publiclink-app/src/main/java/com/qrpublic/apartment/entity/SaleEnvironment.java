@@ -38,6 +38,21 @@ public class SaleEnvironment {
     @Column(name = "will_ended_at")
     private Timestamp willEndedAt;
 
+    /**
+     * When the sale window opens. Null on rows created before the window
+     * feature, which means "started as soon as it was created".
+     */
+    @Column(name = "will_started_at")
+    private Timestamp willStartedAt;
+
+    /**
+     * transfer_info.transfer_code of the account shown on the sale page so
+     * buyers can pay. Null when the seller chose not to show one. Kept as a
+     * plain code (no FK): a deactivated account simply stops being displayed.
+     */
+    @Column(name = "transfer_code", length = 36)
+    private String transferCode;
+
     @OneToMany(mappedBy = "saleEnvironment", cascade = CascadeType.ALL)
     @OrderBy(value = "orderedAt DESC")
     private List<Order> listOrder;

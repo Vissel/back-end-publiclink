@@ -12,8 +12,12 @@
 #
 # Workflow:
 #   1. Clone backend + frontend repos at <github_tag> (or branch if main/develop)
-#   2. Run build-and-deploy.sh to build and stage artifacts
-#   3. Health checks: verify login page and public-key endpoint
+#   2. Run the adjacent build-and-deploy.sh to build and install release files
+#   3. Check currently running endpoints (service restarts remain manual)
+#
+# Run as a sudo-capable login user, without sudo. Only installation elevates.
+# DEPLOY_WORK_DIR overrides the private checkout workspace under ~/.cache.
+# Backend destination/account overrides are forwarded to build-and-deploy.sh.
 #
 set -euo pipefail
 
@@ -21,6 +25,17 @@ set -euo pipefail
 TAG="${1:?Usage: $0 <github_tag> <server_loc>}"
 SERVER_LOC="${2:?Usage: $0 <github_tag> <server_loc>}"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+SERVER_LOC="${SERVER_LOC%/}"
+if [[ "$EUID" -eq 0 || "$(id -un)" == "${TOMCAT_USER:-tomcat}" ||
+      "$(id -un)" == "${PUBLICLINK_USER:-publiclink}" ]]; then
+  echo "✗ Run this script as your sudo-capable login user, without sudo." >&2
+  exit 1
+fi
+if [[ "$SERVER_LOC" != /* || "$SERVER_LOC" == / ]]; then
+  echo "✗ Server location must be an absolute Tomcat home directory, not /." >&2
+  exit 1
+fi
+umask 077
 
 # ── Helper functions ───────────────────────────────────────────────────────────
 log_step() {
@@ -52,30 +67,17 @@ if ! command -v git &> /dev/null; then
 fi
 log_done "git: $(git --version)"
 
-# Check SSH key for GitHub
-# Get the actual user's home directory (handle sudo correctly)
-if [[ -n "${SUDO_USER:-}" ]]; then
-  ACTUAL_HOME=$(eval echo ~$SUDO_USER)
-else
-  ACTUAL_HOME="$HOME"
-fi
-
-SSH_DIR="$ACTUAL_HOME/.ssh"
-if [[ ! -d "$SSH_DIR" ]]; then
-  log_error "SSH directory does not exist: $SSH_DIR"
-  log_error "Run: ssh-keygen -t ed25519 -C \"your_email@example.com\""
+# Git uses this login user's SSH configuration/agent, including custom key names.
+# Authentication is checked by clone, not by guessing private-key filenames.
+SSH_DIR="$HOME/.ssh"
+if [[ ! -f "$SCRIPT_DIR/build-and-deploy.sh" ]]; then
+  log_error "Keep the updated build-and-deploy.sh beside this deploy.sh"
   exit 1
 fi
-
-# Check for any private key (id_* or *.pem, excluding .pub files)
-SSH_KEY_COUNT=$(find "$SSH_DIR" -maxdepth 1 -type f \( -name "id_*" -o -name "*.pem" \) ! -name "*.pub" 2>/dev/null | wc -l)
-if [[ "$SSH_KEY_COUNT" -eq 0 ]]; then
-  log_error "No SSH private keys found in $SSH_DIR"
-  log_error "Run: ssh-keygen -t ed25519 -C \"your_email@example.com\""
-  log_error "Then add the public key to GitHub: https://github.com/settings/keys"
+if ! command -v sudo >/dev/null || ! sudo -v; then
+  log_error "Administrator sudo access is required for release installation"
   exit 1
 fi
-log_done "SSH key: found $SSH_KEY_COUNT private key(s) in $SSH_DIR"
 
 # Optional: check if ssh-agent has keys loaded (non-fatal warning)
 if command -v ssh-add &> /dev/null; then
@@ -153,7 +155,18 @@ log_done "npm: $(npm --version)"
 # ── Step 1: Clone repositories ─────────────────────────────────────────────────
 log_step "Cloning repositories at ${TAG}"
 
-cd "$SCRIPT_DIR"
+# Use a fresh private checkout for each run. Never delete/reuse old checkouts:
+# they may contain local changes or root-owned files from a previous sudo run.
+WORK_ROOT="${DEPLOY_WORK_DIR:-$HOME/.cache/publiclink-deploy}"
+mkdir -p "$WORK_ROOT"
+WORK_ROOT="$(cd "$WORK_ROOT" && pwd)"
+if [[ ! -O "$WORK_ROOT" || ! -w "$WORK_ROOT" ]]; then
+  log_error "Workspace must be owned and writable by $(id -un): $WORK_ROOT"
+  log_error "Set DEPLOY_WORK_DIR to a new directory owned by your login user"
+  exit 1
+fi
+WORK_DIR="$(mktemp -d "$WORK_ROOT/release.XXXXXX")"
+log_done "Private workspace: $WORK_DIR (retained for diagnostics)"
 
 # Determine if it's a branch or tag
 if [[ "$TAG" == "main" || "$TAG" == "develop" ]]; then
@@ -165,47 +178,28 @@ else
 fi
 
 # Clone backend
-BACKEND_DIR="$SCRIPT_DIR/back-end-publiclink"
-if [[ -d "$BACKEND_DIR" ]]; then
-  log_warn "Removing existing backend directory"
-  rm -rf "$BACKEND_DIR"
-fi
-
-git clone --branch "$BRANCH" --depth 1 git@github.com:Vissel/back-end-publiclink.git || {
+BACKEND_DIR="$WORK_DIR/back-end-publiclink"
+git clone --branch "$BRANCH" --depth 1 git@github.com:Vissel/back-end-publiclink.git "$BACKEND_DIR" || {
   log_error "Failed to clone backend repository (tag/branch: $BRANCH)"
   exit 1
 }
 log_done "Backend cloned to $BACKEND_DIR"
 
 # Clone frontend
-FRONTEND_DIR="$SCRIPT_DIR/frontend-public-link"
-if [[ -d "$FRONTEND_DIR" ]]; then
-  log_warn "Removing existing frontend directory"
-  rm -rf "$FRONTEND_DIR"
-fi
-
-git clone --branch "$BRANCH" --depth 1 git@github.com:Vissel/frontend-public-link.git || {
+FRONTEND_DIR="$WORK_DIR/frontend-public-link"
+git clone --branch "$BRANCH" --depth 1 git@github.com:Vissel/frontend-public-link.git "$FRONTEND_DIR" || {
   log_error "Failed to clone frontend repository (tag/branch: $BRANCH)"
   exit 1
 }
 log_done "Frontend cloned to $FRONTEND_DIR"
 
 # ── Step 2: Build and deploy ───────────────────────────────────────────────────
-log_step "Building and deploying to ${SERVER_LOC}/webapps"
+log_step "Installing frontend to ${SERVER_LOC}/webapps and backend to ${PUBLICLINK_DIR:-/opt/publiclink}"
 
-cd "$BACKEND_DIR"
-
-# Check if build-and-deploy.sh exists
-if [[ ! -f build-and-deploy.sh ]]; then
-  log_error "build-and-deploy.sh not found in backend repository"
-  exit 1
-fi
-
-# Make it executable
-chmod +x build-and-deploy.sh
-
-# Run the build and deploy script
-./build-and-deploy.sh "${SERVER_LOC}/webapps" prod || {
+# Always use the updated adjacent installer, even when deploying an older tag.
+# Source code comes from the tag; deployment safety must not regress with it.
+BACKEND_DIR="$BACKEND_DIR" FRONTEND_DIR="$FRONTEND_DIR" \
+  bash "$SCRIPT_DIR/build-and-deploy.sh" "${SERVER_LOC}/webapps" prod || {
   log_error "Build and deploy failed"
   exit 1
 }
@@ -214,15 +208,14 @@ log_done "Build and deploy completed"
 # ── Step 3: Health checks ──────────────────────────────────────────────────────
 log_step "Running health checks"
 
-# Wait a moment for services to start/reload
-log_warn "Waiting 5 seconds for services to initialize..."
-sleep 5
+log_warn "Services were not restarted. These checks describe currently running endpoints."
+log_warn "Restart services manually and recheck health to verify the installed release."
 
 HEALTH_OK=true
 
 # Check 1: Login page (expect HTTP 200)
 log_step "Health check 1: Login page"
-HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" -I https://share-link.top/login 2>/dev/null || echo "000")
+HTTP_CODE=$(curl -s --connect-timeout 5 --max-time 20 -o /dev/null -w "%{http_code}" -I https://share-link.top/login) || HTTP_CODE="000"
 if [[ "$HTTP_CODE" == "200" ]]; then
   log_done "Login page: HTTP $HTTP_CODE"
 else
@@ -232,8 +225,9 @@ fi
 
 # Check 2: Public key endpoint (expect non-empty, non-204)
 log_step "Health check 2: Public key endpoint"
-RESPONSE=$(curl -s https://share-link.top/apiGateway/api/v1/auth/public-key 2>/dev/null || echo "")
-HTTP_CODE_KEY=$(curl -s -o /dev/null -w "%{http_code}" https://share-link.top/apiGateway/api/v1/auth/public-key 2>/dev/null || echo "000")
+KEY_RESULT=$(curl -s --connect-timeout 5 --max-time 20 -w $'\n%{http_code}' https://share-link.top/apiGateway/api/v1/auth/public-key) || KEY_RESULT=$'\n000'
+HTTP_CODE_KEY="${KEY_RESULT##*$'\n'}"
+RESPONSE="${KEY_RESULT%$'\n'*}"
 
 if [[ -z "$RESPONSE" ]]; then
   log_error "Public key endpoint: empty response"
@@ -244,15 +238,17 @@ elif [[ "$HTTP_CODE_KEY" == "204" ]]; then
 elif [[ "$HTTP_CODE_KEY" == "200" ]]; then
   log_done "Public key endpoint: HTTP $HTTP_CODE_KEY, response length: ${#RESPONSE} bytes"
 else
-  log_warn "Public key endpoint: HTTP $HTTP_CODE_KEY (non-200, but non-empty)"
+  log_error "Public key endpoint: HTTP $HTTP_CODE_KEY (expected 200)"
+  HEALTH_OK=false
 fi
 
 # Check 3: Chat bridge (chat-app on :9090 through the gateway /chat/** route)
 # A 200 here proves nginx, the gateway route and chat-app together, so a missing
 # unit or a wrong route order cannot pass silently.
 log_step "Health check 3: Chat bridge"
-CHAT_BODY=$(curl -s --max-time 10 https://share-link.top/apiGateway/chat/api/v1/chat/health 2>/dev/null || echo "")
-HTTP_CODE_CHAT=$(curl -s --max-time 10 -o /dev/null -w "%{http_code}" https://share-link.top/apiGateway/chat/api/v1/chat/health 2>/dev/null || echo "000")
+CHAT_RESULT=$(curl -s --connect-timeout 5 --max-time 10 -w $'\n%{http_code}' https://share-link.top/apiGateway/chat/api/v1/chat/health) || CHAT_RESULT=$'\n000'
+HTTP_CODE_CHAT="${CHAT_RESULT##*$'\n'}"
+CHAT_BODY="${CHAT_RESULT%$'\n'*}"
 
 if [[ "$HTTP_CODE_CHAT" == "200" && "$CHAT_BODY" == *'"status":"UP"'* ]]; then
   log_done "Chat bridge: HTTP $HTTP_CODE_CHAT — $CHAT_BODY"
@@ -268,9 +264,9 @@ fi
 echo ""
 echo "══════════════════════════════════════════════════"
 if [[ "$HEALTH_OK" == true ]]; then
-  echo "  ✓ Deployment successful — all health checks passed"
+  echo "  ✓ Release files installed — currently running endpoints passed health checks"
 else
-  echo "  ✗ Deployment completed — but some health checks failed"
+  echo "  ✗ Release files installed — some currently running endpoints failed health checks"
 fi
 echo "══════════════════════════════════════════════════"
 echo ""
@@ -278,6 +274,7 @@ echo "Tag/Branch: ${TAG}"
 echo "Server:     ${SERVER_LOC}"
 echo "Backend:    ${BACKEND_DIR}"
 echo "Frontend:   ${FRONTEND_DIR}"
+echo "Activation: manual service restart required; the new backend is not yet verified"
 echo ""
 
 if [[ "$HEALTH_OK" == true ]]; then

@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+# ---------------------------------------------------------------------------
+# publiclink-app QA runner (this Mac).
+#
+# Copy to run-publiclink-qa.sh, fill in WIN_IP and the secrets, then:
+#   cd VietQrApplication
+#   mvn -Pqa -pl publiclink-app -am package -DskipTests
+#   ./deploy/mac/run-publiclink-qa.sh
+#
+# Runs in the foreground; stop with Ctrl-C and start again manually.
+# Requires the three QA services on the Windows machine to be up
+# (see deploy/windows/README.md).
+# ---------------------------------------------------------------------------
+set -euo pipefail
+
+# LAN IP of the Windows machine that runs gateway (WAR, /apiGateway), user
+# (8082) and chat-app (9090)
+WIN_IP=192.168.1.x
+
+# Must equal JWT_KEY in the Windows qa-env.bat, or every token one side issues
+# is rejected by the other.
+export JWT_KEY=
+export JWT_URLKEY=
+
+# The three QA services on the Windows machine. SECURITY_SERVICE_URL carries
+# the /apiGateway context path, because that is where Tomcat mounts the WAR.
+export USER_SERVICE_URL="http://${WIN_IP}:8082"
+export SECURITY_SERVICE_URL="http://${WIN_IP}:8080/apiGateway"
+
+# Same RabbitMQ broker as the gateway — payment and notification events cross
+# services. guest cannot connect remotely, so use the QA account created on
+# the Windows machine (deploy/windows/README.md step 4).
+export RABBITMQ_HOST="${WIN_IP}"
+export RABBITMQ_PORT=5672
+export RABBITMQ_USERNAME=publiclink
+export RABBITMQ_PASSWORD=
+
+# publiclink-db stays on this Mac's MySQL; application-qa.properties already
+# points there (localhost:3306). Nothing else to override.
+
+exec java -jar "$(cd "$(dirname "$0")" && pwd)/../../publiclink-app/target/publiclink-exec.jar"

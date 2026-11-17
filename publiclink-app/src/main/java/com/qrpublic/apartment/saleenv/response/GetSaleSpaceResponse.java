@@ -14,10 +14,32 @@ public class GetSaleSpaceResponse extends BaseResponse {
     private String createdAt;
     private String endedAt;
     private String plannedEndedAt;
+    /**
+     * When the sale window opens; empty for environments created before it existed.
+     */
+    private String plannedStartedAt;
+    /**
+     * True while the window has not opened yet, computed against DB time so a
+     * browser clock cannot decide it. Orders are refused in this state and the
+     * public page hides the order form.
+     */
+    private Boolean notStartedYet;
     private List<ProductDTO> listProduct;
     private List<OrderDTO> listOrder;
     private String sellerFullName;
 
     private Boolean isSellerView;
     private int availableAmount;
+
+    /**
+     * STANDARD or YOGA_BOOKING (from the first product). The frontend renders
+     * the yoga calendar instead of the order form when YOGA_BOOKING.
+     */
+    private String productType;
+
+    /**
+     * Transfer account the seller (or an admin) chose to show so buyers can
+     * pay; null when none is attached or the account was removed since.
+     */
+    private EnvTransferInfoDTO transferInfo;
 }

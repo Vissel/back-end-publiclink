@@ -9,12 +9,16 @@ import com.qrpublic.apartment.order.request.GetMoneyRequest;
 import com.qrpublic.apartment.order.request.SellerNoteRequest;
 import com.qrpublic.apartment.order.request.SetDeliverRequest;
 import com.qrpublic.apartment.requestmodel.Pagination;
+import com.qrpublic.apartment.requestmodel.SaleEnvDTO;
 import com.qrpublic.apartment.requestmodel.UpdateProductRequest;
 import com.qrpublic.apartment.saleenv.SaleSpaceService;
 import com.qrpublic.apartment.saleenv.SellerService;
 import com.qrpublic.apartment.saleenv.request.ExportAllRequest;
 import com.qrpublic.apartment.saleenv.request.ExportReportRequest;
 import com.qrpublic.apartment.saleenv.request.ListSellerRequestsRequest;
+import com.qrpublic.apartment.saleenv.request.UpdateEnvironmentTransferRequest;
+import com.qrpublic.apartment.saleenv.request.UpdateEnvironmentWindowRequest;
+import com.qrpublic.apartment.saleenv.response.EnvTransferInfoDTO;
 import com.qrpublic.apartment.saleenv.response.ListSellerRequestResponse;
 import com.qrpublic.apartment.service.LinkService;
 import com.qrpublic.apartment.service.NotificationService;
@@ -73,6 +77,35 @@ public class SellerPageController {
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(e.getMessage());
         }
+    }
+
+    /**
+     * Seller edit of the sale window: move the closing time earlier, close the
+     * sale now, or extend it up to the end of the paid plan (which re-issues the
+     * public link). Ownership is checked against X-User-ID.
+     */
+    @PostMapping("/environment/updateWindow")
+    public Mono<ResponseEntity<SaleEnvDTO>> updateEnvironmentWindow(
+            @RequestHeader(value = "X-User-ID", defaultValue = "") String sellerUsername,
+            @RequestBody UpdateEnvironmentWindowRequest request) {
+        return Mono
+                .fromCallable(() -> ResponseEntity.ok(sellerService.updateEnvironmentWindow(request, sellerUsername)))
+                .subscribeOn(Schedulers.boundedElastic());
+    }
+
+    /**
+     * Seller shows one of their own transfer accounts on the sale page, or
+     * hides it again (blank transferCode). Ownership is checked against
+     * X-User-ID; the body is empty after a detach.
+     */
+    @PostMapping("/environment/transferInfo")
+    public Mono<ResponseEntity<EnvTransferInfoDTO>> updateEnvironmentTransferInfo(
+            @RequestHeader(value = "X-User-ID", defaultValue = "") String sellerUsername,
+            @Valid @RequestBody UpdateEnvironmentTransferRequest request) {
+        return Mono
+                .fromCallable(() -> ResponseEntity
+                        .ok(sellerService.updateEnvironmentTransferInfo(request, sellerUsername)))
+                .subscribeOn(Schedulers.boundedElastic());
     }
 
     @PostMapping("/export")

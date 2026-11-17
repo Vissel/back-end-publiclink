@@ -7,26 +7,42 @@ import com.qrpublic.apartment.apiGateway.authentication.response.BasicLoginRespo
 import com.qrpublic.apartment.apiGateway.authentication.response.ChangePasswordResponse;
 import com.qrpublic.apartment.apiGateway.authentication.response.RefreshTokenResponse;
 import com.qrpublic.apartment.apiGateway.exception.BusinessException;
+import com.qrpublic.apartment.apiGateway.exception.ErrorCode;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Mono;
 
+@Slf4j
 @RestController
 @RequestMapping("/api/v1/auth")
 public class AuthenticationController {
     @Autowired
     AuthenticationService authenticationService;
 
+    @Value("${rsa-pubkey.path}")
+    private String publicKeyPath;
+
+    /**
+     * The browser encrypts every password with this key, so an unreadable key
+     * file breaks login AND registration. It used to be swallowed into a 204
+     * with an empty body, which the client read as "no key" and reported as a
+     * vague encryption failure; now the cause is logged with the path and the
+     * caller gets a 503 it can show.
+     */
     @GetMapping("/public-key")
     public ResponseEntity<ByteArrayResource> getPublicKey() {
         try {
-            // Read from /Users/user/.openssl/authpub.pem
             return ResponseEntity.ok(authenticationService.getPublicKey());
         } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.NO_CONTENT).body(null);
+            log.error("Cannot read the RSA public key from [{}] (rsa-pubkey.path / RSA_PUBKEY_PATH). "
+                    + "Login and registration cannot encrypt passwords until this file exists.",
+                    publicKeyPath, e);
+            throw new BusinessException(ErrorCode.RSA_KEY_UNAVAILABLE, e);
         }
     }
 

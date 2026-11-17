@@ -45,6 +45,7 @@ All inter-service URLs are configurable via environment variables:
 | `CHAT_SERVICE_URL` | `http://localhost:9090` | GatewayRoutesConfig (apiGateway) | Gateway → chat-app routing |
 | `CHAT_DB_URL` / `CHAT_DB_USERNAME` / `CHAT_DB_PASSWORD` | `jdbc:mysql://localhost:3306/chat_schema` | chat-app | Chat schema — owned and migrated by chat-app alone, never by publiclink-app |
 | `ZALO_*` | see `deploy/publiclink.env.example` | chat-app | OA credentials, webhook signature key, admin binding, bridge toggles |
+| `CHAT_VAPID_PUBLIC_KEY` / `CHAT_VAPID_PRIVATE_KEY` / `CHAT_VAPID_SUBJECT` | empty (push off) | chat-app | VAPID identity for browser push of admin chat notifications; empty keys leave the console fully working without out-of-tab alerts |
 | `SECURITY_SERVICE_URL` | `http://localhost:8080` | SecurityCheckClient (publiclink-app) | publiclink-app → gateway security endpoints |
 | `JWT_KEY` | *(required)* | All modules | JWT signing secret |
 | `JWT_URLKEY` | *(required)* | publiclink-app, authen-authorisation | JWT URL secret |

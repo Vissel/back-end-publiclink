@@ -58,6 +58,45 @@
     <changeSet id="020" author="thach">
         <sqlFile path="db/changelog/changeset-020-add-start-end-time.sql"/>
     </changeSet>
+    <changeSet id="021" author="thach">
+        <sqlFile path="db/changelog/changeset-021-create-payment-plan.sql"/>
+    </changeSet>
+    <changeSet id="022" author="thach">
+        <sqlFile path="db/changelog/changeset-022-create-payment.sql"/>
+    </changeSet>
+    <changeSet id="023" author="thach">
+        <sqlFile path="db/changelog/changeset-023-create-transfer-info.sql"/>
+    </changeSet>
+    <changeSet id="024" author="thach">
+        <sqlFile path="db/changelog/changeset-024-update-payment-plan-catalog.sql"/>
+    </changeSet>
+    <changeSet id="025" author="thach">
+        <sqlFile path="db/changelog/changeset-025-create-yoga-class.sql"/>
+    </changeSet>
+    <changeSet id="026" author="thach">
+        <sqlFile path="db/changelog/changeset-026-create-yoga-booking.sql"/>
+    </changeSet>
+    <changeSet id="027" author="thach">
+        <sqlFile path="db/changelog/changeset-027-create-seller-payment-plan.sql"/>
+    </changeSet>
+    <changeSet id="028" author="thach">
+        <sqlFile path="db/changelog/changeset-028-add-payment-qr.sql"/>
+    </changeSet>
+    <changeSet id="029" author="thach">
+        <sqlFile path="db/changelog/changeset-029-add-will-started-at.sql"/>
+    </changeSet>
+    <changeSet id="030" author="thach">
+        <sqlFile path="db/changelog/changeset-030-add-plan-extension.sql"/>
+    </changeSet>
+    <changeSet id="031" author="thach">
+        <sqlFile path="db/changelog/changeset-031-add-env-transfer-code.sql"/>
+    </changeSet>
+    <changeSet id="032" author="thach">
+        <sqlFile path="db/changelog/changeset-032-add-notification-reference.sql"/>
+    </changeSet>
+    <changeSet id="033" author="thach">
+        <sqlFile path="db/changelog/changeset-033-add-user-email.sql"/>
+    </changeSet>
     <!-- Chat tables moved to the chat-app module, which owns the chat_schema.
          publiclink-app stays the sole DDL owner of publiclink-db.
     <changeSet id="021" author="thach">

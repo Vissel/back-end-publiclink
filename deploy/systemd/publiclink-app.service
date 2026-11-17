@@ -14,8 +14,7 @@ EnvironmentFile=/etc/publiclink/publiclink.env
 #     unzip -p publiclink-exec.jar BOOT-INF/classes/application.properties
 ExecStart=/usr/bin/java -XX:MaxRAMPercentage=60 -jar /opt/publiclink/publiclink-exec.jar
 SuccessExitStatus=143
-Restart=on-failure
-RestartSec=10
+Restart=no
 
 [Install]
 WantedBy=multi-user.target

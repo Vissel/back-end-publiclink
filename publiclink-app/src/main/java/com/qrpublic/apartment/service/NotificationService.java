@@ -1,6 +1,8 @@
 package com.qrpublic.apartment.service;
 
 import com.qrpublic.apartment.constant.CommonConstant;
+import com.qrpublic.apartment.core.model.PaymentModel;
+import com.qrpublic.apartment.core.service.CorePaymentService;
 import com.qrpublic.apartment.entity.*;
 import com.qrpublic.apartment.model.notification.NotificationCountResponse;
 import com.qrpublic.apartment.model.notification.NotificationDTO;
@@ -46,6 +48,9 @@ public class NotificationService {
 
     @Autowired
     private RequestRepository requestRepository;
+
+    @Autowired
+    private CorePaymentService corePaymentService;
 
     @Autowired
     private PublicLinkServiceTemplate publicLinkServiceTemplate;
@@ -232,9 +237,11 @@ public class NotificationService {
                 String createdBy = recipient.getNotification().getCreatedBy();
                 List<User> senders = userRepository.findByUserNames(List.of(createdBy));
                 User sender = senders.isEmpty() ? null : senders.get(0);
-                return toDTO(recipient,
+                NotificationDTO dto = toDTO(recipient,
                         sender != null ? sender.getName() : createdBy,
                         sender != null ? sender.getLink() : "");
+                fillPaymentRef(dto);
+                return dto;
             }
         });
     }
@@ -384,15 +391,58 @@ public class NotificationService {
 
     private static NotificationDTO toDTO(NotificationRecipient recipient, String senderName, String senderEmail) {
         Notification n = recipient.getNotification();
-        return new NotificationDTO(
-                n.getId(),
-                n.getTitle(),
-                n.getMessage(),
-                n.getTargetType(),
-                recipient.getRequestUuid(),
-                recipient.isRead(),
-                n.getCreatedAt() != null ? n.getCreatedAt().toString() : "",
-                senderName,
-                senderEmail);
+        NotificationDTO dto = new NotificationDTO();
+        dto.setId(n.getId());
+        dto.setTitle(n.getTitle());
+        dto.setMessage(n.getMessage());
+        dto.setTargetType(n.getTargetType());
+        dto.setRequestUuid(recipient.getRequestUuid());
+        dto.setRead(recipient.isRead());
+        dto.setCreatedAt(n.getCreatedAt() != null ? n.getCreatedAt().toString() : "");
+        dto.setSenderName(senderName);
+        dto.setSenderEmail(senderEmail);
+        dto.setReferenceType(n.getReferenceType());
+        dto.setReferenceCode(n.getReferenceCode());
+        return dto;
+    }
+
+    /**
+     * Load the payload behind a referenced payment so the bell dialog shows the
+     * amount, plan and contact instead of only the message text. A reference
+     * that no longer resolves is left out: the dialog then falls back to the
+     * plain message.
+     */
+    private void fillPaymentRef(NotificationDTO dto) {
+        if (!"PAYMENT".equals(dto.getReferenceType())
+                || dto.getReferenceCode() == null || dto.getReferenceCode().isBlank()) {
+            return;
+        }
+        try {
+            PaymentModel payment = corePaymentService.findPaymentByCode(dto.getReferenceCode());
+            NotificationDTO.PaymentRef ref = new NotificationDTO.PaymentRef();
+            ref.setPaymentCode(payment.getPaymentCode());
+            ref.setPlanUserCode(payment.getPlanUserCode());
+            ref.setSellerUsername(payment.getUsername());
+            ref.setAmount(payment.getAmount() != null ? payment.getAmount().toPlainString() : null);
+            ref.setCurrency(payment.getCurrency());
+            ref.setStatus(payment.getStatus());
+            ref.setSellerEmail(payment.getSellerEmail());
+            ref.setSellerPhone(payment.getSellerPhone());
+            ref.setPlanDescription(planLabel(payment));
+            ref.setPaidAt(payment.getPaidAt());
+            ref.setExtendDays(payment.getExtendDays());
+            dto.setPayment(ref);
+        } catch (RuntimeException e) {
+            log.warn("Notification [{}] references unknown payment [{}]", dto.getId(), dto.getReferenceCode());
+        }
+    }
+
+    /** Catalog entries may carry no description, so the plan code is the fallback. */
+    private static String planLabel(PaymentModel payment) {
+        if (payment.getPlan() == null) {
+            return null;
+        }
+        String description = payment.getPlan().getDescription();
+        return description != null && !description.isBlank() ? description : payment.getPlan().getPlanCode();
     }
 }

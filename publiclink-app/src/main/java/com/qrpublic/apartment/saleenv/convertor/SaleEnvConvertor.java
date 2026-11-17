@@ -36,6 +36,7 @@ public class SaleEnvConvertor {
                                 .createdAt(Utils.formatTimeStamp(env.getCreatedAt()))
                                 .endedAt(DateUtils.dateToLocalTimeString(env.getEndedAt()))
                                 .plannedEndedAt(DateUtils.dateToLocalTimeString(env.getWillEndedAt()))
+                                .plannedStartedAt(DateUtils.dateToLocalTimeString(env.getWillStartedAt()))
                                 .sellerName(req != null ? req.getSellerName() : null)
                                 .productName(productName)
                                 .publicLink(publicLink)
@@ -47,10 +48,10 @@ public class SaleEnvConvertor {
         }
 
         public static SaleEnvDTO.SaleEnvDTOBuilder buildEnvDTO(SaleEnvironment env,
-                                                               List<com.qrpublic.apartment.entity.Product> products,
-                                                               List<com.qrpublic.apartment.entity.Order> orders,
-                                                               int orderTotal,
-                                                               int totalProductQuantity) {
+                        List<com.qrpublic.apartment.entity.Product> products,
+                        List<com.qrpublic.apartment.entity.Order> orders,
+                        int orderTotal,
+                        int totalProductQuantity) {
                 Request req = env.getRequest();
                 String productName = CommonConstant.EMPTY;
                 if (products != null && !products.isEmpty()) {
@@ -64,6 +65,7 @@ public class SaleEnvConvertor {
                                 .createdAt(Utils.formatTimeStamp(env.getCreatedAt()))
                                 .endedAt(DateUtils.dateToLocalTimeString(env.getEndedAt()))
                                 .plannedEndedAt(DateUtils.dateToLocalTimeString(env.getWillEndedAt()))
+                                .plannedStartedAt(DateUtils.dateToLocalTimeString(env.getWillStartedAt()))
                                 .sellerName(req != null ? req.getSellerName() : null)
                                 .productName(productName)
                                 .publicLink(publicLink)
@@ -106,6 +108,7 @@ public class SaleEnvConvertor {
                                 .createdAt(model.getCreatedAt())
                                 .endedAt(model.getLinkEndedAt() != null ? model.getLinkEndedAt().toString() : null)
                                 .plannedEndedAt(model.getPlannedEndedAt())
+                                .plannedStartedAt(model.getPlannedStartedAt())
                                 .sellerName(model.getSeller() != null ? model.getSeller().getName() : null)
                                 .createdBy("Jade")
                                 .sellerAuthLink(sellerAuthLink)

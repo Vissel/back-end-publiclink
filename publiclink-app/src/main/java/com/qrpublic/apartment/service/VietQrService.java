@@ -69,6 +69,24 @@ public class VietQrService extends JwtService implements LinkService {
         return new LinkModel(generatedToken, issueAt, validDate);
     }
 
+    /**
+     * Exact-instant expiry variant: no end-of-day padding, so a link capped by
+     * a plan deadline really stops working at that deadline.
+     */
+    @Override
+    public LinkModel generateSecureUrlUntil(String subject, Map<String, String> claims, Date expiration) {
+        Date issueAt = coreTimezoneService.getNow();
+        String generatedToken = Jwts.builder()
+                .setClaims(claims)
+                .setSubject(subject)
+                .setIssuedAt(issueAt)
+                .signWith(Keys.hmacShaKeyFor(secretKey.getBytes()),
+                        SignatureAlgorithm.HS256)
+                .setExpiration(expiration).compact();
+        log.info("Generated secure URL token with exact expiry: {}", expiration);
+        return new LinkModel(generatedToken, issueAt, expiration);
+    }
+
     @Override
     public LinkModel generateAuthLink(Map<String, String> claims) {
         Date issueAt = new Date();
@@ -80,7 +98,6 @@ public class VietQrService extends JwtService implements LinkService {
                 .setExpiration(validDate).compact();
         return new LinkModel(generatedToken, issueAt, validDate);
     }
-
 
     public byte[] generateQrImage(VietQrRequest request) {
         String payload = generateVietQrPayload(request);
@@ -147,9 +164,10 @@ public class VietQrService extends JwtService implements LinkService {
     public boolean validateLink(String publicToken) {
         return isTokenValid(publicToken);
     }
+
     @Override
     public boolean validateLinkButNotExpiredValidation(String publicToken) {
         return isTokenValidButMayExpired(publicToken);
-    }   
+    }
 
 }

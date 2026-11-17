@@ -52,6 +52,12 @@ public class ChatMessageDomain {
     @Autowired
     ChatEventPublisher chatEventPublisher;
 
+    @Autowired
+    ChatConversationDomain chatConversationDomain;
+
+    @Autowired
+    AdminPushDomain adminPushDomain;
+
     @Value("${chat.max-message-length:2000}")
     private int maxMessageLength;
 
@@ -90,6 +96,13 @@ public class ChatMessageDomain {
                 clip(content), blankToNull(clientMessageId), null);
         chatEventPublisher.publishMessage(saved);
 
+        // The inbox badge, so a message the administrator has not opened is
+        // visible without polling, and a background push for whoever is not
+        // looking at a window right now.
+        chatConversationDomain.markUnread(conversation.getId())
+                .ifPresent(chatEventPublisher::publishConversation);
+        adminPushDomain.notifyAdmins(conversation, saved);
+
         dispatchToZalo(saved, conversation);
         return saved;
     }
@@ -112,6 +125,15 @@ public class ChatMessageDomain {
                                 outcome.getReason()),
                         error -> log.error("Zalo dispatch crashed for message {}: {}",
                                 message.getId(), error.getMessage()));
+    }
+
+    /**
+     * Newest message of a thread. The inbox list uses it for the one-line
+     * preview, so the console never has to open a thread to know where it
+     * stands.
+     */
+    public Optional<ChatMessageModel> lastMessage(Long conversationId) {
+        return coreChatService.findLastMessage(conversationId);
     }
 
     // --------------------------------------------------------------- dispatcher
@@ -165,7 +187,7 @@ public class ChatMessageDomain {
     private ChatMessageModel saveAdminMessage(ChatConversationModel conversation, String content,
             String quoteZaloMsgId, String adminZaloMessageId, String source) {
         Long quotedMessageId = resolveQuotedMessageId(quoteZaloMsgId);
-        ChatStatusEnum initial = chatEventPublisher.isClientOnline(conversation.getDeviceId())
+        ChatStatusEnum initial = chatEventPublisher.isClientOnline(conversation.getUuid())
                 ? ChatStatusEnum.SENT
                 : ChatStatusEnum.PENDING;
 
@@ -317,8 +339,8 @@ public class ChatMessageDomain {
         return coreChatService.replayAfter(conversationId, afterMessageId);
     }
 
-    public void publishTyping(String deviceId, String conversationUuid, String source, boolean typing) {
-        chatEventPublisher.publishTyping(deviceId, conversationUuid, source, typing);
+    public void publishTyping(String conversationUuid, String source, boolean typing) {
+        chatEventPublisher.publishTyping(conversationUuid, source, typing);
     }
 
     private String clip(String content) {

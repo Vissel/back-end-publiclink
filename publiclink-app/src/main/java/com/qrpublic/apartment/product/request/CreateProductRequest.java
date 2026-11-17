@@ -34,6 +34,14 @@ public class CreateProductRequest {
     private double price;
 
     /**
+     * STANDARD (default) or YOGA_BOOKING. Chosen by the seller/admin in the
+     * generate form; drives whether the public page renders the order form or
+     * the yoga calendar.
+     */
+    @JsonProperty("productType")
+    private String productType;
+
+    /**
      * Raw base64 data URIs sent by the frontend.
      * Each string is like {@code "data:image/png;base64,iVBORw0KG..."}.
      * Convert to {@link CreateProductImageRequest} objects in the service layer.

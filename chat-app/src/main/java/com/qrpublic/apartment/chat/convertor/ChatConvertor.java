@@ -59,6 +59,9 @@ public final class ChatConvertor {
         response.setClientMessageCount(conversation.getClientMessageCount());
         response.setAdminMessageCount(conversation.getAdminMessageCount());
         response.setAwaitingAdmin(conversation.isAwaitingAdmin());
+        response.setUnreadCount(conversation.getUnreadCount());
+        response.setOwnerUsername(conversation.getOwnerUsername());
+        response.setOwnerDisplayName(conversation.getOwnerDisplayName());
         response.setLastMessagePreview(preview(lastMessage));
         return response;
     }

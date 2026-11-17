@@ -30,6 +30,16 @@ public class Notification {
     @Column(name = "created_by", nullable = false, length = 100)
     private String createdBy;
 
+    /**
+     * What the notification is about (null for a plain message). PAYMENT means
+     * {@code referenceCode} is a payment_code the bell dialog can load and act on.
+     */
+    @Column(name = "reference_type", length = 30)
+    private String referenceType;
+
+    @Column(name = "reference_code", length = 64)
+    private String referenceCode;
+
     @Column(name = "created_at", updatable = false, insertable = false)
     private Timestamp createdAt;
 

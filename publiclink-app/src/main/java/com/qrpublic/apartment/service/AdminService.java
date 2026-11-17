@@ -1,9 +1,6 @@
 package com.qrpublic.apartment.service;
 
 import com.qrpublic.apartment.exception.EnvironmentCreationException;
-import com.qrpublic.apartment.plan.PlanService;
-import com.qrpublic.apartment.plan.request.CreatePlanRequest;
-import com.qrpublic.apartment.plan.response.CreatePlanResponse;
 
 import com.qrpublic.apartment.requestmodel.Pagination;
 import com.qrpublic.apartment.saleenv.SaleEnvironmentService;
@@ -34,16 +31,14 @@ public class AdminService {
     @Autowired
     PubUserService pubUserService;
 
-    @Autowired
-    PlanService planService;
-    
     /**
      * 2026 - create sale environment with public link
      *
      * @param createEnvironmentRequest
      * @return
      */
-    public Mono<ResponseEntity<CreateEnvironmentResponse>> createSaleEnvironment(CreateEnvironmentRequest createEnvironmentRequest) {
+    public Mono<ResponseEntity<CreateEnvironmentResponse>> createSaleEnvironment(
+            CreateEnvironmentRequest createEnvironmentRequest) {
         return Mono.fromCallable(() -> saleEnvironmentService.generateSaleEnvironment(createEnvironmentRequest))
                 .subscribeOn(Schedulers.boundedElastic())
                 .map(responseDTO -> {
@@ -55,29 +50,22 @@ public class AdminService {
                     response.setUrlString(response.buildUrlString());
                     return ResponseEntity.ok(response);
                 })
-                .onErrorMap(throwable ->
-                        new EnvironmentCreationException("Failed to create sale environment. Please try again later."));
+                .onErrorMap(throwable -> new EnvironmentCreationException(
+                        "Failed to create sale environment. Please try again later."));
     }
 
     /**
-     * Create seller plan with seller details, request UUID, start time and description
-     *
-     * @param createSellerPlanRequest
-     * @return
+     * Create seller plan moved to PaymentPlanAdminService: the endpoint now
+     * owns the payment plan / payment record semantics.
      */
-    public Mono<CreatePlanResponse> createSellerPlan(CreatePlanRequest createSellerPlanRequest) {
-        return Mono.fromCallable(() -> planService.createPricingPlanForSeller(createSellerPlanRequest))
-                .subscribeOn(Schedulers.boundedElastic())
-                .onErrorMap(throwable ->
-                        new EnvironmentCreationException("Failed to create seller plan. Please try again later."));
-    }
 
     public Mono<ListUserResponse> listInnerUsers(Pagination<ListUserRequest> listUserRequestPagination) {
         return Mono.fromCallable(() -> pubUserService.listUser(listUserRequestPagination))
                 .flatMap(result -> returnResult(result, result.getErrorMessage()));
     }
 
-    public Mono<ListEnvironmentResponse> getSaleEnvironment(Pagination<ListEnvironmentRequest> listEnvironmentRequestPagination) {
+    public Mono<ListEnvironmentResponse> getSaleEnvironment(
+            Pagination<ListEnvironmentRequest> listEnvironmentRequestPagination) {
         return saleEnvironmentService.getEnvironments(listEnvironmentRequestPagination)
                 .flatMap(result -> returnResult(result, "Can not get list environment"));
     }

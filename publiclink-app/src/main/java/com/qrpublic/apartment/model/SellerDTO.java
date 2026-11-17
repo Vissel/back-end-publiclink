@@ -12,6 +12,7 @@ public class SellerDTO extends AuthToken {
     private String link;
     private String productName;
     private String name;
+    private String email;
     private UserType userType;
     private PriceRequest price;
 }

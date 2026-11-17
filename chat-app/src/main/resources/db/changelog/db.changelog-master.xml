@@ -13,4 +13,14 @@
     <changeSet id="001" author="thach">
         <sqlFile path="db/changelog/changeset-001-create-chat.sql"/>
     </changeSet>
+
+    <!-- Console UX: unread counter per conversation, browser push subscriptions. -->
+    <changeSet id="002" author="thach">
+        <sqlFile path="db/changelog/changeset-002-chat-console.sql"/>
+    </changeSet>
+
+    <!-- Account-first visitor identity: owner columns + per-conversation stream key. -->
+    <changeSet id="003" author="thach">
+        <sqlFile path="db/changelog/changeset-003-chat-account-identity.sql"/>
+    </changeSet>
 </databaseChangeLog>

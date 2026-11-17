@@ -211,6 +211,8 @@ if [[ ! -f "$ENV_FILE_DEST" ]]; then
   echo "      JWT_KEY, JWT_URLKEY, DB_*, USER_DB_*, MAIL_*"
   echo "      and, for the Zalo chat bridge: CHAT_DB_*, ZALO_* (leave"
   echo "      ZALO_ENABLED=false until the OA + Zalo App + OAuth consent exist)"
+  echo "      optional, for out-of-tab chat notifications: CHAT_VAPID_PUBLIC_KEY and"
+  echo "      CHAT_VAPID_PRIVATE_KEY (generate with: npx --yes web-push generate-vapid-keys)"
 else
   echo "  $ENV_FILE_DEST already exists — skipping (manual edit required)"
 fi

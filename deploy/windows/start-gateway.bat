@@ -14,15 +14,20 @@ REM --spring.webflux.base-path=/apiGateway keeps the /apiGateway URL prefix,
 REM so SECURITY_SERVICE_URL on the Mac and the frontend base URL stay unchanged.
 REM ---------------------------------------------------------------------------
 setlocal
+if not exist "%~dp0qa-env.bat" (
+    echo ERROR: qa-env.bat was not found next to this script.
+    echo Copy qa-env.bat.example to qa-env.bat and fill it in first.
+    pause
+    exit /b 1
+)
 call "%~dp0qa-env.bat"
 
 REM -- Preflight ---------------------------------------------------------------
-REM The gateway routes /publiclink/** to PUBLICLINK_SERVICE_URL. If that host
-REM does not resolve (a .local name without Bonjour or a hosts entry) or the
-REM Mac app is down, EVERY /publiclink/** call fails while /api/v1/auth/** keeps
-REM working - which reads like an auth bug but is a routing one. Report it here
-REM at startup instead of leaving it to be discovered through 500s.
-REM A warning only: the gateway itself is fine before the Mac app comes up.
-powershell -NoProfile -Command "$u=[Uri]'%PUBLICLINK_SERVICE_URL%'; $ok=(Test-NetConnection -ComputerName $u.Host -Port $u.Port -WarningAction SilentlyContinue).TcpTestSucceeded; if($ok){Write-Host ('publiclink-app reachable: '+$u.Host+':'+$u.Port) -ForegroundColor Green}else{Write-Host ('WARNING: publiclink-app NOT reachable: '+$u.Host+':'+$u.Port) -ForegroundColor Yellow; Write-Host 'Every /publiclink/** route will fail until it is. Check the Mac app is running and that this machine resolves the name (ping it). For a .local name install Bonjour for Windows or add a hosts entry.' -ForegroundColor Yellow}"
+REM The gateway routes /publiclink/** to PUBLICLINK_SERVICE_URL. Reactor Netty
+REM does its OWN DNS lookup and does not use mDNS/Bonjour: ping can succeed while
+REM the gateway still gets NXDOMAIN. Check the hosts file, which Netty does read,
+REM then test the TCP port. A warning only: the gateway itself can boot before
+REM the Mac app comes up.
+powershell -NoProfile -Command "$u=[Uri]'%PUBLICLINK_SERVICE_URL%'; $h=$u.Host; $hosts=$env:SystemRoot+'\System32\drivers\etc\hosts'; $entry=$false; if(Test-Path $hosts){$entry=[bool](Select-String -Path $hosts -Pattern ('(?m)^\s*\d+\.\d+\.\d+\.\d+\s+'+[regex]::Escape($h)+'(\s|$)') -Quiet)}; if($h.EndsWith('.local') -and -not $entry){Write-Host ('WARNING: Reactor Netty does not use mDNS. Ping may work but '+$h+' will still fail with NXDOMAIN. Add an entry to '+$hosts) -ForegroundColor Red; Write-Host ('Example: 192.168.1.13   '+$h+' - edit as Administrator, run ipconfig /flushdns, then restart.') -ForegroundColor Yellow}else{$r=Test-NetConnection -ComputerName $h -Port $u.Port -WarningAction SilentlyContinue; if($r.TcpTestSucceeded){Write-Host ('publiclink-app reachable: '+$h+':'+$u.Port) -ForegroundColor Green}else{Write-Host ('WARNING: publiclink-app NOT reachable: '+$h+':'+$u.Port+' - check the hosts mapping and that the Mac app is running.') -ForegroundColor Yellow}}"
 
 java -jar "%~dp0apiGateway.war" --spring.webflux.base-path=/apiGateway

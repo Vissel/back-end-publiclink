@@ -1,0 +1,5 @@
+-- Hibernate quotes these MySQL column definitions when identifiers are quoted.
+CREATE DOMAIN IF NOT EXISTS "LONGTEXT" AS CLOB;
+CREATE DOMAIN IF NOT EXISTS "MEDIUMTEXT" AS CLOB;
+CREATE DOMAIN IF NOT EXISTS "TEXT" AS CLOB;
+CREATE SCHEMA IF NOT EXISTS "publiclink-db";

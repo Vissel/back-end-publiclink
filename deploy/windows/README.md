@@ -11,39 +11,112 @@ and joins this stack over the LAN.
 | apiGateway | `apiGateway.war` | `start-gateway.bat` (standalone) | 8080 | `http://WIN_IP:8080/apiGateway` |
 | user | `user-0.0.1-SNAPSHOT.jar` | `start-user.bat` | 8082 | `http://WIN_IP:8082` |
 | chat-app | `chat-exec.jar` | `start-chat.bat` | 9090 | `http://WIN_IP:9090` |
-| publiclink-app | `publiclink-exec.jar` | Mac (`deploy/mac/run-publiclink-qa.sh`) | 9080 | `http://jade.local:9080` |
+| publiclink-app | `publiclink-exec.jar` | Mac (`deploy/mac/run-publiclink-qa.sh`) | 9080 | `http://jade-mac.local:9080` |
 
 `WIN_IP` = this Windows machine's LAN IP. The Mac is addressed **by hostname**
-(`jade.local`, its Bonjour name) so the config survives the Mac's IP changing.
-MySQL, RabbitMQ and Redis live on this Windows machine; `publiclink-db` stays
-on the Mac.
+(`jade-mac.local`, its Bonjour name — `scutil --get LocalHostName`) so the URL
+never contains an IP address. MySQL, RabbitMQ and Redis live on this Windows
+machine; `publiclink-db` stays on the Mac.
 
 ### Resolving the Mac's hostname from Windows
 
-`PUBLICLINK_SERVICE_URL=http://jade.local:9080` only works if Windows can
-resolve `jade.local`. This LAN has **no local DNS zone** — the router hands out
-ISP DNS servers and no domain option — so `jade`, `jade.lan` and `jade.home`
-do not resolve. Pick one:
+`PUBLICLINK_SERVICE_URL=http://jade-mac.local:9080` keeps the config
+hostname-based,
+but **Reactor Netty (Spring Cloud Gateway's HTTP client) does not use mDNS**.
+`ping jade-mac.local` can succeed through Windows/Bonjour while the gateway
+still fails with:
 
-- **Bonjour for Windows** (recommended, no IP anywhere): install Apple's
-  *Bonjour Print Services*, or the Bonjour that ships with iTunes / Apple
-  Devices. It adds mDNS to the OS, so `*.local` resolves exactly as on the Mac.
-- **hosts entry** (no extra software): add to
-  `C:\Windows\System32\drivers\etc\hosts` as administrator —
-  `192.168.1.13   jade.local`. Update that one line if the Mac's IP changes.
-
-Verify before starting the gateway:
-
-```bat
-ping jade.local
-curl http://jade.local:9080/publiclink/api/v1/publish/getTimeZone
+```text
+java.net.UnknownHostException: Failed to resolve 'jade-mac.local' [A(1), AAAA(28)]
+Caused by: io.netty.resolver.dns.DnsErrorCauseException: Query failed with NXDOMAIN
 ```
 
-`start-gateway.bat` runs this reachability check at startup and prints a
-warning when the name does not resolve or the Mac app is down. Without it,
-every `/publiclink/**` request fails while `/api/v1/auth/**` keeps working —
-a routing problem that used to be reported as a misleading
+That is expected: Netty queries the configured unicast DNS servers directly,
+and this LAN has **no local DNS zone** (the router hands out ISP DNS servers and
+no domain option). `jade-mac`, `jade-mac.lan` and `jade-mac.home` do not resolve
+either.
+
+Renaming the Mac (`scutil --set LocalHostName …`) only moves the mDNS name — it
+does not add anything Netty can resolve. After a rename, update this URL *and*
+the hosts entry together.
+
+**Required fix:** add a hosts entry, which Netty *does* read
+(`%SystemRoot%\System32\drivers\etc\hosts`). Run Notepad as Administrator and add:
+
+```text
+192.168.1.13   jade-mac.local jade.local
+```
+
+Then flush DNS and restart the gateway:
+
+```bat
+ipconfig /flushdns
+start-gateway.bat
+```
+
+Bonjour for Windows alone is **not enough** for the gateway; it only fixes
+OS-level tools such as ping/curl. The alternative to a hosts entry is a real
+unicast DNS record for `jade-mac.local` on the LAN.
+
+Verify all three layers before starting:
+
+```bat
+findstr /I "jade" %SystemRoot%\System32\drivers\etc\hosts
+ping jade-mac.local
+curl http://jade-mac.local:9080/publiclink/api/v1/publish/getTimeZone
+```
+
+`start-gateway.bat` now checks the hosts file itself (not just ping) and prints
+a red warning when a `.local` host has no entry, then tests TCP reachability.
+Without it, every `/publiclink/**` request fails while `/api/v1/auth/**` keeps
+working — a routing problem that used to be reported as a misleading
 `500 AUTH_001 "Invalid username or password"`.
+
+## Quick start after a Windows restart
+
+The three backend apps run in **console windows**, not as Windows services, so
+they do **not** come back after a reboot — relaunch them by hand. MySQL,
+RabbitMQ and Redis are services and usually auto-start, but verify them first:
+the gateway needs Redis before it can serve anything.
+
+**1. Check the middleware services** (cmd / PowerShell):
+
+```bat
+redis-cli ping        & REM expect PONG; otherwise start the Redis / Memurai service
+rabbitmqctl status    & REM expect a running node; otherwise start the RabbitMQ service
+```
+
+MySQL must also be running (`services.msc` → MySQL). If Redis is down the
+gateway answers **every** request with a misleading `500` — start it first.
+
+**2. Relaunch the three backends**, each in its own console window. Leave the
+windows open — closing one stops that app:
+
+```bat
+C:\publiclink\start-gateway.bat   & REM port 8080 — needs Redis up first
+C:\publiclink\start-user.bat      & REM port 8082
+C:\publiclink\start-chat.bat      & REM port 9090
+```
+
+`start-gateway.bat` prints whether publiclink-app (`jade-mac.local:9080`) is
+reachable; a yellow warning only means the Mac app is not up yet.
+
+**3. On the Mac**, start publiclink-app (IDE run config or
+`deploy/mac/run-publiclink-qa.sh`) so the gateway's `/publiclink/**` routes work.
+
+**4. Optional — frontend SPA:** start Tomcat
+(`%CATALINA_HOME%\bin\startup.bat`) only if you want the browser UI served from
+this machine. It is not a backend dependency.
+
+**5. Verify** (from Windows):
+
+```bat
+curl http://localhost:8080/apiGateway/actuator/health
+curl http://localhost:8080/apiGateway/publiclink/api/v1/publish/getTimeZone
+```
+
+Both answering means the full chain (gateway → user / chat / publiclink-app) is
+back up. Section 8 explains how to tell a routing problem from an auth problem.
 
 ## 0. Prerequisites
 

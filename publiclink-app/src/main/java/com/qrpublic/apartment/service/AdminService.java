@@ -13,6 +13,7 @@ import com.qrpublic.apartment.template.model.Result;
 import com.qrpublic.apartment.user.PubUserService;
 import com.qrpublic.apartment.user.request.ListUserRequest;
 import com.qrpublic.apartment.user.response.ListUserResponse;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -22,6 +23,7 @@ import reactor.core.scheduler.Schedulers;
 
 import java.sql.Timestamp;
 
+@Slf4j
 @Service
 @PreAuthorize("hasRole('Admin')")
 public class AdminService {
@@ -50,8 +52,12 @@ public class AdminService {
                     response.setUrlString(response.buildUrlString());
                     return ResponseEntity.ok(response);
                 })
-                .onErrorMap(throwable -> new EnvironmentCreationException(
-                        "Failed to create sale environment. Please try again later."));
+                .onErrorMap(throwable -> {
+                    log.error("Failed to create sale environment for request [{}]",
+                            createEnvironmentRequest.getRequestUuid(), throwable);
+                    return new EnvironmentCreationException(
+                            "Failed to create sale environment. Please try again later.");
+                });
     }
 
     /**

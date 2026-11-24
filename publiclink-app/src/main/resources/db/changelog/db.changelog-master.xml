@@ -97,6 +97,9 @@
     <changeSet id="033" author="thach">
         <sqlFile path="db/changelog/changeset-033-add-user-email.sql"/>
     </changeSet>
+    <changeSet id="034" author="thach">
+        <sqlFile path="db/changelog/changeset-034-picture-link-nullable.sql"/>
+    </changeSet>
     <!-- Chat tables moved to the chat-app module, which owns the chat_schema.
          publiclink-app stays the sole DDL owner of publiclink-db.
     <changeSet id="021" author="thach">

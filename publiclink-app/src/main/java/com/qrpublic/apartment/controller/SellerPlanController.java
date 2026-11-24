@@ -2,9 +2,11 @@ package com.qrpublic.apartment.controller;
 
 import com.qrpublic.apartment.constant.HeaderConstant;
 import com.qrpublic.apartment.paymentplan.request.CheckPlanRequest;
+import com.qrpublic.apartment.paymentplan.request.ExtendPlanRequest;
 import com.qrpublic.apartment.paymentplan.request.SelectPlanRequest;
 import com.qrpublic.apartment.paymentplan.response.CheckPlanResponse;
 import com.qrpublic.apartment.paymentplan.response.ListPlanUserResponse;
+import com.qrpublic.apartment.paymentplan.response.MorePlanStateResponse;
 import com.qrpublic.apartment.paymentplan.response.SelfServiceStateResponse;
 import com.qrpublic.apartment.service.PaymentPlanAdminService;
 import com.qrpublic.apartment.service.SelfServicePlanService;
@@ -80,6 +82,45 @@ public class SellerPlanController {
     public Mono<ResponseEntity<SelfServiceStateResponse>> current(
             @RequestHeader(value = HeaderConstant.USER_ID_HEADER, defaultValue = "") String sellerUsername) {
         return Mono.fromCallable(() -> selfServicePlanService.currentState(sellerUsername))
+                .subscribeOn(Schedulers.boundedElastic())
+                .flatMap(ResponseEntityConvertor::convertToMonoResponseEntity);
+    }
+
+    /**
+     * "More plan" screen: what the account already pays for plus the order it
+     * still has to transfer. Sellers and buyers alike; admins have no plan
+     * account to buy with and are refused by the service.
+     */
+    @GetMapping("/moreState")
+    public Mono<ResponseEntity<MorePlanStateResponse>> moreState(
+            @RequestHeader(value = HeaderConstant.USER_ID_HEADER, defaultValue = "") String username) {
+        return Mono.fromCallable(() -> selfServicePlanService.moreState(username))
+                .subscribeOn(Schedulers.boundedElastic())
+                .flatMap(ResponseEntityConvertor::convertToMonoResponseEntity);
+    }
+
+    /**
+     * Buy a further plan on top of the running one. An order that is still
+     * unpaid is handed back instead of a second one being opened.
+     */
+    @PostMapping("/buyMore")
+    public Mono<ResponseEntity<MorePlanStateResponse>> buyMore(
+            @RequestBody SelectPlanRequest request,
+            @RequestHeader(value = HeaderConstant.USER_ID_HEADER, defaultValue = "") String username) {
+        return Mono.fromCallable(() -> selfServicePlanService.buyMore(username, request))
+                .subscribeOn(Schedulers.boundedElastic())
+                .flatMap(ResponseEntityConvertor::convertToMonoResponseEntity);
+    }
+
+    /**
+     * Buy extra days on one of the caller's own ACTIVE plans. The extension
+     * order lands in the admin "Waiting for pay" queue like any other payment.
+     */
+    @PostMapping("/extendMore")
+    public Mono<ResponseEntity<MorePlanStateResponse>> extendMore(
+            @RequestBody ExtendPlanRequest request,
+            @RequestHeader(value = HeaderConstant.USER_ID_HEADER, defaultValue = "") String username) {
+        return Mono.fromCallable(() -> selfServicePlanService.extendMore(username, request))
                 .subscribeOn(Schedulers.boundedElastic())
                 .flatMap(ResponseEntityConvertor::convertToMonoResponseEntity);
     }

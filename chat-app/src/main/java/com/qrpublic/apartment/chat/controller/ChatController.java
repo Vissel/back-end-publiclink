@@ -3,6 +3,7 @@ package com.qrpublic.apartment.chat.controller;
 import com.qrpublic.apartment.chat.request.ChatHistoryRequest;
 import com.qrpublic.apartment.chat.request.ChatSendMessageRequest;
 import com.qrpublic.apartment.chat.request.ChatStartRequest;
+import com.qrpublic.apartment.chat.request.ChatSystemMessageRequest;
 import com.qrpublic.apartment.chat.request.ChatTypingRequest;
 import com.qrpublic.apartment.chat.response.ChatConversationResponse;
 import com.qrpublic.apartment.chat.response.ChatHealthResponse;
@@ -84,6 +85,15 @@ public class ChatController {
             @RequestBody ChatSendMessageRequest request,
             @RequestHeader(value = "X-User-ID", required = false) String callerUsername) {
         return Mono.fromCallable(() -> chatService.sendMessage(request, callerUsername))
+                .subscribeOn(Schedulers.boundedElastic())
+                .flatMap(ResponseEntityConvertor::convertToMonoResponseEntity);
+    }
+
+    /** Internal endpoint used by publiclink-app after a seller booking decision. */
+    @PostMapping("/system-message")
+    public Mono<ResponseEntity<ChatMessageResponse>> systemMessage(
+            @RequestBody ChatSystemMessageRequest request) {
+        return Mono.fromCallable(() -> chatService.systemMessage(request))
                 .subscribeOn(Schedulers.boundedElastic())
                 .flatMap(ResponseEntityConvertor::convertToMonoResponseEntity);
     }

@@ -1,6 +1,7 @@
 package com.qrpublic.apartment.chat.domain;
 
 import com.qrpublic.apartment.chat.core.model.ChatConversationModel;
+import com.qrpublic.apartment.chat.core.model.ChatDeviceModel;
 import com.qrpublic.apartment.chat.core.model.ChatDirectionEnum;
 import com.qrpublic.apartment.chat.core.model.ChatMessageModel;
 import com.qrpublic.apartment.chat.core.model.ChatStatusEnum;
@@ -13,6 +14,7 @@ import org.springframework.stereotype.Component;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -42,6 +44,9 @@ public class ChatMessageDomain {
      */
     private static final Pattern TAG_PATTERN = Pattern.compile("\\[?\\s*chat\\s*#?(\\d{1,4})\\s*]?",
             Pattern.CASE_INSENSITIVE);
+
+    private static final String SYSTEM_DEVICE_PREFIX = "system-";
+    private static final String SYSTEM_USER_AGENT = "publiclink-system";
 
     @Autowired
     CoreChatService coreChatService;
@@ -125,6 +130,48 @@ public class ChatMessageDomain {
                                 outcome.getReason()),
                         error -> log.error("Zalo dispatch crashed for message {}: {}",
                                 message.getId(), error.getMessage()));
+    }
+
+    // ------------------------------------------------------------------ internal
+
+    /**
+     * Appends an internal service message to the owner's latest open chat. A
+     * missing or closed thread gets a new conversation backed by a synthetic
+     * device, because this caller has no browser device to supply.
+     *
+     * The message is console-only: it is immediately SENT and is never mirrored
+     * to Zalo. Publishing the refreshed conversation keeps the admin inbox and
+     * its unread badge current.
+     */
+    public ChatMessageModel saveSystemMessage(String ownerUsername, String content) {
+        String owner = ownerUsername == null ? null : ownerUsername.trim();
+        if (owner == null || owner.isBlank()) {
+            throw new ApplicationException("Owner username is required.", 400);
+        }
+        String messageContent = clip(content);
+
+        ChatConversationModel conversation = coreChatService.findLatestConversationByOwner(owner)
+                .filter(existing -> !CoreChatService.ChatConversationStatus.CLOSED.equals(existing.getStatus()))
+                .orElseGet(() -> createSystemConversation(owner));
+
+        ChatMessageModel saved = coreChatService.saveMessage(conversation.getId(), ChatDirectionEnum.ADMIN,
+                messageContent, null, null);
+        ChatMessageModel sent = coreChatService.advanceStatus(saved.getId(), ChatStatusEnum.SENT, null, null)
+                .orElseThrow(() -> new IllegalStateException(
+                        "System chat message not found after save: " + saved.getId()));
+
+        chatEventPublisher.publishMessage(sent);
+        chatConversationDomain.markUnread(conversation.getId())
+                .ifPresent(chatEventPublisher::publishConversation);
+        log.info("System message stored for conversation {} (owner={}, messageId={})",
+                conversation.getUuid(), owner, sent.getId());
+        return sent;
+    }
+
+    private ChatConversationModel createSystemConversation(String ownerUsername) {
+        String deviceId = SYSTEM_DEVICE_PREFIX + UUID.randomUUID();
+        ChatDeviceModel device = coreChatService.registerVisit(deviceId, null, null, SYSTEM_USER_AGENT);
+        return coreChatService.createConversation(device.getDeviceId(), ownerUsername, ownerUsername);
     }
 
     /**

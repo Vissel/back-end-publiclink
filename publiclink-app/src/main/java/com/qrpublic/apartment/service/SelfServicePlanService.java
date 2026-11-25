@@ -52,7 +52,10 @@ import java.util.List;
 @Service
 public class SelfServicePlanService {
 
-    /** Upper bound of one self-served extension, the same sanity limit the admin flow uses. */
+    /**
+     * Upper bound of one self-served extension, the same sanity limit the admin
+     * flow uses.
+     */
     private static final int MAX_EXTEND_DAYS = 3650;
 
     /**

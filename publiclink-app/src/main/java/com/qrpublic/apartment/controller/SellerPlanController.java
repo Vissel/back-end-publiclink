@@ -32,96 +32,96 @@ import reactor.core.scheduler.Schedulers;
 @RequestMapping("/api/v1/sellerPlan")
 public class SellerPlanController {
 
-    @Autowired
-    private PaymentPlanAdminService paymentPlanAdminService;
+        @Autowired
+        private PaymentPlanAdminService paymentPlanAdminService;
 
-    @Autowired
-    private SelfServicePlanService selfServicePlanService;
+        @Autowired
+        private SelfServicePlanService selfServicePlanService;
 
-    @GetMapping("/myPlans")
-    public Mono<ResponseEntity<ListPlanUserResponse>> myPlans(
-            @RequestHeader(value = HeaderConstant.USER_ID_HEADER, defaultValue = "") String sellerUsername) {
-        return Mono.fromCallable(() -> paymentPlanAdminService.listUserPlans(sellerUsername))
-                .subscribeOn(Schedulers.boundedElastic())
-                .flatMap(ResponseEntityConvertor::convertToMonoResponseEntity);
-    }
+        @GetMapping("/myPlans")
+        public Mono<ResponseEntity<ListPlanUserResponse>> myPlans(
+                        @RequestHeader(value = HeaderConstant.USER_ID_HEADER, defaultValue = "") String sellerUsername) {
+                return Mono.fromCallable(() -> paymentPlanAdminService.listUserPlans(sellerUsername))
+                                .subscribeOn(Schedulers.boundedElastic())
+                                .flatMap(ResponseEntityConvertor::convertToMonoResponseEntity);
+        }
 
-    /**
-     * Quota gate for the seller-facing Generate Product Link flow. The seller
-     * is taken from the header, so nobody can probe another seller's quota.
-     */
-    @PostMapping("/check")
-    public Mono<ResponseEntity<CheckPlanResponse>> check(
-            @RequestHeader(value = HeaderConstant.USER_ID_HEADER, defaultValue = "") String sellerUsername) {
-        CheckPlanRequest request = new CheckPlanRequest();
-        request.setUsername(sellerUsername);
-        return Mono.fromCallable(() -> paymentPlanAdminService.checkPlan(request))
-                .subscribeOn(Schedulers.boundedElastic())
-                .flatMap(ResponseEntityConvertor::convertToMonoResponseEntity);
-    }
+        /**
+         * Quota gate for the seller-facing Generate Product Link flow. The seller
+         * is taken from the header, so nobody can probe another seller's quota.
+         */
+        @PostMapping("/check")
+        public Mono<ResponseEntity<CheckPlanResponse>> check(
+                        @RequestHeader(value = HeaderConstant.USER_ID_HEADER, defaultValue = "") String sellerUsername) {
+                CheckPlanRequest request = new CheckPlanRequest();
+                request.setUsername(sellerUsername);
+                return Mono.fromCallable(() -> paymentPlanAdminService.checkPlan(request))
+                                .subscribeOn(Schedulers.boundedElastic())
+                                .flatMap(ResponseEntityConvertor::convertToMonoResponseEntity);
+        }
 
-    /**
-     * Self-service plan purchase: the seller buys the selected catalog plan and
-     * immediately gets the transfer instructions. An order that is already open
-     * is handed back instead of a second one being created.
-     */
-    @PostMapping("/select")
-    public Mono<ResponseEntity<SelfServiceStateResponse>> selectPlan(
-            @RequestBody SelectPlanRequest request,
-            @RequestHeader(value = HeaderConstant.USER_ID_HEADER, defaultValue = "") String sellerUsername) {
-        return Mono.fromCallable(() -> selfServicePlanService.selectPlan(sellerUsername, request))
-                .subscribeOn(Schedulers.boundedElastic())
-                .flatMap(ResponseEntityConvertor::convertToMonoResponseEntity);
-    }
+        /**
+         * Self-service plan purchase: the seller buys the selected catalog plan and
+         * immediately gets the transfer instructions. An order that is already open
+         * is handed back instead of a second one being created.
+         */
+        @PostMapping("/select")
+        public Mono<ResponseEntity<SelfServiceStateResponse>> selectPlan(
+                        @RequestBody SelectPlanRequest request,
+                        @RequestHeader(value = HeaderConstant.USER_ID_HEADER, defaultValue = "") String sellerUsername) {
+                return Mono.fromCallable(() -> selfServicePlanService.selectPlan(sellerUsername, request))
+                                .subscribeOn(Schedulers.boundedElastic())
+                                .flatMap(ResponseEntityConvertor::convertToMonoResponseEntity);
+        }
 
-    /**
-     * Onboarding state of the seller, polled by the plan screen while an admin
-     * verifies the transfer.
-     */
-    @GetMapping("/current")
-    public Mono<ResponseEntity<SelfServiceStateResponse>> current(
-            @RequestHeader(value = HeaderConstant.USER_ID_HEADER, defaultValue = "") String sellerUsername) {
-        return Mono.fromCallable(() -> selfServicePlanService.currentState(sellerUsername))
-                .subscribeOn(Schedulers.boundedElastic())
-                .flatMap(ResponseEntityConvertor::convertToMonoResponseEntity);
-    }
+        /**
+         * Onboarding state of the seller, polled by the plan screen while an admin
+         * verifies the transfer.
+         */
+        @GetMapping("/current")
+        public Mono<ResponseEntity<SelfServiceStateResponse>> current(
+                        @RequestHeader(value = HeaderConstant.USER_ID_HEADER, defaultValue = "") String sellerUsername) {
+                return Mono.fromCallable(() -> selfServicePlanService.currentState(sellerUsername))
+                                .subscribeOn(Schedulers.boundedElastic())
+                                .flatMap(ResponseEntityConvertor::convertToMonoResponseEntity);
+        }
 
-    /**
-     * "More plan" screen: what the account already pays for plus the order it
-     * still has to transfer. Sellers and buyers alike; admins have no plan
-     * account to buy with and are refused by the service.
-     */
-    @GetMapping("/moreState")
-    public Mono<ResponseEntity<MorePlanStateResponse>> moreState(
-            @RequestHeader(value = HeaderConstant.USER_ID_HEADER, defaultValue = "") String username) {
-        return Mono.fromCallable(() -> selfServicePlanService.moreState(username))
-                .subscribeOn(Schedulers.boundedElastic())
-                .flatMap(ResponseEntityConvertor::convertToMonoResponseEntity);
-    }
+        /**
+         * "More plan" screen: what the account already pays for plus the order it
+         * still has to transfer. Sellers and buyers alike; admins have no plan
+         * account to buy with and are refused by the service.
+         */
+        @GetMapping("/moreState")
+        public Mono<ResponseEntity<MorePlanStateResponse>> moreState(
+                        @RequestHeader(value = HeaderConstant.USER_ID_HEADER, defaultValue = "") String username) {
+                return Mono.fromCallable(() -> selfServicePlanService.moreState(username))
+                                .subscribeOn(Schedulers.boundedElastic())
+                                .flatMap(ResponseEntityConvertor::convertToMonoResponseEntity);
+        }
 
-    /**
-     * Buy a further plan on top of the running one. An order that is still
-     * unpaid is handed back instead of a second one being opened.
-     */
-    @PostMapping("/buyMore")
-    public Mono<ResponseEntity<MorePlanStateResponse>> buyMore(
-            @RequestBody SelectPlanRequest request,
-            @RequestHeader(value = HeaderConstant.USER_ID_HEADER, defaultValue = "") String username) {
-        return Mono.fromCallable(() -> selfServicePlanService.buyMore(username, request))
-                .subscribeOn(Schedulers.boundedElastic())
-                .flatMap(ResponseEntityConvertor::convertToMonoResponseEntity);
-    }
+        /**
+         * Buy a further plan on top of the running one. An order that is still
+         * unpaid is handed back instead of a second one being opened.
+         */
+        @PostMapping("/buyMore")
+        public Mono<ResponseEntity<MorePlanStateResponse>> buyMore(
+                        @RequestBody SelectPlanRequest request,
+                        @RequestHeader(value = HeaderConstant.USER_ID_HEADER, defaultValue = "") String username) {
+                return Mono.fromCallable(() -> selfServicePlanService.buyMore(username, request))
+                                .subscribeOn(Schedulers.boundedElastic())
+                                .flatMap(ResponseEntityConvertor::convertToMonoResponseEntity);
+        }
 
-    /**
-     * Buy extra days on one of the caller's own ACTIVE plans. The extension
-     * order lands in the admin "Waiting for pay" queue like any other payment.
-     */
-    @PostMapping("/extendMore")
-    public Mono<ResponseEntity<MorePlanStateResponse>> extendMore(
-            @RequestBody ExtendPlanRequest request,
-            @RequestHeader(value = HeaderConstant.USER_ID_HEADER, defaultValue = "") String username) {
-        return Mono.fromCallable(() -> selfServicePlanService.extendMore(username, request))
-                .subscribeOn(Schedulers.boundedElastic())
-                .flatMap(ResponseEntityConvertor::convertToMonoResponseEntity);
-    }
+        /**
+         * Buy extra days on one of the caller's own ACTIVE plans. The extension
+         * order lands in the admin "Waiting for pay" queue like any other payment.
+         */
+        @PostMapping("/extendMore")
+        public Mono<ResponseEntity<MorePlanStateResponse>> extendMore(
+                        @RequestBody ExtendPlanRequest request,
+                        @RequestHeader(value = HeaderConstant.USER_ID_HEADER, defaultValue = "") String username) {
+                return Mono.fromCallable(() -> selfServicePlanService.extendMore(username, request))
+                                .subscribeOn(Schedulers.boundedElastic())
+                                .flatMap(ResponseEntityConvertor::convertToMonoResponseEntity);
+        }
 }

@@ -27,18 +27,27 @@ public class MorePlanStateResponse {
 
     private String state;
 
-    /** Email the account gave at registration; prefills the payment confirmation. */
+    /**
+     * Email the account gave at registration; prefills the payment confirmation.
+     */
     private String contactEmail;
 
     /** Product links still creatable across the plans that are running. */
     private int remainingQuota;
 
-    /** Latest instant the account has paid for; null when nothing reaches the future. */
+    /**
+     * Latest instant the account has paid for; null when nothing reaches the
+     * future.
+     */
     private String coverageEndDate;
 
-    /** ACTIVE assignments, newest first; these are the plans that can be extended. */
+    /**
+     * ACTIVE assignments, newest first; these are the plans that can be extended.
+     */
     private List<PlanUserModel> activePlans;
 
-    /** Open order with its transfer instructions, null when there is nothing to pay. */
+    /**
+     * Open order with its transfer instructions, null when there is nothing to pay.
+     */
     private PaymentInfoResponse pendingPayment;
 }

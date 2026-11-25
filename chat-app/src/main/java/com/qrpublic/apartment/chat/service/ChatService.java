@@ -5,6 +5,7 @@ import com.qrpublic.apartment.chat.convertor.ChatConvertor;
 import com.qrpublic.apartment.chat.request.ChatHistoryRequest;
 import com.qrpublic.apartment.chat.request.ChatSendMessageRequest;
 import com.qrpublic.apartment.chat.request.ChatStartRequest;
+import com.qrpublic.apartment.chat.request.ChatSystemMessageRequest;
 import com.qrpublic.apartment.chat.request.ChatTypingRequest;
 import com.qrpublic.apartment.chat.response.ChatConversationResponse;
 import com.qrpublic.apartment.chat.response.ChatHistoryResponse;
@@ -153,6 +154,32 @@ public class ChatService {
                         conversation.getUuid(), owner, identity.getRecognition(), identity.isResumed(),
                         messages.size());
                 return response;
+            }
+        });
+    }
+
+    /** Internal service-to-player message; console-only and never mirrored to Zalo. */
+    public Result<ChatMessageResponse> systemMessage(ChatSystemMessageRequest request) {
+        return chatServiceTemplate.execute(new ProcessCallback<ChatSystemMessageRequest, ChatMessageResponse>() {
+            @Override
+            public ChatSystemMessageRequest getRequest() {
+                return request;
+            }
+
+            @Override
+            public void preProcess(ChatSystemMessageRequest req) {
+                Assert.notNull(req, "System message request is required.");
+                Assert.hasText(req.getOwnerUsername(), "Owner username is required.");
+                Assert.hasText(req.getContent(), "Message content is required.");
+                Assert.isTrue(req.getContent().length() <= maxMessageLength,
+                        "Message is longer than " + maxMessageLength + " characters.");
+            }
+
+            @Override
+            public ChatMessageResponse process() {
+                ChatMessageModel saved = chatMessageDomain.saveSystemMessage(
+                        request.getOwnerUsername().trim(), request.getContent());
+                return ChatConvertor.toMessageResponse(saved);
             }
         });
     }

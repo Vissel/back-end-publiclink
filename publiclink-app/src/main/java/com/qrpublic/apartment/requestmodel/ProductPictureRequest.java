@@ -16,7 +16,7 @@ import lombok.Setter;
 @AllArgsConstructor
 public class ProductPictureRequest {
 
-	private String title;
+    private String title;
 
-	private String data;
+    private String data;
 }

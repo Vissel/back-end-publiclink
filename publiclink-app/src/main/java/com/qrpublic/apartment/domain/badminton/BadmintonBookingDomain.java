@@ -73,7 +73,8 @@ public class BadmintonBookingDomain {
                 String state = BadmintonFrameModel.FREE;
                 if (blocker != null) {
                     state = callerUsername != null && callerUsername.equals(blocker.getBuyerUsername())
-                            ? BadmintonFrameModel.MINE : BadmintonFrameModel.BOOKED;
+                            ? BadmintonFrameModel.MINE
+                            : BadmintonFrameModel.BOOKED;
                 }
                 frames.add(BadmintonFrameResponse.builder()
                         .startTime(frame.getStartTime())

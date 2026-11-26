@@ -88,7 +88,8 @@ class BadmintonBookingDomainTest {
         when(coreBadmintonService.findByCode("court-1")).thenReturn(court("env-1"));
         when(coreBadmintonService.confirm("booking-1")).thenReturn(confirmed);
         doThrow(new IllegalStateException("notification unavailable")).when(coreNotificationService)
-                .notifyUsernames(anyList(), anyString(), anyString(), anyString(), anyString(), anyString(), anyString());
+                .notifyUsernames(anyList(), anyString(), anyString(), anyString(), anyString(), anyString(),
+                        anyString());
         when(chatMessageClient.sendSystemMessage(anyString(), anyString()))
                 .thenThrow(new IllegalStateException("chat unavailable"));
 
@@ -110,7 +111,8 @@ class BadmintonBookingDomainTest {
         when(coreBadmintonService.findByCode("court-1")).thenReturn(court("env-1"));
         when(coreBadmintonService.reject("booking-1", "Court unavailable")).thenReturn(rejected);
         doThrow(new IllegalStateException("notification unavailable")).when(coreNotificationService)
-                .notifyUsernames(anyList(), anyString(), anyString(), anyString(), anyString(), anyString(), anyString());
+                .notifyUsernames(anyList(), anyString(), anyString(), anyString(), anyString(), anyString(),
+                        anyString());
         when(chatMessageClient.sendSystemMessage(anyString(), anyString()))
                 .thenReturn(Mono.error(new IllegalStateException("chat down")));
 
@@ -125,7 +127,8 @@ class BadmintonBookingDomainTest {
     }
 
     private BadmintonCourtModel court(String envId) {
-        return BadmintonCourtModel.builder().courtCode("court-1").courtName("Court 1").envId(envId).active(true).build();
+        return BadmintonCourtModel.builder().courtCode("court-1").courtName("Court 1").envId(envId).active(true)
+                .build();
     }
 
     private BadmintonBookingModel booking(String status) {

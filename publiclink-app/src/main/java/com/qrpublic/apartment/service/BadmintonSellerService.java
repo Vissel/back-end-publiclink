@@ -4,6 +4,7 @@ import com.qrpublic.apartment.badminton.request.BadmintonBookingCodeRequest;
 import com.qrpublic.apartment.badminton.request.BadmintonCourtDeleteRequest;
 import com.qrpublic.apartment.badminton.request.BadmintonCourtSaveRequest;
 import com.qrpublic.apartment.badminton.request.BadmintonSellerBookingsRequest;
+import com.qrpublic.apartment.badminton.request.BadmintonSellerCourtsRequest;
 import com.qrpublic.apartment.badminton.request.BadmintonSellerRejectRequest;
 import com.qrpublic.apartment.badminton.response.BadmintonCourtResponse;
 import com.qrpublic.apartment.badminton.response.BadmintonCourtScheduleResponse;
@@ -36,6 +37,30 @@ public class BadmintonSellerService {
 
     @Autowired
     private BadmintonBookingDomain badmintonBookingDomain;
+
+    public Result<List<BadmintonCourtResponse>> courts(BadmintonSellerCourtsRequest request,
+            String sellerUsername) {
+        return publicLinkServiceTemplate.execute(
+                new ProcessCallback<BadmintonSellerCourtsRequest, List<BadmintonCourtResponse>>() {
+                    @Override
+                    public BadmintonSellerCourtsRequest getRequest() {
+                        return request;
+                    }
+
+                    @Override
+                    public void preProcess(BadmintonSellerCourtsRequest req) {
+                        Assert.hasText(req.getToken(), "Link token is required.");
+                        Assert.hasText(sellerUsername, "Seller identity is required.");
+                    }
+
+                    @Override
+                    public List<BadmintonCourtResponse> process() {
+                        return badmintonCourtDomain.listCourts(request.getToken(), sellerUsername).stream()
+                                .map(BadmintonSellerService.this::toResponse)
+                                .toList();
+                    }
+                });
+    }
 
     public Result<BadmintonCourtResponse> saveCourt(BadmintonCourtSaveRequest request, String sellerUsername) {
         return publicLinkServiceTemplate.execute(

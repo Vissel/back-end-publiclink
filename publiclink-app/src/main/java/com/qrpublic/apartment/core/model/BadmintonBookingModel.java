@@ -5,7 +5,9 @@ import lombok.Data;
 
 import java.math.BigDecimal;
 
-/** Public badminton booking contract. Times are HH:mm and date is yyyy-MM-dd. */
+/**
+ * Public badminton booking contract. Times are HH:mm and date is yyyy-MM-dd.
+ */
 @Data
 @Builder
 public class BadmintonBookingModel {

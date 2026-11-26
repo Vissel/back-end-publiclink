@@ -33,7 +33,9 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
-/** Core persistence, frame generation and state machine for badminton bookings. */
+/**
+ * Core persistence, frame generation and state machine for badminton bookings.
+ */
 @Slf4j
 @Service
 public class CoreBadmintonService {
@@ -132,8 +134,8 @@ public class CoreBadmintonService {
             return List.of();
         }
         List<BadmintonFrameModel> frames = new ArrayList<>();
-        for (LocalTime start = open; !start.plusMinutes(schedule.getSlotMinutes()).isAfter(close);
-                start = start.plusMinutes(schedule.getSlotMinutes())) {
+        for (LocalTime start = open; !start.plusMinutes(schedule.getSlotMinutes()).isAfter(close); start = start
+                .plusMinutes(schedule.getSlotMinutes())) {
             LocalTime end = start.plusMinutes(schedule.getSlotMinutes());
             frames.add(BadmintonFrameModel.builder()
                     .startTime(format(start))
@@ -319,7 +321,8 @@ public class CoreBadmintonService {
             LocalTime open = parseTime(schedule.getOpenTime());
             LocalTime close = parseTime(schedule.getCloseTime());
             if (open == null || close == null || !close.isAfter(open)) {
-                throw new ApplicationException("Schedule open/close times must be valid HH:mm values with close after open.", 400);
+                throw new ApplicationException(
+                        "Schedule open/close times must be valid HH:mm values with close after open.", 400);
             }
             if (schedule.getSlotMinutes() <= 0) {
                 throw new ApplicationException("slotMinutes must be greater than zero.", 400);

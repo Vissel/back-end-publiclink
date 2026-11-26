@@ -23,7 +23,7 @@ public class ChatMessageClient {
             return Mono.empty();
         }
         return webClient.post()
-                .uri("/chat/api/v1/chat/system-message")
+                .uri("/chat/internal/v1/chat/system-message")
                 .bodyValue(new SystemMessageRequest(ownerUsername, content))
                 .retrieve()
                 .bodyToMono(Void.class)

@@ -27,6 +27,7 @@ public interface BadmintonCourtRepository extends JpaRepository<BadmintonCourt, 
 
     /** Serializes court creation so the six-court cap holds under concurrency. */
     @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @Query("SELECT c FROM BadmintonCourt c WHERE c.saleEnvironment.envId = :envId ORDER BY c.courtId ASC")
+    @Query("SELECT c FROM BadmintonCourt c JOIN c.saleEnvironment se"
+            + " WHERE se.envId = :envId ORDER BY c.courtId ASC")
     List<BadmintonCourt> findAllByEnvIdForUpdate(@Param("envId") String envId);
 }

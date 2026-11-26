@@ -16,4 +16,6 @@ public class SelfRegisterRequest {
     private String name;
     /** Contact email: used for plan and payment follow-up */
     private String email;
+    /** BUYER for players booking courts; defaults to SELLER when blank. */
+    private String role;
 }

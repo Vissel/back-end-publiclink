@@ -53,6 +53,9 @@ public final class ExportLabels {
     private final String no;
     private final String notAvailable;
 
+    private final String active;
+    private final String inactive;
+
     private ExportLabels(
             String sheetReport,
             String sheetSummary,
@@ -89,7 +92,9 @@ public final class ExportLabels {
             String summaryOrders,
             String yes,
             String no,
-            String notAvailable) {
+            String notAvailable,
+            String active,
+            String inactive) {
         this.sheetReport = sheetReport;
         this.sheetSummary = sheetSummary;
         this.sheetEnvPrefix = sheetEnvPrefix;
@@ -126,6 +131,8 @@ public final class ExportLabels {
         this.yes = yes;
         this.no = no;
         this.notAvailable = notAvailable;
+        this.active = active;
+        this.inactive = inactive;
     }
 
     public static ExportLabels forLocale(String locale) {
@@ -138,6 +145,11 @@ public final class ExportLabels {
 
     public String yesNo(boolean value) {
         return value ? yes : no;
+    }
+
+    /** Sale environment state as a readable label instead of true/false. */
+    public String activeInactive(boolean value) {
+        return value ? active : inactive;
     }
 
     public String orNotAvailable(String value) {
@@ -181,7 +193,9 @@ public final class ExportLabels {
                 "Orders",
                 "Yes",
                 "No",
-                "N/A");
+                "N/A",
+                "Active",
+                "Inactive");
     }
 
     private static ExportLabels vietnamese() {
@@ -221,6 +235,8 @@ public final class ExportLabels {
                 "Đơn hàng",
                 "Có",
                 "Không",
-                "Không có");
+                "Không có",
+                "Hoạt động",
+                "Không hoạt động");
     }
 }

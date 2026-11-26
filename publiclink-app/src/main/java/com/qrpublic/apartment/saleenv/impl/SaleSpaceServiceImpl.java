@@ -17,6 +17,7 @@ import com.qrpublic.apartment.repository.SaleEnvironmentRepository;
 import com.qrpublic.apartment.requestmodel.OrderDTO;
 import com.qrpublic.apartment.requestmodel.PictureDTO;
 import com.qrpublic.apartment.requestmodel.ProductDTO;
+import com.qrpublic.apartment.requestmodel.ProductPictureRequest;
 import com.qrpublic.apartment.requestmodel.UpdateProductRequest;
 import com.qrpublic.apartment.saleenv.SaleSpaceService;
 import com.qrpublic.apartment.saleenv.response.GetSaleSpaceResponse;
@@ -29,9 +30,6 @@ import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
-import jakarta.persistence.EntityManager;
-import jakarta.persistence.PersistenceContext;
 
 import java.text.SimpleDateFormat;
 import java.util.*;
@@ -58,9 +56,6 @@ public class SaleSpaceServiceImpl implements SaleSpaceService {
 
     @Autowired
     ProductRepository productRepository;
-
-    @PersistenceContext
-    private EntityManager entityManager;
 
     @Autowired
     CoreTimezoneService coreTimezoneService;
@@ -257,27 +252,23 @@ public class SaleSpaceServiceImpl implements SaleSpaceService {
         product.setPrice(req.getPrice());
         // product.setTotal_amount(req.getTotalAmount());
 
-        // Replace images: explicitly delete old mappings, then add new ones.
-        // Must use entityManager.remove() instead of ppm.setProduct(null)
-        // because ProductPictureMap.product is @ManyToOne(optional = false),
-        // making product_id non-nullable — nullifying it violates the constraint.
+        // Mutate Hibernate's managed collection in place. Replacing it with a new
+        // list dereferences the orphanRemoval collection and fails at transaction
+        // commit; clearing the managed collection lets Hibernate delete the old
+        // mappings and their pictures before cascading the new ones.
         if (req.getListPicProMap() != null) {
-            if (product.getListPicProMap() != null) {
-                List<ProductPictureMap> toRemove = new ArrayList<>(product.getListPicProMap());
-                product.getListPicProMap().clear();
-                toRemove.forEach(entityManager::remove);
+            List<ProductPictureMap> picMaps = product.getListPicProMap();
+            if (picMaps == null) {
+                picMaps = new ArrayList<>();
+                product.setListPicProMap(picMaps);
             }
-            // Add new mappings with proper bidirectional links
-            List<ProductPictureMap> newPics = new ArrayList<>();
-            for (PictureDTO picDTO : req.getListPicProMap()) {
+            picMaps.clear();
+            for (ProductPictureRequest picDTO : req.getListPicProMap()) {
                 Picture picture = new Picture();
-                picture.setLink(picDTO.getLink());
                 picture.setTitle(picDTO.getTitle());
                 picture.setData(picDTO.getData());
-                ProductPictureMap ppm = new ProductPictureMap(product, picture);
-                newPics.add(ppm);
+                picMaps.add(new ProductPictureMap(product, picture));
             }
-            product.setListPicProMap(newPics);
         }
 
         productRepository.save(product);

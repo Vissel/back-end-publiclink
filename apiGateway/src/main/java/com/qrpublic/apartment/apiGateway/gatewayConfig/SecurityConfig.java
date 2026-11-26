@@ -79,6 +79,10 @@ public class SecurityConfig {
                                 "/publiclink/api/v1/publish/**")// temporary allow user creation without auth for
                                                                 // testing
                         .permitAll()
+                        // Internal service writes (for example booking chat messages)
+                        // must never be exposed through the public gateway.
+                        .pathMatchers("/chat/internal/**")
+                        .denyAll()
                         // Server-side-only admin registration: admin roles only
                         // (authorities carry plain role strings, no ROLE_ prefix)
                         .pathMatchers("/api/v1/user/admin/internal/**")

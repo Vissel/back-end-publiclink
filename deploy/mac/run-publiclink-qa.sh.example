@@ -37,5 +37,26 @@ export RABBITMQ_PASSWORD=
 
 # publiclink-db stays on this Mac's MySQL; application-qa.properties already
 # points there (localhost:3306). Nothing else to override.
+#
+# IMPORTANT: every variable above is REQUIRED in QA. With them unset the app
+# falls back to application.properties defaults — USER_SERVICE_URL becomes
+# http://localhost:8082, and nothing listens there on the Mac. Self-register
+# then answers 503 "The account service is unreachable right now." and the log
+# shows: HTTP POST http://localhost:8082/api/v1/user/findByUsername.
+#
+# That is why the same 503 appears with or without the gateway: the gateway is
+# fine, the app is the one that cannot reach the user service.
+# Launching from the IDE (Run/Debug Configurations -> Environment variables)
+# needs the exact same list:
+#   USER_SERVICE_URL=http://<WIN_IP>:8082
+#   SECURITY_SERVICE_URL=http://<WIN_IP>:8080/apiGateway
+#   RABBITMQ_HOST=<WIN_IP>  RABBITMQ_PORT=5672
+#   RABBITMQ_USERNAME / RABBITMQ_PASSWORD  (same as qa-env.bat)
+# JWT_KEY / JWT_URLKEY must equal qa-env.bat on the Windows machine.
+#
+# Verify before touching the gateway (expect 400/409/2xx, never 503):
+#   curl -X POST http://localhost:9080/publiclink/api/v1/publish/self-register \
+#     -H 'Content-Type: application/json' -d '{}'
+#   -> {"message":"Username is required."}
 
 exec java -jar "$(cd "$(dirname "$0")" && pwd)/../../publiclink-app/target/publiclink-exec.jar"

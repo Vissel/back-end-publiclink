@@ -17,15 +17,16 @@ import java.math.BigDecimal;
 import java.util.List;
 
 /**
- * Core-layer resolution of sale environments for the yoga feature. The only
- * place that turns a request UUID / env id into the YogaEnvModel DTO; the
- * domain layer never sees SaleEnvironment or Product entities.
+ * Core-layer resolution of sale environments for calendar booking products.
+ * The only place that turns a request UUID / env id into the YogaEnvModel DTO;
+ * the domain layer never sees SaleEnvironment or Product entities.
  */
 @Slf4j
 @Service
 public class CoreYogaEnvironmentService {
 
         public static final String TYPE_YOGA = "YOGA_BOOKING";
+        public static final String TYPE_BADMINTON = "BADMINTON_COURT";
         public static final String TYPE_STANDARD = "STANDARD";
 
         @Autowired

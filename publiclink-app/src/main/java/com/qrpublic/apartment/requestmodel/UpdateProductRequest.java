@@ -1,11 +1,11 @@
 package com.qrpublic.apartment.requestmodel;
 
+import java.util.List;
+
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
-
-import java.util.List;
 
 @Getter
 @Setter
@@ -20,5 +20,5 @@ public class UpdateProductRequest {
     private String unit;
     private Double price;
     private int totalAmount;
-    private List<PictureDTO> listPicProMap;
+    private List<ProductPictureRequest> listPicProMap;
 }

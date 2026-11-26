@@ -35,7 +35,7 @@
         <sqlFile path="db/changelog/changeset-010-update-order.sql"/>
     </changeSet>
     <!--<changeSet id="011" author="thach" >-->
-    <!--	<sqlFile path="db/changelog/changeset-011-update-table.sql"/>-->
+    <!--        <sqlFile path="db/changelog/changeset-011-update-table.sql"/>-->
     <!--</changeSet> -->
     <changeSet id="012" author="thach">
         <sqlFile path="db/changelog/changeset-012-create-pricing.sql"/>
@@ -96,6 +96,12 @@
     </changeSet>
     <changeSet id="033" author="thach">
         <sqlFile path="db/changelog/changeset-033-add-user-email.sql"/>
+    </changeSet>
+    <changeSet id="034" author="thach">
+        <sqlFile path="db/changelog/changeset-034-picture-link-nullable.sql"/>
+    </changeSet>
+    <changeSet id="035" author="thach">
+        <sqlFile path="db/changelog/changeset-035-create-badminton.sql"/>
     </changeSet>
     <!-- Chat tables moved to the chat-app module, which owns the chat_schema.
          publiclink-app stays the sole DDL owner of publiclink-db.

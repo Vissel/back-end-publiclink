@@ -100,11 +100,20 @@ public class CoreUserService {
      */
     @Transactional
     public UserModel createSelfRegisteredSeller(String username, String name, String email) {
+        return createSelfRegistered(username, name, email, UserType.SELLER.name());
+    }
+
+    /**
+     * Local row of a self-registered account (SELLER or BUYER). The account
+     * already holds the password the user typed, so it is BASIC from the start.
+     */
+    @Transactional
+    public UserModel createSelfRegistered(String username, String name, String email, String type) {
         User user = new User();
         user.setUserName(username);
         user.setName(name);
         user.setEmail(email);
-        user.setType(UserType.SELLER.name());
+        user.setType(type);
         user.setAuthenticationMethod(AuthenticationEnum.BASIC.name());
         userRepo.save(user);
 

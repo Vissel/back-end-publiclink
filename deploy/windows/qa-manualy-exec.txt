@@ -1,0 +1,11 @@
+$hosts = "$env:SystemRoot\System32\drivers\etc\hosts"
+$entry = "192.168.1.13 jade.local"
+
+if (-not (Select-String -Path $hosts -Pattern '^\s*192\.168\.1\.13\s+jade\.local(\s|$' -Quiet)) {
+    Add-Content -Path $hosts -Value "`r`n$entry"
+    Write-Host "Added: $entry"
+} else {
+    Write-Host "Entry already present: $entry"
+}
+
+ipconfig /flushdns

@@ -159,10 +159,15 @@ public class PageController {
     /**
      * Plans on sale, public so the register screen can show what a seller
      * gets for their money before asking for an email address.
+     *
+     * @param group PRODUCT or BOOKING to see only that purpose group; blank
+     *              returns the whole catalog, which is what the register
+     *              preview of both price lists needs
      */
     @GetMapping("/plans")
-    public Mono<ResponseEntity<PlanCatalogResponse>> plans() {
-        return Mono.fromCallable(() -> selfServicePlanService.publicCatalog())
+    public Mono<ResponseEntity<PlanCatalogResponse>> plans(
+            @RequestParam(value = "group", required = false) String group) {
+        return Mono.fromCallable(() -> selfServicePlanService.publicCatalog(group))
                 .subscribeOn(Schedulers.boundedElastic())
                 .flatMap(ResponseEntityConvertor::convertToMonoResponseEntity);
     }

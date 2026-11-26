@@ -112,6 +112,17 @@ public class PaymentDomainService {
             response.setEstimatedActiveDate(today.toString());
             response.setEstimatedEndDate(today.plusDays(payment.getPlan().getPlanDay()).toString());
         }
+        if (notBlank(payment.getConvertsPlanUserCode())) {
+            // A conversion order buys the target plan for only the difference, so
+            // the page must price it at what is actually due while still showing
+            // the days and links the seller gets once it is paid.
+            response.setFee(payment.getAmount());
+            LocalDate from = LocalDate.now();
+            response.setEstimatedActiveDate(from.toString());
+            if (payment.getPlan() != null) {
+                response.setEstimatedEndDate(from.plusDays(payment.getPlan().getPlanDay()).toString());
+            }
+        }
         if (payment.getExtendDays() != null && payment.getExtendDays() > 0) {
             // This link buys extra days on a plan that is already running, so
             // the window of a fresh plan would be wrong: show the days on offer

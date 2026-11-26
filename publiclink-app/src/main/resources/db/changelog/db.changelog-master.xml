@@ -103,6 +103,12 @@
     <changeSet id="035" author="thach">
         <sqlFile path="db/changelog/changeset-035-create-badminton.sql"/>
     </changeSet>
+    <changeSet id="036" author="thach">
+        <sqlFile path="db/changelog/changeset-036-add-plan-group.sql"/>
+    </changeSet>
+    <changeSet id="037" author="thach">
+        <sqlFile path="db/changelog/changeset-037-add-plan-purpose-conversion.sql"/>
+    </changeSet>
     <!-- Chat tables moved to the chat-app module, which owns the chat_schema.
          publiclink-app stays the sole DDL owner of publiclink-db.
     <changeSet id="021" author="thach">

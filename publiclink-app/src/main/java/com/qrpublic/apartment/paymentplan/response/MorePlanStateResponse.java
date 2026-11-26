@@ -3,6 +3,7 @@ package com.qrpublic.apartment.paymentplan.response;
 import com.qrpublic.apartment.core.model.PlanUserModel;
 import lombok.Data;
 
+import java.math.BigDecimal;
 import java.util.List;
 
 /**
@@ -32,6 +33,19 @@ public class MorePlanStateResponse {
      */
     private String contactEmail;
 
+    /**
+     * PRODUCT or BOOKING, the purpose this account registered for. The buy tab
+     * filters its catalog with it, and a conversion never leaves it.
+     */
+    private String planPurpose;
+
+    /**
+     * Present when this answer came from a conversion request: what happened and
+     * how much, so the screen can show the payment it opened or the success it
+     * owed without an extra round trip.
+     */
+    private ConversionOutcome conversionOutcome;
+
     /** Product links still creatable across the plans that are running. */
     private int remainingQuota;
 
@@ -50,4 +64,33 @@ public class MorePlanStateResponse {
      * Open order with its transfer instructions, null when there is nothing to pay.
      */
     private PaymentInfoResponse pendingPayment;
+
+    /**
+     * Result of a conversion request.
+     */
+    @Data
+    public static class ConversionOutcome {
+        /** An order was opened for the difference and the transfer is still due. */
+        public static final String ORDER_CREATED = "ORDER_CREATED";
+        /**
+         * The difference was zero or negative, so nothing is charged: the plan
+         * was converted on the spot and the surplus is forfeited.
+         */
+        public static final String NO_PAYMENT = "NO_PAYMENT";
+
+        /** ORDER_CREATED | NO_PAYMENT */
+        private String result;
+        /** new plan fee minus the fee already paid; negative means forfeited */
+        private BigDecimal feeDelta;
+        private String sourcePlanUserCode;
+        private String conversionPlanUserCode;
+        private String targetPlanCode;
+        private BigDecimal targetFee;
+        private int targetPlanDay;
+        private int targetEnvCount;
+        /** the converted plan's window starts again from this date ... */
+        private String newActiveDate;
+        /** ... and runs to this one */
+        private String newEndedDate;
+    }
 }

@@ -20,14 +20,20 @@ public class PlanUserModel {
     private int envQuota;
     private int usedCount;
     private int remaining;
-    /** CREATE | ACTIVE | DEACTIVE | EXTENDED */
+    /** CREATE | ACTIVE | DEACTIVE | EXTENDED | CONVERTED */
     private String planState;
+    /** PRODUCT or BOOKING: which kind of link this plan pays for */
+    private String planGroup;
     private String activeDate;
     private String endedDate;
     /** days bought on top of another plan; non-null marks an extension order */
     private Integer extendDays;
     /** plan user code whose end date the extension adds its days to */
     private String extendsPlanUserCode;
+    /** plan user code this order replaces; non-null marks a conversion order */
+    private String convertsPlanUserCode;
+    /** amount due for a conversion order, the difference between the two plans */
+    private BigDecimal convertFeeDelta;
     private String createdAt;
     private String paymentCode;
     /** payment status of the linked payment record */

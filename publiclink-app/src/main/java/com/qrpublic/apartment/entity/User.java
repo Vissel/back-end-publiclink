@@ -29,6 +29,14 @@ public class User {
      */
     private String email;
 
+    /**
+     * Which plan group this account was registered for: PRODUCT or BOOKING.
+     * Null means the purpose was never asked, which reads as PRODUCT so every
+     * pre-existing account keeps the catalog it already bought from.
+     */
+    @Column(name = "plan_purpose", length = 20)
+    private String planPurpose;
+
     @Column(updatable = false, insertable = false)
     private Timestamp createdAt;
 

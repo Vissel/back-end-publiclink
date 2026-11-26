@@ -3,12 +3,14 @@ package com.qrpublic.apartment.controller;
 import com.qrpublic.apartment.constant.HeaderConstant;
 import com.qrpublic.apartment.core.model.SellerPlanModel;
 import com.qrpublic.apartment.core.model.YogaBookingModel;
+import com.qrpublic.apartment.core.model.YogaClassCopyModel;
 import com.qrpublic.apartment.core.model.YogaClassModel;
 import com.qrpublic.apartment.core.model.YogaEnvModel;
 import com.qrpublic.apartment.service.YogaSellerService;
 import com.qrpublic.apartment.template.ResponseEntityConvertor;
 import com.qrpublic.apartment.yoga.request.SellerPlanUpsertRequest;
 import com.qrpublic.apartment.yoga.request.YogaBookingToggleRequest;
+import com.qrpublic.apartment.yoga.request.YogaClassCopyRequest;
 import com.qrpublic.apartment.yoga.request.YogaClassUpsertRequest;
 import com.qrpublic.apartment.yoga.request.YogaRangeRequest;
 import com.qrpublic.apartment.yoga.response.YogaResultResponse;
@@ -61,6 +63,15 @@ public class YogaSellerController {
                         @RequestBody YogaClassUpsertRequest request,
                         @RequestHeader(value = HeaderConstant.USER_ID_HEADER, defaultValue = "") String seller) {
                 return Mono.fromCallable(() -> yogaSellerService.upsertClass(request, seller))
+                                .subscribeOn(Schedulers.boundedElastic())
+                                .flatMap(ResponseEntityConvertor::convertToMonoResponseEntity);
+        }
+
+        @PostMapping("/class/copy")
+        public Mono<ResponseEntity<YogaResultResponse<YogaClassCopyModel>>> copyClass(
+                        @RequestBody YogaClassCopyRequest request,
+                        @RequestHeader(value = HeaderConstant.USER_ID_HEADER, defaultValue = "") String seller) {
+                return Mono.fromCallable(() -> yogaSellerService.copyClass(request, seller))
                                 .subscribeOn(Schedulers.boundedElastic())
                                 .flatMap(ResponseEntityConvertor::convertToMonoResponseEntity);
         }

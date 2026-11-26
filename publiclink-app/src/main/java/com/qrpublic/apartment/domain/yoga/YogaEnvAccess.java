@@ -93,6 +93,13 @@ public class YogaEnvAccess {
         return toDbZone(coreTimezoneService.getNow()).toLocalTime();
     }
 
+    /** A lifetime epoch-millis value as a DB-zone date, for window comparisons. */
+    public LocalDate dbDateOf(long epochMillis) {
+        return java.time.Instant.ofEpochMilli(epochMillis)
+                .atZone(ZoneId.of(coreTimezoneService.getDatabaseTimeZone().getID()))
+                .toLocalDate();
+    }
+
     private java.time.ZonedDateTime toDbZone(Date now) {
         return now.toInstant().atZone(ZoneId.of(coreTimezoneService.getDatabaseTimeZone().getID()));
     }

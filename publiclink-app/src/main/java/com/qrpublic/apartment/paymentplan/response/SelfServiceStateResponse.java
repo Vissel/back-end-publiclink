@@ -25,6 +25,12 @@ public class SelfServiceStateResponse {
     /** Email the seller gave at registration; prefills the payment confirmation. */
     private String contactEmail;
 
+    /**
+     * PRODUCT or BOOKING, the purpose this account registered for. The plan
+     * screen fetches its catalog with it so only the right group is offered.
+     */
+    private String planPurpose;
+
     /** Newest assignment that is ACTIVE; null when nothing is paid for yet. */
     private PlanUserModel activePlan;
 

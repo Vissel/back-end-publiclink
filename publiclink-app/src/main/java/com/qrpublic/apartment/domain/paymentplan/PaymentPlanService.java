@@ -11,6 +11,7 @@ import com.qrpublic.apartment.exception.ApplicationException;
 import com.qrpublic.apartment.paymentplan.request.CreateCatalogPlanRequest;
 import com.qrpublic.apartment.paymentplan.request.CreateSellerPlanRequest;
 import com.qrpublic.apartment.paymentplan.response.CreateSellerPlanResponse;
+import com.qrpublic.apartment.paymentplan.response.ConvertPlanResponse;
 import com.qrpublic.apartment.paymentplan.response.CreatedPlanResponse;
 import com.qrpublic.apartment.paymentplan.response.ExtendPlanResponse;
 import com.qrpublic.apartment.service.LinkService;
@@ -63,7 +64,8 @@ public class PaymentPlanService {
     public CreatedPlanResponse createCatalogPlan(CreateCatalogPlanRequest request) {
         int envCount = request.getEnvCount() > 0 ? request.getEnvCount() : 1;
         com.qrpublic.apartment.core.model.PaymentPlanModel plan = corePaymentPlanService.createPlan(
-                request.getFee(), request.getPlanDay(), envCount, request.getDescription());
+                request.getFee(), request.getPlanDay(), envCount, request.getDescription(),
+                request.getPlanGroup());
 
         CreatedPlanResponse response = new CreatedPlanResponse();
         response.setPlanCode(plan.getPlanCode());
@@ -72,6 +74,7 @@ public class PaymentPlanService {
         response.setEnvCount(plan.getEnvCount());
         response.setDescription(plan.getDescription());
         response.setPlanState(plan.getPlanState());
+        response.setPlanGroup(plan.getPlanGroup());
         return response;
     }
 
@@ -118,6 +121,15 @@ public class PaymentPlanService {
         return corePaymentPlanService.findRemainingQuota(username);
     }
 
+    /**
+     * Remaining quota of one purpose group, which is what the onboarding guard
+     * needs: a running plan of the other group does not cover this purchase.
+     */
+    @Transactional(readOnly = true)
+    public int remainingQuota(String username, String planGroup) {
+        return corePaymentPlanService.findRemainingQuota(username, planGroup);
+    }
+
     @Transactional(readOnly = true)
     public List<PlanUserModel> activeAssignments(String username) {
         return corePaymentPlanService.findActiveAssignments(username);
@@ -141,6 +153,14 @@ public class PaymentPlanService {
     @Transactional(readOnly = true)
     public List<com.qrpublic.apartment.core.model.PaymentPlanModel> catalog() {
         return corePaymentPlanService.findActivePlans();
+    }
+
+    /**
+     * Catalog of one purpose group only, for the self-service screens.
+     */
+    @Transactional(readOnly = true)
+    public List<com.qrpublic.apartment.core.model.PaymentPlanModel> catalog(String planGroup) {
+        return corePaymentPlanService.findActivePlansByGroup(planGroup);
     }
 
     /**
@@ -233,6 +253,15 @@ public class PaymentPlanService {
     }
 
     /**
+     * Gate evaluated against one purpose group, so the answer is about the link
+     * being created and not merely about the account owning some plan.
+     */
+    @Transactional(readOnly = true)
+    public com.qrpublic.apartment.core.model.PlanGateModel evaluate(String username, String planGroup) {
+        return corePaymentPlanService.evaluate(username, planGroup);
+    }
+
+    /**
      * Latest instant the seller has paid for, quota ignored, or {@code null}
      * when no plan reaches the future. This is the ceiling for stretching a
      * sale window that already exists: running an existing link longer spends
@@ -252,7 +281,16 @@ public class PaymentPlanService {
      */
     @Transactional
     public com.qrpublic.apartment.core.model.PlanGateModel consumeQuotaOrThrow(String username) {
-        com.qrpublic.apartment.core.model.PlanGateModel gate = corePaymentPlanService.consumeOne(username);
+        return consumeQuotaOrThrow(username, null);
+    }
+
+    /**
+     * Consume one slot of a specific purpose group. A blank group keeps the old
+     * any-plan behaviour, which is what a flow that creates no typed product uses.
+     */
+    @Transactional
+    public com.qrpublic.apartment.core.model.PlanGateModel consumeQuotaOrThrow(String username, String planGroup) {
+        com.qrpublic.apartment.core.model.PlanGateModel gate = corePaymentPlanService.consumeOne(username, planGroup);
         if (!gate.isAllowed()) {
             log.warn("Refused environment creation for [{}]: {}", username, gate.getReason());
             throw new ApplicationException(gate.getMessage(), 403);
@@ -278,6 +316,7 @@ public class PaymentPlanService {
         int count = 0;
         int started = 0;
         int extended = 0;
+        int converted = 0;
         for (String planUserCode : planUserCodes) {
             corePaymentService.markPaid(requirePayment(latest, planUserCode).getPaymentCode(),
                     note, adminUsername);
@@ -286,7 +325,13 @@ public class PaymentPlanService {
             if (!"CREATE".equals(assignment.getPlanState())) {
                 continue;
             }
-            if (assignment.getExtendDays() != null) {
+            if (assignment.getConvertsPlanUserCode() != null) {
+                // A conversion order never becomes a plan of its own: the plan it
+                // converts is rebuilt onto the target instead.
+                PlanUserModel rebuilt = corePaymentPlanService.applyConversion(planUserCode);
+                converted++;
+                notifyPlanConverted(assignment.getUsername(), rebuilt, adminUsername);
+            } else if (assignment.getExtendDays() != null) {
                 corePaymentPlanService.applyExtension(planUserCode);
                 extended++;
             } else {
@@ -295,9 +340,29 @@ public class PaymentPlanService {
                 notifyPlanActivated(assignment.getUsername(), startedPlan, adminUsername);
             }
         }
-        log.info("Marked {} payment(s) as paid by admin [{}]: {} plan(s) started on [{}], {} plan(s) extended",
-                count, adminUsername, started, activeDate, extended);
+        log.info("Marked {} payment(s) as paid by admin [{}]: {} plan(s) started on [{}], {} plan(s) extended, "
+                + "{} plan(s) converted", count, adminUsername, started, activeDate, extended, converted);
         return count;
+    }
+
+    /**
+     * The money for a conversion arrived and the plan became the better one. The
+     * window restarted, so the seller has to be told the new dates rather than
+     * left reading the plan they used to have.
+     */
+    private void notifyPlanConverted(String username, PlanUserModel plan, String adminUsername) {
+        if (username == null || username.isBlank()) {
+            return;
+        }
+        String message = "Your plan was upgraded to " + plan.getPlanDay() + " day(s) with "
+                + plan.getEnvQuota() + " link(s), active from " + plan.getActiveDate()
+                + " to " + plan.getEndedDate() + ".";
+        try {
+            coreNotificationService.notifyUsernames(List.of(username), "Plan converted", message,
+                    "PLAN", adminUsername, "PLAN", plan.getPlanUserCode());
+        } catch (RuntimeException e) {
+            log.error("Converted plan for [{}] but the notification failed: {}", username, e.getMessage());
+        }
     }
 
     /**
@@ -351,6 +416,63 @@ public class PaymentPlanService {
         response.setPaymentUrl(paymentUrl);
         response.setStatus(payment.getStatus());
         return response;
+    }
+
+    /**
+     * Payment page URL for a payment code: a fresh secured link holding the
+     * code, valid for {@code payment.link.expiry}. Shared by the plan purchase,
+     * the extension order and the regeneration, so all three hand out the same
+     * kind of URL.
+     */
+    /**
+     * Move a running plan onto a dearer one of the same purpose group for only
+     * the difference: a conversion order that grants no environment slot, plus
+     * its payment priced at that difference. The converted plan is rebuilt when
+     * the order is marked paid, exactly like an extension waits for its money.
+     */
+    @Transactional
+    public ConvertPlanResponse createConversion(String sourcePlanUserCode, String targetPlanCode,
+            String adminUsername) {
+        PlanUserModel order = corePaymentPlanService.createConversionAssignment(sourcePlanUserCode,
+                targetPlanCode);
+        // order.getFee() is the stored delta, not the target's full price.
+        PaymentModel payment = corePaymentService.createPayment(
+                order.getPlanUserCode(), order.getFee(), adminUsername);
+        String paymentUrl = buildPaymentUrl(payment.getPaymentCode());
+        corePaymentService.updatePaymentUrl(payment.getPaymentCode(), paymentUrl);
+
+        ConvertPlanResponse response = new ConvertPlanResponse();
+        response.setSourcePlanUserCode(sourcePlanUserCode);
+        response.setConversionPlanUserCode(order.getPlanUserCode());
+        response.setTargetPlanCode(targetPlanCode);
+        response.setTargetPlanGroup(order.getPlanGroup());
+        response.setTargetFee(corePaymentPlanService.findPlanByCode(targetPlanCode).getFee());
+        response.setTargetPlanDay(order.getPlanDay());
+        response.setTargetEnvCount(
+                corePaymentPlanService.findPlanByCode(targetPlanCode).getEnvCount());
+        response.setFeeDelta(order.getFee());
+        response.setNewActiveDate(order.getActiveDate());
+        response.setNewEndedDate(order.getEndedDate());
+        response.setPaymentCode(payment.getPaymentCode());
+        response.setPaymentUrl(paymentUrl);
+        response.setStatus(payment.getStatus());
+        response.setSellerUsername(order.getUsername());
+        return response;
+    }
+
+    /**
+     * Conversion of a plan that already costs as much as the target, or more:
+     * nothing is owed, so no order and no payment are created and the plan is
+     * rebuilt on the spot. The surplus is forfeited, which the seller accepted
+     * before this is reached.
+     */
+    @Transactional
+    public PlanUserModel convertWithoutPayment(String sourcePlanUserCode, String targetPlanCode,
+            String adminUsername) {
+        PlanUserModel rebuilt = corePaymentPlanService.convertWithoutPayment(sourcePlanUserCode,
+                targetPlanCode);
+        notifyPlanConverted(rebuilt.getUsername(), rebuilt, adminUsername);
+        return rebuilt;
     }
 
     /**

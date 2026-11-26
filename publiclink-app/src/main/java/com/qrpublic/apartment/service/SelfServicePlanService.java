@@ -9,11 +9,15 @@ import com.qrpublic.apartment.domain.paymentplan.PaymentPlanService;
 import com.qrpublic.apartment.domain.paymentplan.event.PaymentCreatedEvent;
 import com.qrpublic.apartment.entity.User;
 import com.qrpublic.apartment.exception.ApplicationException;
+import com.qrpublic.apartment.model.PlanGroup;
 import com.qrpublic.apartment.model.UserType;
+import com.qrpublic.apartment.paymentplan.request.ChangePlanPurposeRequest;
+import com.qrpublic.apartment.paymentplan.request.ConvertPlanRequest;
 import com.qrpublic.apartment.paymentplan.request.CreateSellerPlanRequest;
 import com.qrpublic.apartment.paymentplan.request.ExtendPlanRequest;
 import com.qrpublic.apartment.paymentplan.request.SelectPlanRequest;
 import com.qrpublic.apartment.paymentplan.response.CreateSellerPlanResponse;
+import com.qrpublic.apartment.paymentplan.response.ConvertPlanResponse;
 import com.qrpublic.apartment.paymentplan.response.ExtendPlanResponse;
 import com.qrpublic.apartment.paymentplan.response.MorePlanStateResponse;
 import com.qrpublic.apartment.paymentplan.response.PlanCatalogResponse;
@@ -233,8 +237,9 @@ public class SelfServicePlanService {
                     open.getPlanUserCode());
             return buildState(assignments, username);
         }
-        if (hasUsablePlan(username)) {
-            // Nothing to buy: a running plan with quota left already covers them.
+        if (hasUsablePlan(username, purposeOf(username))) {
+            // Nothing to buy: a running plan of the group this account registered
+            // for already covers it.
             return buildState(assignments, username);
         }
 
@@ -266,6 +271,8 @@ public class SelfServicePlanService {
         response.setContactEmail(coreUserService.findUserEntityByUsername(username)
                 .map(User::getEmail)
                 .orElse(null));
+        String purpose = purposeOf(username);
+        response.setPlanPurpose(purpose);
 
         PlanUserModel active = assignments.stream()
                 .filter(assignment -> "ACTIVE".equals(assignment.getPlanState()))
@@ -282,7 +289,10 @@ public class SelfServicePlanService {
                     : SelfServiceStateResponse.STATE_WAITING_TRANSFER);
             return response;
         }
-        if (active != null && hasUsablePlan(username)) {
+        if (active != null && hasUsablePlan(username, purpose)) {
+            // Only a plan of the group this account registered for counts as
+            // covering it, so a booking seller holding a product plan is still
+            // offered the booking catalog instead of being sent away satisfied.
             response.setState(SelfServiceStateResponse.STATE_ACTIVE);
             return response;
         }
@@ -468,6 +478,7 @@ public class SelfServicePlanService {
         response.setContactEmail(coreUserService.findUserEntityByUsername(username)
                 .map(User::getEmail)
                 .orElse(null));
+        response.setPlanPurpose(purposeOf(username));
         response.setRemainingQuota(paymentPlanService.remainingQuota(username));
         java.util.Date coverageEnd = paymentPlanService.planCoverageEnd(username);
         response.setCoverageEndDate(coverageEnd == null ? null : DateUtils.dateToString(coverageEnd));
@@ -499,6 +510,20 @@ public class SelfServicePlanService {
         return paymentPlanService.remainingQuota(username) > 0;
     }
 
+    /** Usable links within one purpose group. */
+    private boolean hasUsablePlan(String username, String planGroup) {
+        return paymentPlanService.remainingQuota(username, planGroup) > 0;
+    }
+
+    /**
+     * The group this account registered to buy from. Blank, which is every
+     * account predating the split and every account an admin created, reads as
+     * PRODUCT so nothing changes for them.
+     */
+    private String purposeOf(String username) {
+        return PlanGroup.fromPurpose(coreUserService.findPlanPurpose(username)).name();
+    }
+
     /**
      * Plan part of the bank transfer content, formatted exactly like the admin
      * flow so the QR content stays whole-VND and ASCII-safe.
@@ -521,6 +546,15 @@ public class SelfServicePlanService {
 
     /** Catalog view for the public plan screen. */
     public Result<PlanCatalogResponse> publicCatalog() {
+        return publicCatalog(null);
+    }
+
+    /**
+     * Catalog view for the plan screens. A purpose group narrows the list to the
+     * kind of link that account registered to buy; blank returns every ACTIVE
+     * plan so the register screen can still preview both price lists.
+     */
+    public Result<PlanCatalogResponse> publicCatalog(String group) {
         return publicLinkServiceTemplate.execute(new ProcessCallback<Void, PlanCatalogResponse>() {
             @Override
             public Void getRequest() {
@@ -534,7 +568,10 @@ public class SelfServicePlanService {
 
             @Override
             public PlanCatalogResponse process() {
-                List<PaymentPlanModel> plans = paymentPlanService.catalog();
+                boolean grouped = group != null && !group.isBlank();
+                List<PaymentPlanModel> plans = grouped
+                        ? paymentPlanService.catalog(PlanGroup.fromPurpose(group).name())
+                        : paymentPlanService.catalog();
                 PlanCatalogResponse response = new PlanCatalogResponse();
                 response.setItems(plans.stream().map(plan -> {
                     PlanCatalogResponse.PlanItem item = new PlanCatalogResponse.PlanItem();
@@ -543,10 +580,206 @@ public class SelfServicePlanService {
                     item.setPlanDay(plan.getPlanDay());
                     item.setEnvCount(plan.getEnvCount());
                     item.setDescription(plan.getDescription());
+                    item.setPlanGroup(plan.getPlanGroup());
                     return item;
                 }).toList());
                 return response;
             }
         });
+    }
+
+    /**
+     * Switch which plan group this account is offered. Deliberately separate
+     * from {@code convertPlan}: a conversion stays inside one group, so this is
+     * the only way out for someone who answered the registration question wrong.
+     */
+    public Result<SelfServiceStateResponse> changePurpose(String username, ChangePlanPurposeRequest request) {
+        return publicLinkServiceTemplate
+                .execute(new ProcessCallback<String, SelfServiceStateResponse>() {
+                    @Override
+                    public String getRequest() {
+                        return username;
+                    }
+
+                    @Override
+                    public void preProcess(String caller) {
+                        Assert.hasText(caller, "Account identity is required.");
+                        Assert.notNull(request, "A purpose must be given.");
+                    }
+
+                    @Override
+                    public SelfServiceStateResponse process() {
+                        return switchPurpose(username, request.getPlanPurpose());
+                    }
+                });
+    }
+
+    private SelfServiceStateResponse switchPurpose(String username, String purpose) {
+        User local = purchasingAccountOrThrow(username);
+        List<PlanUserModel> assignments = paymentPlanService.assignmentsWithPayments(username);
+        if (firstOpenOrder(assignments) != null) {
+            // The unpaid order belongs to the group being left. Switching now
+            // would leave the seller staring at a transfer they no longer want.
+            throw new ApplicationException(
+                    "You still have an order waiting to be paid. Pay or let it expire first, then switch.",
+                    400);
+        }
+        String resolved = PlanGroup.fromPurpose(purpose).name();
+        if (!resolved.equals(local.getPlanPurpose())) {
+            coreUserService.updatePlanPurpose(local, resolved);
+            log.info("Account [{}] switched its plan purpose to {}", username, resolved);
+        }
+        return buildState(assignments, username);
+    }
+
+    /**
+     * Convert a running plan onto a dearer one of the same group, charging only
+     * the difference. When the difference is zero or negative nothing is
+     * charged at all: the plan is converted on the spot and the surplus lost,
+     * which the seller confirmed before asking.
+     */
+    public Result<MorePlanStateResponse> convertPlan(String username, ConvertPlanRequest request) {
+        return publicLinkServiceTemplate
+                .execute(new ProcessCallback<String, MorePlanStateResponse>() {
+                    @Override
+                    public String getRequest() {
+                        return username;
+                    }
+
+                    @Override
+                    public void preProcess(String caller) {
+                        Assert.hasText(caller, "Account identity is required.");
+                        Assert.notNull(request, "A plan must be selected.");
+                        Assert.hasText(request.getPlanUserCode(), "A plan must be selected.");
+                        Assert.hasText(request.getTargetPlanCode(), "The plan to switch to must be selected.");
+                    }
+
+                    @Override
+                    public MorePlanStateResponse process() {
+                        return convertOwnPlan(username, request.getPlanUserCode().trim(),
+                                request.getTargetPlanCode().trim());
+                    }
+                });
+    }
+
+    private MorePlanStateResponse convertOwnPlan(String username, String planUserCode, String targetPlanCode) {
+        requireSelfServiceAdmin();
+        purchasingAccountOrThrow(username);
+
+        List<PlanUserModel> assignments = paymentPlanService.assignmentsWithPayments(username);
+        // Ownership is settled by the lookup itself: the code is searched only
+        // among the caller's own assignments, so another account's plan simply
+        // is not there.
+        PlanUserModel source = assignments.stream()
+                .filter(assignment -> planUserCode.equals(assignment.getPlanUserCode()))
+                .findFirst()
+                .orElseThrow(() -> new ApplicationException(
+                        "This plan does not belong to your account. Please contact admin.", 403));
+        if (!"ACTIVE".equals(source.getPlanState()) || !isPlainPlan(source)) {
+            throw new ApplicationException(
+                    "Only a running plan can be converted. Please buy a new plan instead.", 400);
+        }
+
+        PaymentPlanModel target = findOnSalePlan(targetPlanCode);
+        if (!groupOf(source).equals(groupOf(target))) {
+            throw new ApplicationException(
+                    "A " + groupOf(source) + " plan cannot become a " + groupOf(target)
+                            + " plan. Buy a " + groupOf(target) + " plan instead.",
+                    400);
+        }
+
+        BigDecimal delta = feeOf(target).subtract(feeOf(source));
+        if (delta.signum() <= 0) {
+            // Nothing to transfer: convert straight away and say so, so the
+            // screen can confirm rather than show an empty payment panel.
+            paymentPlanService.convertWithoutPayment(planUserCode, targetPlanCode, selfServiceAdmin);
+            MorePlanStateResponse state = buildMoreState(username);
+            state.setConversionOutcome(outcome(
+                    MorePlanStateResponse.ConversionOutcome.NO_PAYMENT, delta, planUserCode, null, target));
+            return state;
+        }
+
+        PlanUserModel open = firstOpenOrder(assignments);
+        if (open != null) {
+            log.info("Account [{}] asked to convert a plan while order [{}] is still open", username,
+                    open.getPlanUserCode());
+            return buildMoreState(assignments, username);
+        }
+
+        ConvertPlanResponse created = paymentPlanService.createConversion(planUserCode, targetPlanCode,
+                selfServiceAdmin);
+        eventPublisher.publishEvent(new PaymentCreatedEvent(
+                created.getPaymentCode(),
+                created.getFeeDelta(),
+                username,
+                buildConvertLabel(created.getFeeDelta(), created.getTargetPlanDay()),
+                selfServiceAdmin));
+
+        log.info("Account [{}] opened conversion of plan [{}] to [{}] for {}", username, planUserCode,
+                targetPlanCode, created.getFeeDelta().toPlainString());
+        MorePlanStateResponse state = buildMoreState(username);
+        state.setConversionOutcome(outcome(MorePlanStateResponse.ConversionOutcome.ORDER_CREATED, delta,
+                planUserCode, created.getConversionPlanUserCode(), target));
+        return state;
+    }
+
+    /**
+     * The outcome echoed back to the screen, so it can render the difference and
+     * the new window without re-deriving either from the plan list.
+     */
+    private MorePlanStateResponse.ConversionOutcome outcome(String result, BigDecimal delta, String sourceCode,
+            String orderCode, PaymentPlanModel target) {
+        MorePlanStateResponse.ConversionOutcome outcome = new MorePlanStateResponse.ConversionOutcome();
+        outcome.setResult(result);
+        outcome.setFeeDelta(delta);
+        outcome.setSourcePlanUserCode(sourceCode);
+        outcome.setConversionPlanUserCode(orderCode);
+        outcome.setTargetPlanCode(target.getPlanCode());
+        outcome.setTargetFee(target.getFee());
+        outcome.setTargetPlanDay(target.getPlanDay());
+        outcome.setTargetEnvCount(target.getEnvCount());
+        return outcome;
+    }
+
+    /** An ACTIVE assignment that is neither an extension nor a conversion order. */
+    private boolean isPlainPlan(PlanUserModel assignment) {
+        return assignment.getExtendDays() == null && assignment.getConvertsPlanUserCode() == null;
+    }
+
+    private PaymentPlanModel findOnSalePlan(String planCode) {
+        return paymentPlanService.catalog().stream()
+                .filter(plan -> planCode.equals(plan.getPlanCode()))
+                .findFirst()
+                .orElseThrow(() -> new ApplicationException(
+                        "This plan is no longer on sale. Please pick another one.", 400));
+    }
+
+    private String groupOf(PaymentPlanModel plan) {
+        return plan.getPlanGroup() == null || plan.getPlanGroup().isBlank()
+                ? PlanGroup.PRODUCT.name()
+                : plan.getPlanGroup();
+    }
+
+    private String groupOf(PlanUserModel assignment) {
+        return assignment.getPlanGroup() == null || assignment.getPlanGroup().isBlank()
+                ? PlanGroup.PRODUCT.name()
+                : assignment.getPlanGroup();
+    }
+
+    private BigDecimal feeOf(PaymentPlanModel plan) {
+        return plan.getFee() == null ? BigDecimal.ZERO : plan.getFee();
+    }
+
+    private BigDecimal feeOf(PlanUserModel assignment) {
+        return assignment.getFee() == null ? BigDecimal.ZERO : assignment.getFee();
+    }
+
+    /**
+     * Conversion part of the bank transfer content, worded like the extension's
+     * so the QR content stays recognisable at the bank either way.
+     */
+    private static String buildConvertLabel(BigDecimal delta, int planDay) {
+        String amount = delta == null ? "0" : delta.setScale(0, RoundingMode.HALF_UP).toPlainString();
+        return "nang loi " + amount + " " + planDay + "Days";
     }
 }

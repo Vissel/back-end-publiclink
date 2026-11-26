@@ -24,14 +24,20 @@ public class ListPlanUserResponse {
         private int envQuota;
         private int usedCount;
         private int remaining;
-        /** CREATE | ACTIVE | DEACTIVE | EXTENDED */
+        /** CREATE | ACTIVE | DEACTIVE | EXTENDED | CONVERTED */
         private String planState;
+        /** PRODUCT or BOOKING, so the admin can see what a row actually buys */
+        private String planGroup;
         private String activeDate;
         private String endedDate;
         /** days bought on another plan; set on an extension order row */
         private Integer extendDays;
         /** the plan this extension order adds its days to */
         private String extendsPlanUserCode;
+        /** the plan this conversion order replaces */
+        private String convertsPlanUserCode;
+        /** amount due on a conversion order: the difference between the plans */
+        private BigDecimal convertFeeDelta;
         private String createdAt;
         private String paymentCode;
         /** CREATE | WAITING_CONFIRM | CONFIRMED | PAID | REJECTED */

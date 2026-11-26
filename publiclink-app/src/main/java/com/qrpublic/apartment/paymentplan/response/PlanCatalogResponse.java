@@ -6,7 +6,8 @@ import java.math.BigDecimal;
 import java.util.List;
 
 /**
- * ACTIVE plan catalog, rendered by the UI as "3,000 | 1 day | 1 link".
+ * ACTIVE plan catalog, rendered by the UI as "3,000 | 1 day | 1 link". Items
+ * carry their purpose group so a screen can show one group at a time.
  */
 @Data
 public class PlanCatalogResponse {
@@ -20,5 +21,7 @@ public class PlanCatalogResponse {
         private int planDay;
         private int envCount;
         private String description;
+        /** PRODUCT or BOOKING: the UI groups and colours the cards by it */
+        private String planGroup;
     }
 }

@@ -32,6 +32,12 @@ public class PaymentModel {
     private PaymentPlanModel plan;
     /** days bought on top of the seller's running plan; null for a plan payment */
     private Integer extendDays;
+    /**
+     * Set when this payment is a conversion order: the plan user code being
+     * replaced. The amount due is then the difference between the two plans,
+     * not the full price of the plan this payment points at.
+     */
+    private String convertsPlanUserCode;
     /** the window the extension buys: from (current plan end) ... */
     private String extensionFrom;
     /** ... to (new plan end) */

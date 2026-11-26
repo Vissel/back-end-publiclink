@@ -5,6 +5,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import java.math.BigDecimal;
 import java.sql.Timestamp;
 
 @Entity
@@ -57,6 +58,22 @@ public class PaymentPlanUser {
      */
     @Column(name = "extends_plan_user_code", length = 36)
     private String extendsPlanUserCode;
+
+    /**
+     * plan_user_code of the assignment this order replaces. Non-null marks the
+     * row as a conversion order: it grants no environment slot of its own, and
+     * paying it swaps the converted plan for the one this row points at.
+     */
+    @Column(name = "converts_plan_user_code", length = 36)
+    private String convertsPlanUserCode;
+
+    /**
+     * Money actually due for a conversion order: the target plan's fee minus
+     * what the converted plan cost. Stored so the queue tables and the payment
+     * both read the difference instead of the full target price.
+     */
+    @Column(name = "convert_fee_delta", precision = 15, scale = 2)
+    private BigDecimal convertFeeDelta;
 
     @Column(name = "created_at", updatable = false, insertable = false)
     private Timestamp createdAt;

@@ -18,4 +18,9 @@ public class SelfRegisterRequest {
     private String email;
     /** BUYER for players booking courts; defaults to SELLER when blank. */
     private String role;
+    /**
+     * Which plan group this account is registering to buy from: PRODUCT for
+     * normal product links, BOOKING for yoga and badminton. Blank means PRODUCT.
+     */
+    private String planPurpose;
 }

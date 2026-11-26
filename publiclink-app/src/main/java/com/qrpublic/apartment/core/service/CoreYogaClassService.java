@@ -29,6 +29,12 @@ public class CoreYogaClassService {
 
     private static final DateTimeFormatter HHMM = DateTimeFormatter.ofPattern("HH:mm");
 
+    /**
+     * Two active classes may share an overlapping weekday frame; a third is
+     * refused.
+     */
+    private static final int MAX_OVERLAPPING_CLASSES = 2;
+
     @Autowired
     private YogaClassRepository yogaClassRepository;
 
@@ -40,7 +46,7 @@ public class CoreYogaClassService {
         SaleEnvironment env = saleEnvironmentRepository.findById(envId)
                 .orElseThrow(() -> new ResourceNotFoundException("Environment not found: " + envId));
         assertTimes(draft);
-        assertNoOverlap(envId, draft.getDayOfWeek(), parse(draft.getStartTime()), parse(draft.getEndTime()), null);
+        assertOverlapLimit(envId, draft.getDayOfWeek(), parse(draft.getStartTime()), parse(draft.getEndTime()), null);
 
         YogaClass entity = new YogaClass();
         entity.setClassCode(UUID.randomUUID().toString());
@@ -54,7 +60,8 @@ public class CoreYogaClassService {
         YogaClass entity = getEntity(classCode);
         assertTimes(draft);
         String envId = entity.getSaleEnvironment().getEnvId();
-        assertNoOverlap(envId, draft.getDayOfWeek(), parse(draft.getStartTime()), parse(draft.getEndTime()), classCode);
+        assertOverlapLimit(envId, draft.getDayOfWeek(), parse(draft.getStartTime()), parse(draft.getEndTime()),
+                classCode);
 
         applyDraft(entity, draft);
         entity.setUpdatedAt(new Timestamp(System.currentTimeMillis()));
@@ -119,11 +126,15 @@ public class CoreYogaClassService {
         }
     }
 
-    private void assertNoOverlap(String envId, int dayOfWeek, LocalTime start, LocalTime end, String excludeCode) {
+    /**
+     * Overlap is allowed up to {@link #MAX_OVERLAPPING_CLASSES} concurrent
+     * active classes on the same weekday frame; one more is refused.
+     */
+    private void assertOverlapLimit(String envId, int dayOfWeek, LocalTime start, LocalTime end, String excludeCode) {
         List<YogaClass> overlaps = yogaClassRepository.findOverlapping(envId, dayOfWeek, start, end, excludeCode);
-        if (!overlaps.isEmpty()) {
+        if (overlaps.size() >= MAX_OVERLAPPING_CLASSES) {
             throw new ApplicationException(
-                    "Time frame overlaps class '" + overlaps.get(0).getTitle() + "' on the same weekday.", 400);
+                    "At most two classes may share an overlapping time frame on the same weekday.", 400);
         }
     }
 

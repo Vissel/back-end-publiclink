@@ -8,6 +8,7 @@ import com.qrpublic.apartment.entity.PaymentPlanUser;
 import com.qrpublic.apartment.entity.User;
 import com.qrpublic.apartment.exception.ResourceNotFoundException;
 import com.qrpublic.apartment.exception.ValidationException;
+import com.qrpublic.apartment.model.PlanGroup;
 import com.qrpublic.apartment.repository.PaymentPlanRepository;
 import com.qrpublic.apartment.repository.PaymentPlanUserRepository;
 import com.qrpublic.apartment.util.DateUtils;
@@ -55,6 +56,18 @@ public class CorePaymentPlanService {
                 .toList();
     }
 
+    /**
+     * One purpose group of the catalog. The self-service screens read this so a
+     * seller browsing booking plans never sees a product price list next to
+     * them, and the other way round.
+     */
+    @Transactional(readOnly = true)
+    public List<PaymentPlanModel> findActivePlansByGroup(String planGroup) {
+        return paymentPlanRepository.findAllActiveByGroup(planGroup).stream()
+                .map(this::toPlanModel)
+                .toList();
+    }
+
     @Transactional(readOnly = true)
     public PaymentPlanModel findPlanByCode(String planCode) {
         return paymentPlanRepository.findByPlanCode(planCode)
@@ -70,6 +83,16 @@ public class CorePaymentPlanService {
      */
     @Transactional
     public PaymentPlanModel createPlan(BigDecimal fee, int planDay, int envCount, String description) {
+        return createPlan(fee, planDay, envCount, description, PlanGroup.PRODUCT.name());
+    }
+
+    /**
+     * Append a catalog plan of a chosen purpose group. A blank group lands in
+     * PRODUCT, the kind of plan the catalog held before the split.
+     */
+    @Transactional
+    public PaymentPlanModel createPlan(BigDecimal fee, int planDay, int envCount, String description,
+            String planGroup) {
         PaymentPlan plan = new PaymentPlan();
         plan.setPlanCode(UUID.randomUUID().toString());
         plan.setFee(fee);
@@ -77,7 +100,9 @@ public class CorePaymentPlanService {
         plan.setEnvCount(envCount);
         plan.setDescription(description);
         plan.setPlanState("ACTIVE");
-        log.info("Created payment plan catalog entry fee={} day={} env={}", fee, planDay, envCount);
+        plan.setPlanGroup(PlanGroup.fromPurpose(planGroup).name());
+        log.info("Created payment plan catalog entry fee={} day={} env={} group={}", fee, planDay, envCount,
+                plan.getPlanGroup());
         return toPlanModel(paymentPlanRepository.save(plan));
     }
 
@@ -178,6 +203,157 @@ public class CorePaymentPlanService {
         return (ended == null || ended.before(now)) ? now : ended;
     }
 
+    // ------------------------------------------------------------ conversions
+
+    /**
+     * Open a conversion order: the seller keeps the plan they have and pays only
+     * the difference up to a better one. Like an extension order it grants no
+     * environment slot of its own, so it sits in the "waiting for pay" queue as
+     * an ordinary payment and never becomes a plan window until it is paid.
+     *
+     * @param sourcePlanUserCode the ACTIVE assignment being converted
+     * @param targetPlanCode     catalog plan to move onto, same group, dearer
+     */
+    @Transactional
+    public PlanUserModel createConversionAssignment(String sourcePlanUserCode, String targetPlanCode) {
+        PaymentPlanUser source = getEntityByCode(sourcePlanUserCode);
+        PaymentPlan target = requireSameGroupTarget(source, targetPlanCode);
+        BigDecimal delta = conversionDelta(source, target);
+        if (delta.signum() <= 0) {
+            // Nothing is owed, so there is nothing to order. The no-payment path
+            // converts straight away; reaching this guard means a caller skipped
+            // that decision, and quietly opening a zero-length debt would hide it.
+            throw new ValidationException(
+                    "Plan [" + targetPlanCode + "] does not cost more, so there is nothing to pay for.");
+        }
+
+        Timestamp from = now();
+        Timestamp to = Timestamp.valueOf(from.toLocalDateTime().plusDays(target.getPlanDay()));
+
+        PaymentPlanUser order = new PaymentPlanUser();
+        order.setPlanUserCode(UUID.randomUUID().toString());
+        order.setUser(source.getUser());
+        order.setPlan(target);
+        // No slot of its own: the converted plan keeps granting the links, the
+        // order only moves it onto a better catalog entry once it is paid.
+        order.setEnvQuota(0);
+        order.setUsedCount(0);
+        order.setPlanState("CREATE");
+        order.setActiveDate(from);
+        order.setEndedDate(to);
+        order.setConvertsPlanUserCode(source.getPlanUserCode());
+        order.setConvertFeeDelta(delta);
+        log.info("Opened conversion order [{}] of {} from plan [{}] to [{}] for {}",
+                order.getPlanUserCode(), delta.toPlainString(), source.getPlanUserCode(), targetPlanCode,
+                source.getUser().getUserName());
+        return toAssignmentModel(paymentPlanUserRepository.save(order));
+    }
+
+    /**
+     * The conversion is paid: the converted assignment becomes the target plan,
+     * with the target's link quota and a window that starts again today. Links
+     * already generated keep running to their own end date, because nothing
+     * here reaches into a sale environment.
+     *
+     * @return the rebuilt assignment, now on the target plan
+     */
+    @Transactional
+    public PlanUserModel applyConversion(String conversionPlanUserCode) {
+        PaymentPlanUser order = getEntityByCode(conversionPlanUserCode);
+        if (order.getConvertsPlanUserCode() == null) {
+            throw new ValidationException("Plan [" + conversionPlanUserCode + "] is not a conversion order.");
+        }
+        PaymentPlanUser source = getEntityByCode(order.getConvertsPlanUserCode());
+        PaymentPlan target = order.getPlan();
+
+        Timestamp start = now();
+        repriceOntoTarget(source, target, start);
+        order.setActiveDate(start);
+        order.setEndedDate(source.getEndedDate());
+        order.setPlanState("CONVERTED");
+        paymentPlanUserRepository.save(order);
+        log.info("Converted plan [{}] to plan [{}], new window {} .. {} with {} link(s)",
+                source.getPlanUserCode(), target.getPlanCode(), source.getActiveDate(), source.getEndedDate(),
+                source.getEnvQuota());
+        return toAssignmentModel(source);
+    }
+
+    /**
+     * Convert on the spot, with no order and no payment: the new plan costs the
+     * same or less than the one already paid for, so there is nothing to
+     * transfer and the surplus is forfeited. The seller accepted that before
+     * this is ever called.
+     *
+     * @return the rebuilt assignment, now on the target plan
+     */
+    @Transactional
+    public PlanUserModel convertWithoutPayment(String sourcePlanUserCode, String targetPlanCode) {
+        PaymentPlanUser source = getEntityByCode(sourcePlanUserCode);
+        PaymentPlan target = requireSameGroupTarget(source, targetPlanCode);
+        if (conversionDelta(source, target).signum() > 0) {
+            throw new ValidationException(
+                    "Plan [" + targetPlanCode + "] costs more and has to be paid for first.");
+        }
+        Timestamp start = now();
+        repriceOntoTarget(source, target, start);
+        log.info("Converted plan [{}] to the cheaper plan [{}] with no payment; the surplus is forfeited",
+                source.getPlanUserCode(), target.getPlanCode());
+        return toAssignmentModel(source);
+    }
+
+    /**
+     * Restart-window semantics in one place, so a paid conversion and an
+     * immediate one cannot drift apart: new plan, its full link quota, a window
+     * starting now and running its full length.
+     */
+    private void repriceOntoTarget(PaymentPlanUser source, PaymentPlan target, Timestamp start) {
+        source.setPlan(target);
+        source.setEnvQuota(target.getEnvCount());
+        source.setUsedCount(0);
+        source.setActiveDate(start);
+        source.setEndedDate(Timestamp.valueOf(start.toLocalDateTime().plusDays(target.getPlanDay())));
+        paymentPlanUserRepository.save(source);
+    }
+
+    /**
+     * The target has to be on sale and of the same purpose group: a conversion
+     * is meant to fix a plan that is too small, not to quietly move money from
+     * booking links to product links or the other way round.
+     */
+    private PaymentPlan requireSameGroupTarget(PaymentPlanUser source, String targetPlanCode) {
+        if (source.getExtendDays() != null || source.getConvertsPlanUserCode() != null) {
+            throw new ValidationException(
+                    "Plan [" + source.getPlanUserCode() + "] is an order row, not a running plan.");
+        }
+        if (!"ACTIVE".equals(source.getPlanState())) {
+            throw new ValidationException("Only an active plan can be converted. Plan ["
+                    + source.getPlanUserCode() + "] is " + source.getPlanState() + ".");
+        }
+        PaymentPlan target = paymentPlanRepository.findByPlanCode(targetPlanCode)
+                .orElseThrow(() -> new ResourceNotFoundException("Payment plan not found: " + targetPlanCode));
+        String sourceGroup = planGroupOf(source.getPlan());
+        String targetGroup = planGroupOf(target);
+        if (!sourceGroup.equals(targetGroup)) {
+            throw new ValidationException("A " + sourceGroup + " plan cannot become a " + targetGroup
+                    + " plan. Buy a " + targetGroup + " plan instead.");
+        }
+        return target;
+    }
+
+    /** Difference between the two plans; positive means still to be paid. */
+    public BigDecimal conversionDelta(PaymentPlanUser source, PaymentPlan target) {
+        BigDecimal targetFee = target.getFee() == null ? BigDecimal.ZERO : target.getFee();
+        BigDecimal paidFee = source.getPlan().getFee() == null ? BigDecimal.ZERO : source.getPlan().getFee();
+        return targetFee.subtract(paidFee);
+    }
+
+    /** Null-safe group of a catalog entry, PRODUCT for anything unstored. */
+    private String planGroupOf(PaymentPlan plan) {
+        return plan == null || plan.getPlanGroup() == null || plan.getPlanGroup().isBlank()
+                ? PlanGroup.PRODUCT.name()
+                : plan.getPlanGroup();
+    }
+
     @Transactional(readOnly = true)
     public PlanUserModel findAssignmentByCode(String planUserCode) {
         return toAssignmentModel(getEntityByCode(planUserCode));
@@ -234,37 +410,105 @@ public class CorePaymentPlanService {
     }
 
     /**
+     * Links still creatable with plans of one purpose group. The onboarding
+     * guard asks with the account's own purpose, so a booking seller holding a
+     * product plan is still offered the booking catalog instead of being told
+     * they are already covered.
+     */
+    @Transactional(readOnly = true)
+    public int findRemainingQuota(String username, String planGroup) {
+        if (planGroup == null || planGroup.isBlank()) {
+            return findRemainingQuota(username);
+        }
+        return paymentPlanUserRepository
+                .findUsableActiveByUserNameAndGroup(username, now(), planGroup).stream()
+                .mapToInt(a -> a.getEnvQuota() - a.getUsedCount())
+                .sum();
+    }
+
+    /**
      * Evaluate the seller against their plan window and quota without writing.
      * Distinguishes "no plan", "not started yet", "expired" and "quota used up"
      * so the caller can show the right message.
      */
     @Transactional(readOnly = true)
     public PlanGateModel evaluate(String username) {
+        return evaluate(username, null);
+    }
+
+    /**
+     * Group-aware gate. With a purpose group the answer is about the link being
+     * created, not about the account in general: a seller who only paid for the
+     * other kind of plan is told that, because buying more of what they already
+     * have would not unblock them.
+     *
+     * @param planGroup required group, null or blank to count every plan
+     */
+    @Transactional(readOnly = true)
+    public PlanGateModel evaluate(String username, String planGroup) {
         Timestamp now = now();
-        List<PaymentPlanUser> active = paymentPlanUserRepository.findActiveByUserName(username);
+        boolean grouped = planGroup != null && !planGroup.isBlank();
+        List<PaymentPlanUser> active = grouped
+                ? paymentPlanUserRepository.findActiveByUserNameAndGroup(username, planGroup)
+                : paymentPlanUserRepository.findActiveByUserName(username);
         if (active.isEmpty()) {
+            if (grouped) {
+                // Only say "wrong group" when money is actually tied up in the
+                // other one; a brand new account still gets the plain no-plan
+                // message that points at the catalog.
+                List<PaymentPlanUser> otherGroup = paymentPlanUserRepository.findActiveByUserName(username);
+                if (!otherGroup.isEmpty()) {
+                    return wrongGroupGate(planGroup, otherGroup);
+                }
+            }
             return PlanGateModel.builder()
                     .allowed(false)
                     .reason(PlanGateModel.REASON_NO_PLAN)
                     .message("You have no active payment plan. Please contact admin via chat or buy a plan.")
                     .remaining(0)
+                    .planGroup(blankToNull(planGroup))
                     .build();
         }
 
-        List<PaymentPlanUser> usable = paymentPlanUserRepository.findUsableActiveByUserName(username, now);
+        List<PaymentPlanUser> usable = grouped
+                ? paymentPlanUserRepository.findUsableActiveByUserNameAndGroup(username, now, planGroup)
+                : paymentPlanUserRepository.findUsableActiveByUserName(username, now);
         PlanGateModel gate;
         if (!usable.isEmpty()) {
             PaymentPlanUser chosen = usable.get(0);
             int remaining = usable.stream().mapToInt(a -> a.getEnvQuota() - a.getUsedCount()).sum();
             gate = allowedGate(chosen, remaining);
+            gate.setPlanGroup(planGroupOf(chosen.getPlan()));
         } else {
             gate = blockedGate(active, now);
+            gate.setPlanGroup(blankToNull(planGroup));
         }
         // The bound for stretching a sale window that already exists, next to
         // the creating plan's own end: a later plan must not stay invisible here
         // or the seller would be refused coverage they already paid for.
-        gate.setCoverageEndedDate(DateUtils.dateToString(findPaidCoverageEnd(active, now)));
+        gate.setCoverageEndedDate(DateUtils.dateToString(findPaidCoverageEnd(
+                paymentPlanUserRepository.findActiveByUserName(username), now)));
         return gate;
+    }
+
+    /**
+     * Paid plans exist, none of them for this kind of link. Names both groups so
+     * the seller can see what went wrong rather than being told to buy a plan
+     * they already own.
+     */
+    private PlanGateModel wrongGroupGate(String planGroup, List<PaymentPlanUser> otherGroup) {
+        PaymentPlanUser newest = otherGroup.get(0);
+        return PlanGateModel.builder()
+                .allowed(false)
+                .reason(PlanGateModel.REASON_WRONG_GROUP)
+                .message("Your running plan pays for " + planGroupOf(newest.getPlan())
+                        + " links, not for " + planGroup + " ones. Please convert it or buy a "
+                        + planGroup + " plan from the plan screen.")
+                .remaining(0)
+                .planGroup(planGroup)
+                .activeDate(DateUtils.dateToString(newest.getActiveDate()))
+                .endedDate(DateUtils.dateToString(newest.getEndedDate()))
+                .build();
     }
 
     /**
@@ -297,24 +541,38 @@ public class CorePaymentPlanService {
      */
     @Transactional
     public PlanGateModel consumeOne(String username) {
+        return consumeOne(username, null);
+    }
+
+    /**
+     * Consume one slot of a specific purpose group. The row is locked exactly
+     * like the unfiltered variant, so a booking link can never be paid for by a
+     * product plan's quota even under concurrent generations.
+     */
+    @Transactional
+    public PlanGateModel consumeOne(String username, String planGroup) {
         Timestamp now = now();
-        List<PaymentPlanUser> usable = paymentPlanUserRepository
-                .findUsableActiveByUserNameForUpdate(username, now);
+        boolean grouped = planGroup != null && !planGroup.isBlank();
+        List<PaymentPlanUser> usable = grouped
+                ? paymentPlanUserRepository.findUsableActiveByUserNameAndGroupForUpdate(username, now, planGroup)
+                : paymentPlanUserRepository.findUsableActiveByUserNameForUpdate(username, now);
         if (usable.isEmpty()) {
-            return evaluate(username);
+            return evaluate(username, planGroup);
         }
 
         PaymentPlanUser assignment = usable.get(0);
         assignment.setUsedCount(assignment.getUsedCount() + 1);
         paymentPlanUserRepository.save(assignment);
-        log.info("Consumed environment slot for [{}] from plan [{}], used={}/{}, deadline={}", username,
-                assignment.getPlanUserCode(), assignment.getUsedCount(), assignment.getEnvQuota(),
-                assignment.getEndedDate());
+        log.info("Consumed environment slot for [{}] from plan [{}] ({}), used={}/{}, deadline={}", username,
+                assignment.getPlanUserCode(), planGroupOf(assignment.getPlan()), assignment.getUsedCount(),
+                assignment.getEnvQuota(), assignment.getEndedDate());
 
         int remaining = usable.stream()
                 .mapToInt(a -> a.getEnvQuota() - a.getUsedCount())
                 .sum();
-        return allowedGate(assignment, remaining);
+        PlanGateModel gate = allowedGate(assignment, remaining);
+        gate.setPlanGroup(planGroupOf(assignment.getPlan()));
+        return gate;
     }
 
     private PlanGateModel allowedGate(PaymentPlanUser assignment, int remaining) {
@@ -396,6 +654,12 @@ public class CorePaymentPlanService {
             throw new ValidationException("Plan [" + planUserCode
                     + "] is an extension order. Confirm its payment instead of approving it.");
         }
+        if (assignment.getConvertsPlanUserCode() != null) {
+            // Same trap as an extension: approving a conversion order would
+            // hand out a window of its own and leave the plan it converts alone.
+            throw new ValidationException("Plan [" + planUserCode
+                    + "] is a conversion order. Confirm its payment instead of approving it.");
+        }
         Timestamp start = parseActiveDate(activeDate);
         Timestamp end = Timestamp.valueOf(start.toLocalDateTime().plusDays(assignment.getPlan().getPlanDay()));
         assignment.setPlanState("ACTIVE");
@@ -450,12 +714,24 @@ public class CorePaymentPlanService {
     public PlanUserModel toAssignmentModel(PaymentPlanUser assignment) {
         PaymentPlan plan = assignment.getPlan();
         Integer extendDays = assignment.getExtendDays();
+        String convertsCode = assignment.getConvertsPlanUserCode();
         // An extension order buys days, not links: the tables have to read the
         // bought days and the price actually due, not the 30 days and full fee
-        // of the plan underneath.
-        BigDecimal fee = extendDays == null ? plan.getFee()
-                : extensionFee(plan.getFee(), plan.getPlanDay(), extendDays);
-        int planDay = extendDays == null ? plan.getPlanDay() : extendDays;
+        // of the plan underneath. A conversion order has the same problem with
+        // money instead of days: what is due is the difference, while the days
+        // shown are the ones the seller is about to get.
+        BigDecimal fee;
+        int planDay;
+        if (convertsCode != null) {
+            fee = assignment.getConvertFeeDelta() == null ? plan.getFee() : assignment.getConvertFeeDelta();
+            planDay = plan.getPlanDay();
+        } else if (extendDays != null) {
+            fee = extensionFee(plan.getFee(), plan.getPlanDay(), extendDays);
+            planDay = extendDays;
+        } else {
+            fee = plan.getFee();
+            planDay = plan.getPlanDay();
+        }
         return PlanUserModel.builder()
                 .planUserCode(assignment.getPlanUserCode())
                 .username(assignment.getUser().getUserName())
@@ -466,10 +742,13 @@ public class CorePaymentPlanService {
                 .usedCount(assignment.getUsedCount())
                 .remaining(Math.max(0, assignment.getEnvQuota() - assignment.getUsedCount()))
                 .planState(assignment.getPlanState())
+                .planGroup(planGroupOf(plan))
                 .activeDate(DateUtils.dateToString(assignment.getActiveDate()))
                 .endedDate(DateUtils.dateToString(assignment.getEndedDate()))
                 .extendDays(extendDays)
                 .extendsPlanUserCode(assignment.getExtendsPlanUserCode())
+                .convertsPlanUserCode(convertsCode)
+                .convertFeeDelta(assignment.getConvertFeeDelta())
                 .createdAt(DateUtils.dateToString(assignment.getCreatedAt()))
                 .build();
     }
@@ -496,6 +775,7 @@ public class CorePaymentPlanService {
                 .envCount(plan.getEnvCount())
                 .description(plan.getDescription())
                 .planState(plan.getPlanState())
+                .planGroup(planGroupOf(plan))
                 .build();
     }
 }

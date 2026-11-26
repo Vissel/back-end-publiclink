@@ -16,4 +16,6 @@ public class CreatedPlanResponse {
     private int envCount;
     private String description;
     private String planState;
+    /** PRODUCT or BOOKING */
+    private String planGroup;
 }

@@ -37,6 +37,13 @@ public class PaymentPlan {
     @Column(name = "plan_state", nullable = false, length = 50)
     private String planState = "ACTIVE";
 
+    /**
+     * PRODUCT (plain sale links) or BOOKING (yoga / badminton). Seeded by
+     * changeset 036; every row that predates the split defaults to PRODUCT.
+     */
+    @Column(name = "plan_group", nullable = false, length = 20)
+    private String planGroup = "PRODUCT";
+
     @Column(name = "created_at", updatable = false, insertable = false)
     private Timestamp createdAt;
 

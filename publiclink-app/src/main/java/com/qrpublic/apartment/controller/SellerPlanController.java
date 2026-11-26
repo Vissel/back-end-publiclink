@@ -1,7 +1,9 @@
 package com.qrpublic.apartment.controller;
 
 import com.qrpublic.apartment.constant.HeaderConstant;
+import com.qrpublic.apartment.paymentplan.request.ChangePlanPurposeRequest;
 import com.qrpublic.apartment.paymentplan.request.CheckPlanRequest;
+import com.qrpublic.apartment.paymentplan.request.ConvertPlanRequest;
 import com.qrpublic.apartment.paymentplan.request.ExtendPlanRequest;
 import com.qrpublic.apartment.paymentplan.request.SelectPlanRequest;
 import com.qrpublic.apartment.paymentplan.response.CheckPlanResponse;
@@ -19,6 +21,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
@@ -49,12 +52,20 @@ public class SellerPlanController {
         /**
          * Quota gate for the seller-facing Generate Product Link flow. The seller
          * is taken from the header, so nobody can probe another seller's quota.
+         *
+         * @param productType optional; when given the answer is limited to the plan
+         *                    group that kind of link has to be paid for by. Taken
+         *                    as a query parameter rather than a body because every
+         *                    existing caller posts this endpoint with no body at all
+         *                    and must keep working unchanged.
          */
         @PostMapping("/check")
         public Mono<ResponseEntity<CheckPlanResponse>> check(
+                        @RequestParam(value = "productType", required = false) String productType,
                         @RequestHeader(value = HeaderConstant.USER_ID_HEADER, defaultValue = "") String sellerUsername) {
                 CheckPlanRequest request = new CheckPlanRequest();
                 request.setUsername(sellerUsername);
+                request.setProductType(productType);
                 return Mono.fromCallable(() -> paymentPlanAdminService.checkPlan(request))
                                 .subscribeOn(Schedulers.boundedElastic())
                                 .flatMap(ResponseEntityConvertor::convertToMonoResponseEntity);
@@ -121,6 +132,33 @@ public class SellerPlanController {
                         @RequestBody ExtendPlanRequest request,
                         @RequestHeader(value = HeaderConstant.USER_ID_HEADER, defaultValue = "") String username) {
                 return Mono.fromCallable(() -> selfServicePlanService.extendMore(username, request))
+                                .subscribeOn(Schedulers.boundedElastic())
+                                .flatMap(ResponseEntityConvertor::convertToMonoResponseEntity);
+        }
+
+        /**
+         * Move a running plan onto a dearer plan of the same purpose group for
+         * only the difference. Nothing is charged when the new plan costs the
+         * same or less; the conversion then applies straight away.
+         */
+        @PostMapping("/convert")
+        public Mono<ResponseEntity<MorePlanStateResponse>> convertPlan(
+                        @RequestBody ConvertPlanRequest request,
+                        @RequestHeader(value = HeaderConstant.USER_ID_HEADER, defaultValue = "") String username) {
+                return Mono.fromCallable(() -> selfServicePlanService.convertPlan(username, request))
+                                .subscribeOn(Schedulers.boundedElastic())
+                                .flatMap(ResponseEntityConvertor::convertToMonoResponseEntity);
+        }
+
+        /**
+         * Change which plan group this account is offered, for someone who
+         * answered the registration question with the wrong business.
+         */
+        @PostMapping("/purpose")
+        public Mono<ResponseEntity<SelfServiceStateResponse>> changePurpose(
+                        @RequestBody ChangePlanPurposeRequest request,
+                        @RequestHeader(value = HeaderConstant.USER_ID_HEADER, defaultValue = "") String username) {
+                return Mono.fromCallable(() -> selfServicePlanService.changePurpose(username, request))
                                 .subscribeOn(Schedulers.boundedElastic())
                                 .flatMap(ResponseEntityConvertor::convertToMonoResponseEntity);
         }

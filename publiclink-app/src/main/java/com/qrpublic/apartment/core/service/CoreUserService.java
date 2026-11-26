@@ -100,20 +100,24 @@ public class CoreUserService {
      */
     @Transactional
     public UserModel createSelfRegisteredSeller(String username, String name, String email) {
-        return createSelfRegistered(username, name, email, UserType.SELLER.name());
+        return createSelfRegistered(username, name, email, UserType.SELLER.name(), null);
     }
 
     /**
      * Local row of a self-registered account (SELLER or BUYER). The account
      * already holds the password the user typed, so it is BASIC from the start.
+     *
+     * @param planPurpose which plan group the account is registered to buy from
      */
     @Transactional
-    public UserModel createSelfRegistered(String username, String name, String email, String type) {
+    public UserModel createSelfRegistered(String username, String name, String email, String type,
+            String planPurpose) {
         User user = new User();
         user.setUserName(username);
         user.setName(name);
         user.setEmail(email);
         user.setType(type);
+        user.setPlanPurpose(planPurpose);
         user.setAuthenticationMethod(AuthenticationEnum.BASIC.name());
         userRepo.save(user);
 
@@ -124,6 +128,29 @@ public class CoreUserService {
                 .email(user.getEmail())
                 .authenticationEnum(AuthenticationEnum.BASIC)
                 .build();
+    }
+
+    /**
+     * Purpose as stored, blank for every account that predates the plan split.
+     * Callers resolve it through {@code PlanGroup.fromPurpose}, which reads a
+     * blank as PRODUCT so those accounts keep their existing catalog.
+     */
+    @Transactional(readOnly = true)
+    public String findPlanPurpose(String username) {
+        return userRepo.findByUserName(username)
+                .map(User::getPlanPurpose)
+                .orElse(null);
+    }
+
+    /**
+     * Move an account onto the other plan group. Explicit and rare: it is the
+     * way out for someone who picked the wrong purpose at registration, since a
+     * conversion never crosses groups.
+     */
+    @Transactional
+    public void updatePlanPurpose(User existingUser, String planPurpose) {
+        existingUser.setPlanPurpose(planPurpose);
+        userRepo.save(existingUser);
     }
 
     @Transactional

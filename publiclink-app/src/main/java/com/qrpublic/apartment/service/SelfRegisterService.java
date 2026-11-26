@@ -8,6 +8,7 @@ import com.qrpublic.apartment.adapter.user.request.UserRemoveRequest;
 import com.qrpublic.apartment.adapter.user.response.UserRegisterResponse;
 import com.qrpublic.apartment.core.service.CoreUserService;
 import com.qrpublic.apartment.integration.OperatedUserClient;
+import com.qrpublic.apartment.model.PlanGroup;
 import com.qrpublic.apartment.user.request.SelfRegisterRequest;
 import com.qrpublic.apartment.user.response.SelfRegisterResponse;
 import lombok.extern.slf4j.Slf4j;
@@ -69,10 +70,14 @@ public class SelfRegisterService {
         }
 
         String role = ROLE_BUYER.equalsIgnoreCase(trimOf(request.getRole())) ? ROLE_BUYER : ROLE_SELLER;
+        // Asked on the register screen and stored on the local row only: which
+        // plan group an account may buy from is a business fact, not part of the
+        // identity the account service holds.
+        String planPurpose = PlanGroup.fromPurpose(request.getPlanPurpose()).name();
         return usernameTakenLocally(username)
                 .flatMap(taken -> taken
                         ? Mono.just(response(HttpStatus.CONFLICT, username, name, email, TAKEN_MESSAGE))
-                        : registerRemoteThenLocal(username, name, email, request.getPassword(), role))
+                        : registerRemoteThenLocal(username, name, email, request.getPassword(), role, planPurpose))
                 .onErrorResume(ex -> {
                     log.error("Self-registration failed for [{}]", username, ex);
                     return Mono.just(response(HttpStatus.SERVICE_UNAVAILABLE, username, name, email,
@@ -90,21 +95,22 @@ public class SelfRegisterService {
     }
 
     private Mono<ResponseEntity<SelfRegisterResponse>> registerRemoteThenLocal(String username, String name,
-            String email, String encryptedPassword, String role) {
+            String email, String encryptedPassword, String role, String planPurpose) {
         return operatedUserClient.findUserByUsername(new FindUserRequest(username))
                 .timeout(REMOTE_TIMEOUT)
                 // any answer means the account service already knows the name
                 .flatMap(found -> Mono.just(
                         response(HttpStatus.CONFLICT, username, name, email, TAKEN_MESSAGE)))
-                .switchIfEmpty(Mono.defer(() -> createRemoteAccount(username, name, email, encryptedPassword, role)))
+                .switchIfEmpty(Mono.defer(
+                        () -> createRemoteAccount(username, name, email, encryptedPassword, role, planPurpose)))
                 // the account service answers 404 for an unknown name: that is
                 // the normal path, not a failure
                 .onErrorResume(WebClientResponseException.NotFound.class,
-                        ex -> createRemoteAccount(username, name, email, encryptedPassword, role));
+                        ex -> createRemoteAccount(username, name, email, encryptedPassword, role, planPurpose));
     }
 
     private Mono<ResponseEntity<SelfRegisterResponse>> createRemoteAccount(String username, String name, String email,
-            String encryptedPassword, String role) {
+            String encryptedPassword, String role, String planPurpose) {
         return operatedUserClient.createUser(toCreateRequest(username, name, encryptedPassword, role))
                 .timeout(REMOTE_TIMEOUT)
                 .flatMap(result -> {
@@ -112,7 +118,7 @@ public class SelfRegisterService {
                         return Mono.just(response(HttpStatus.BAD_REQUEST, username, name, email,
                                 accountServiceRefusal(result)));
                     }
-                    return writeLocalAccount(username, name, email, role);
+                    return writeLocalAccount(username, name, email, role, planPurpose);
                 })
                 .onErrorResume(WebClientResponseException.BadRequest.class,
                         ex -> Mono.just(response(HttpStatus.BAD_REQUEST, username, name, email,
@@ -125,9 +131,9 @@ public class SelfRegisterService {
     }
 
     private Mono<ResponseEntity<SelfRegisterResponse>> writeLocalAccount(String username, String name, String email,
-            String role) {
+            String role, String planPurpose) {
         return Mono
-                .fromCallable(() -> coreUserService.createSelfRegistered(username, name, email, role))
+                .fromCallable(() -> coreUserService.createSelfRegistered(username, name, email, role, planPurpose))
                 .subscribeOn(Schedulers.boundedElastic())
                 .map(created -> response(HttpStatus.OK, username, name, email, SUCCESS_MESSAGE))
                 .onErrorResume(ex -> {

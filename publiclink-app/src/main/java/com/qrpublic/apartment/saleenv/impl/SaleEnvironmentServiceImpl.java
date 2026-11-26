@@ -166,10 +166,19 @@ public class SaleEnvironmentServiceImpl implements SaleEnvironmentService {
                 () -> new ResourceNotFoundException("Request not found with UUID: " + requestObject.getRequestUuid()));
 
         // Read-only gate first: it reports the plan window and its deadline
-        // without spending a link slot, so a refused window below cannot leave
-        // the seller with one environment less and nothing to show for it.
+        // without writing anything, so a validation failure in this request
+        // cannot leave the seller with one environment less and nothing to show
+        // for it. The gate is asked for the purpose group this product type
+        // belongs to, so a booking link can never be paid for by a product plan
+        // and the other way round.
         final String sellerUsername = requestObject.getSellerRequest().getUsername();
-        final com.qrpublic.apartment.core.model.PlanGateModel planPreview = paymentPlanService.evaluate(sellerUsername);
+        final String planGroup = com.qrpublic.apartment.model.PlanGroup
+                .fromProductType(requestObject.getProductRequest() == null
+                        ? null
+                        : requestObject.getProductRequest().getProductType())
+                .name();
+        final com.qrpublic.apartment.core.model.PlanGateModel planPreview = paymentPlanService
+                .evaluate(sellerUsername, planGroup);
         if (!planPreview.isAllowed()) {
             log.warn("Refused environment creation for [{}]: {}", sellerUsername, planPreview.getReason());
             throw new com.qrpublic.apartment.exception.ApplicationException(planPreview.getMessage(), 403);
@@ -180,7 +189,7 @@ public class SaleEnvironmentServiceImpl implements SaleEnvironmentService {
         final SaleWindow window = resolveWindow(requestObject, planPreview.getDeadline());
 
         // Quota is only consumed once the window is known to be acceptable.
-        paymentPlanService.consumeQuotaOrThrow(sellerUsername);
+        paymentPlanService.consumeQuotaOrThrow(sellerUsername, planGroup);
 
         if (requestObject.getProductRequest() != null) {
             log.info("Step 2: Validating business rules");

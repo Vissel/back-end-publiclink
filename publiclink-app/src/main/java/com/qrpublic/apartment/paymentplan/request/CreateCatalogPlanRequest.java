@@ -16,4 +16,9 @@ public class CreateCatalogPlanRequest {
     /** environments allowed at the same time */
     private int envCount = 1;
     private String description;
+    /**
+     * PRODUCT or BOOKING. Blank means PRODUCT, so an admin who does not choose
+     * still creates the kind of plan that has always been on offer.
+     */
+    private String planGroup;
 }

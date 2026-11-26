@@ -83,6 +83,7 @@ public class PaymentPlanAdminService {
                                 "Plan fee must not be negative. Use 0 for a free plan.");
                         Assert.isTrue(req.getPlanDay() > 0, "Plan days must be greater than zero.");
                         Assert.isTrue(req.getEnvCount() > 0, "Environment count must be greater than zero.");
+                        assertKnownPlanGroup(req.getPlanGroup());
                     }
 
                     @Override
@@ -137,12 +138,19 @@ public class PaymentPlanAdminService {
 
             @Override
             public CheckPlanResponse process() {
+                // A product type narrows the gate to the plan group that kind of
+                // link has to be paid for by. Without one the answer stays about
+                // the account in general, which is what the workspace banner asks.
+                String planGroup = request.getProductType() == null || request.getProductType().isBlank()
+                        ? null
+                        : com.qrpublic.apartment.model.PlanGroup.fromProductType(request.getProductType()).name();
                 com.qrpublic.apartment.core.model.PlanGateModel gate = paymentPlanService
-                        .evaluate(request.getUsername().trim());
+                        .evaluate(request.getUsername().trim(), planGroup);
                 CheckPlanResponse response = new CheckPlanResponse();
                 response.setAllowed(gate.isAllowed());
                 response.setRemaining(gate.getRemaining());
                 response.setReason(gate.getReason());
+                response.setPlanGroup(gate.getPlanGroup());
                 response.setActiveDate(gate.getActiveDate());
                 response.setEndedDate(gate.getEndedDate());
                 response.setCoverageEndedDate(gate.getCoverageEndedDate());
@@ -175,6 +183,7 @@ public class PaymentPlanAdminService {
                     item.setPlanDay(plan.getPlanDay());
                     item.setEnvCount(plan.getEnvCount());
                     item.setDescription(plan.getDescription());
+                    item.setPlanGroup(plan.getPlanGroup());
                     return item;
                 }).toList());
                 return response;
@@ -404,6 +413,24 @@ public class PaymentPlanAdminService {
         return response;
     }
 
+    /**
+     * A plan group must be one of the two the catalog is split into. Blank is
+     * allowed and means PRODUCT, so an admin who does not choose still creates
+     * the kind of plan that has always been on offer.
+     */
+    private void assertKnownPlanGroup(String planGroup) {
+        if (planGroup == null || planGroup.isBlank()) {
+            return;
+        }
+        String wanted = planGroup.trim().toUpperCase();
+        boolean known = java.util.Arrays.stream(com.qrpublic.apartment.model.PlanGroup.values())
+                .anyMatch(group -> group.name().equals(wanted));
+        if (!known) {
+            throw new ApplicationException(
+                    "Unknown plan group [" + planGroup + "]. Use PRODUCT or BOOKING.", 400);
+        }
+    }
+
     private ListPlanUserResponse.PlanUserItem toItem(PlanUserModel model) {
         ListPlanUserResponse.PlanUserItem item = new ListPlanUserResponse.PlanUserItem();
         item.setPlanUserCode(model.getPlanUserCode());
@@ -415,10 +442,13 @@ public class PaymentPlanAdminService {
         item.setUsedCount(model.getUsedCount());
         item.setRemaining(model.getRemaining());
         item.setPlanState(model.getPlanState());
+        item.setPlanGroup(model.getPlanGroup());
         item.setActiveDate(model.getActiveDate());
         item.setEndedDate(model.getEndedDate());
         item.setExtendDays(model.getExtendDays());
         item.setExtendsPlanUserCode(model.getExtendsPlanUserCode());
+        item.setConvertsPlanUserCode(model.getConvertsPlanUserCode());
+        item.setConvertFeeDelta(model.getConvertFeeDelta());
         item.setCreatedAt(model.getCreatedAt());
         item.setPaymentCode(model.getPaymentCode());
         item.setPaymentStatus(model.getPaymentStatus());

@@ -18,4 +18,6 @@ public class PaymentPlanModel {
     private int envCount;
     private String description;
     private String planState;
+    /** PRODUCT or BOOKING: which kind of link this plan pays for */
+    private String planGroup;
 }

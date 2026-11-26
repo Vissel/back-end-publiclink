@@ -22,8 +22,10 @@ public interface YogaClassRepository extends JpaRepository<YogaClass, Long> {
         List<YogaClass> findActiveByEnvId(@Param("envId") String envId);
 
         /**
-         * Overlap check on the same env + weekday: two active classes may not
-         * share any minute. excludeCode skips the class being updated.
+         * Active classes overlapping the frame on the same env + weekday. The
+         * service allows up to two of them to share a frame, so the caller
+         * counts the result instead of testing emptiness. excludeCode skips the
+         * class being updated.
          */
         @Query("SELECT c FROM YogaClass c WHERE c.saleEnvironment.envId = :envId "
                         + "AND c.dayOfWeek = :dayOfWeek AND c.active = true "

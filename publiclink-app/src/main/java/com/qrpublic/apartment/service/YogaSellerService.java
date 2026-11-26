@@ -1,6 +1,7 @@
 package com.qrpublic.apartment.service;
 
 import com.qrpublic.apartment.core.model.YogaBookingModel;
+import com.qrpublic.apartment.core.model.YogaClassCopyModel;
 import com.qrpublic.apartment.core.model.YogaClassModel;
 import com.qrpublic.apartment.core.model.SellerPlanModel;
 import com.qrpublic.apartment.core.model.YogaEnvModel;
@@ -13,6 +14,7 @@ import com.qrpublic.apartment.template.service.ProcessCallback;
 import com.qrpublic.apartment.template.service.PublicLinkServiceTemplate;
 import com.qrpublic.apartment.yoga.request.SellerPlanUpsertRequest;
 import com.qrpublic.apartment.yoga.request.YogaBookingToggleRequest;
+import com.qrpublic.apartment.yoga.request.YogaClassCopyRequest;
 import com.qrpublic.apartment.yoga.request.YogaClassUpsertRequest;
 import com.qrpublic.apartment.yoga.request.YogaRangeRequest;
 import com.qrpublic.apartment.yoga.response.YogaResultResponse;
@@ -100,6 +102,36 @@ public class YogaSellerService {
                                 : yogaClassDomain.updateClass(request.getToken(), sellerUsername,
                                         request.getClassCode(), draft);
                         return YogaResultResponse.of(saved);
+                    }
+                });
+    }
+
+    /**
+     * Copy one class's schedule info onto the seller's chosen date + time
+     * targets. The domain returns per-target outcomes rather than throwing, so
+     * a partly valid batch still creates what it can.
+     */
+    public Result<YogaResultResponse<YogaClassCopyModel>> copyClass(YogaClassCopyRequest request,
+            String sellerUsername) {
+        return publicLinkServiceTemplate.execute(
+                new ProcessCallback<YogaClassCopyRequest, YogaResultResponse<YogaClassCopyModel>>() {
+                    @Override
+                    public YogaClassCopyRequest getRequest() {
+                        return request;
+                    }
+
+                    @Override
+                    public void preProcess(YogaClassCopyRequest req) {
+                        Assert.hasText(req.getToken(), "Link token is required.");
+                        Assert.hasText(sellerUsername, "Seller identity is required.");
+                        Assert.hasText(req.getClassCode(), "A class must be selected.");
+                        Assert.notEmpty(req.getTargets(), "At least one target date is required.");
+                    }
+
+                    @Override
+                    public YogaResultResponse<YogaClassCopyModel> process() {
+                        return YogaResultResponse.of(yogaClassDomain.copyClass(request.getToken(),
+                                sellerUsername, request.getClassCode(), request.getTargets()));
                     }
                 });
     }

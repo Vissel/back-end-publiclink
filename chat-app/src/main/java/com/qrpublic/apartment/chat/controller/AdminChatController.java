@@ -3,6 +3,7 @@ package com.qrpublic.apartment.chat.controller;
 import com.qrpublic.apartment.chat.request.AdminChatReplyRequest;
 import com.qrpublic.apartment.chat.request.ChatTypingRequest;
 import com.qrpublic.apartment.chat.request.PushSubscriptionRequest;
+import com.qrpublic.apartment.chat.exception.ApplicationException;
 import com.qrpublic.apartment.chat.response.AdminConversationListResponse;
 import com.qrpublic.apartment.chat.response.ChatConversationResponse;
 import com.qrpublic.apartment.chat.response.ChatHistoryResponse;
@@ -15,10 +16,12 @@ import com.qrpublic.apartment.chat.service.ZaloConnectService;
 import com.qrpublic.apartment.chat.template.ResponseEntityConvertor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.codec.ServerSentEvent;
+import org.springframework.http.codec.multipart.FilePart;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -48,6 +51,10 @@ public class AdminChatController {
     @Autowired
     ZaloConnectService zaloConnectService;
 
+    /** Hard ceiling while reading one multipart upload into memory. */
+    @Value("${chat.max-file-bytes:10485760}")
+    private int maxUploadBytes;
+
     @GetMapping("/conversations")
     public Mono<ResponseEntity<AdminConversationListResponse>> conversations(
             @RequestParam(defaultValue = "0") int page,
@@ -69,6 +76,35 @@ public class AdminChatController {
         return Mono.fromCallable(() -> adminChatService.reply(request))
                 .subscribeOn(Schedulers.boundedElastic())
                 .flatMap(ResponseEntityConvertor::convertToMonoResponseEntity);
+    }
+
+    /**
+     * Console answer carrying one image or document, the administrator twin of
+     * the visitor's attachment message.
+     */
+    @PostMapping(value = "/reply/attachment", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public Mono<ResponseEntity<ChatMessageResponse>> replyWithAttachment(
+            @RequestPart("file") FilePart file,
+            @RequestPart("conversationUuid") String conversationUuid,
+            @RequestPart(value = "caption", required = false) String caption) {
+        return ChatAttachmentHttp.readCapped(file, maxUploadBytes)
+                .flatMap(upload -> Mono.fromCallable(() -> adminChatService.replyWithAttachment(
+                        conversationUuid, caption, upload.bytes(), upload.fileName(), upload.contentType()))
+                        .subscribeOn(Schedulers.boundedElastic()))
+                .flatMap(ResponseEntityConvertor::convertToMonoResponseEntity)
+                .onErrorResume(ApplicationException.class, error -> Mono.just(ChatAttachmentHttp.error(error)));
+    }
+
+    /**
+     * Bytes of one attachment for the console; the gateway JWT gate is the
+     * authorisation here, matching every other /admin/v1/chat route.
+     */
+    @GetMapping("/attachment/{uuid}")
+    public Mono<ResponseEntity<byte[]>> downloadAttachment(@PathVariable String uuid) {
+        return Mono.fromCallable(() -> adminChatService.downloadAttachment(uuid))
+                .subscribeOn(Schedulers.boundedElastic())
+                .map(ChatAttachmentHttp::downloadResponse)
+                .onErrorResume(ApplicationException.class, error -> Mono.just(ChatAttachmentHttp.error(error)));
     }
 
     /**

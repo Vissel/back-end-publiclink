@@ -152,6 +152,12 @@ public class CorePaymentService {
 
     public PaymentModel toModel(Payment payment) {
         PaymentPlanUser assignment = payment.getPlanUser();
+        // The window the seller chose when buying, if any: the payment page has to
+        // promise that window, not "today plus the plan length".
+        Timestamp requestedStart = assignment.getRequestedStartAt();
+        String requestedEnd = requestedStart == null ? null
+                : DateUtils.dateToString(Timestamp.valueOf(requestedStart.toLocalDateTime()
+                        .plusDays(assignment.getPlan().getPlanDay())));
         return PaymentModel.builder()
                 .paymentCode(payment.getPaymentCode())
                 .planUserCode(assignment.getPlanUserCode())
@@ -173,6 +179,8 @@ public class CorePaymentService {
                 .convertsPlanUserCode(assignment.getConvertsPlanUserCode())
                 .extensionFrom(DateUtils.dateToString(assignment.getActiveDate()))
                 .extensionTo(DateUtils.dateToString(assignment.getEndedDate()))
+                .requestedStartAt(DateUtils.dateToString(requestedStart))
+                .requestedEndAt(requestedEnd)
                 .build();
     }
 }

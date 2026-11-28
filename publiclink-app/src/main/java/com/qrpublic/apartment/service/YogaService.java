@@ -48,6 +48,9 @@ public class YogaService {
     @Autowired
     private PasswordSetupDomain passwordSetupDomain;
 
+    @Autowired
+    private com.qrpublic.apartment.core.service.CoreUserService coreUserService;
+
     public Result<YogaOccurrencesResponse> calendar(YogaCalendarRequest request, String callerUsername) {
         return publicLinkServiceTemplate
                 .execute(new ProcessCallback<YogaCalendarRequest, YogaOccurrencesResponse>() {
@@ -69,6 +72,7 @@ public class YogaService {
                         boolean sellerView = isSeller(request.getToken(), callerUsername);
                         YogaOccurrencesResponse response = YogaOccurrencesResponse.of(items, sellerView);
                         attachEnvMeta(response, request.getToken());
+                        response.setBuyerFullName(resolveBuyerFullName(callerUsername));
                         return response;
                     }
                 });
@@ -95,6 +99,7 @@ public class YogaService {
                         boolean sellerView = isSeller(request.getToken(), callerUsername);
                         YogaOccurrencesResponse response = YogaOccurrencesResponse.of(items, sellerView);
                         attachEnvMeta(response, request.getToken());
+                        response.setBuyerFullName(resolveBuyerFullName(callerUsername));
                         return response;
                     }
                 });
@@ -231,6 +236,20 @@ public class YogaService {
         } catch (Exception e) {
             return false;
         }
+    }
+
+    /**
+     * Name to prefill the buyer's booking form with. The gateway only forwards
+     * X-User-ID from a validated JWT, so a blank caller really is anonymous and
+     * gets null: the input stays empty for them to type their own name.
+     */
+    private String resolveBuyerFullName(String callerUsername) {
+        if (callerUsername == null || callerUsername.isBlank()) {
+            return null;
+        }
+        var user = coreUserService.findByUsername(callerUsername);
+        String name = user != null ? user.getName() : null;
+        return name == null || name.isBlank() ? callerUsername : name.trim();
     }
 
     private void attachEnvMeta(YogaOccurrencesResponse response, String token) {

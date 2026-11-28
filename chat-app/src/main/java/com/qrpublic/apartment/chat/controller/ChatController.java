@@ -4,6 +4,7 @@ import com.qrpublic.apartment.chat.request.ChatHistoryRequest;
 import com.qrpublic.apartment.chat.request.ChatSendMessageRequest;
 import com.qrpublic.apartment.chat.request.ChatStartRequest;
 import com.qrpublic.apartment.chat.request.ChatTypingRequest;
+import com.qrpublic.apartment.chat.exception.ApplicationException;
 import com.qrpublic.apartment.chat.response.ChatConversationResponse;
 import com.qrpublic.apartment.chat.response.ChatHealthResponse;
 import com.qrpublic.apartment.chat.response.ChatHistoryResponse;
@@ -19,6 +20,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.codec.ServerSentEvent;
+import org.springframework.http.codec.multipart.FilePart;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -51,6 +53,10 @@ public class ChatController {
 
     @Value("${chat.public-console-url:/adminChat}")
     private String consoleRedirectUrl;
+
+    /** Hard ceiling while reading one multipart upload into memory. */
+    @Value("${chat.max-file-bytes:10485760}")
+    private int maxUploadBytes;
 
     /**
      * Liveness probe. This is what a deployment verifies: a 200 here proves nginx,
@@ -86,6 +92,53 @@ public class ChatController {
         return Mono.fromCallable(() -> chatService.sendMessage(request, callerUsername))
                 .subscribeOn(Schedulers.boundedElastic())
                 .flatMap(ResponseEntityConvertor::convertToMonoResponseEntity);
+    }
+
+    /**
+     * Visitor message carrying one image or document. The multipart fields
+     * travel as parts; the file is read with a hard byte cap before anything
+     * blocking runs, and the safety checks (allow-list, magic bytes, per-kind
+     * limit) happen in the attachment domain.
+     */
+    @PostMapping(value = "/message/attachment", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public Mono<ResponseEntity<ChatMessageResponse>> messageWithAttachment(
+            @RequestPart("file") FilePart file,
+            @RequestPart(value = "conversationUuid", required = false) String conversationUuid,
+            @RequestPart(value = "deviceId", required = false) String deviceId,
+            @RequestPart(value = "clientMessageId", required = false) String clientMessageId,
+            @RequestPart(value = "caption", required = false) String caption,
+            @RequestHeader(value = "X-User-ID", required = false) String callerUsername) {
+        return ChatAttachmentHttp.readCapped(file, maxUploadBytes)
+                .flatMap(upload -> {
+                    ChatSendMessageRequest request = new ChatSendMessageRequest();
+                    request.setConversationUuid(conversationUuid);
+                    request.setDeviceId(deviceId);
+                    request.setClientMessageId(clientMessageId);
+                    request.setContent(caption);
+                    return Mono.fromCallable(() -> chatService.sendMessageWithAttachment(
+                            request, upload.bytes(), upload.fileName(), upload.contentType(), callerUsername))
+                            .subscribeOn(Schedulers.boundedElastic());
+                })
+                .flatMap(ResponseEntityConvertor::convertToMonoResponseEntity)
+                .onErrorResume(ApplicationException.class, error -> Mono.just(ChatAttachmentHttp.error(error)));
+    }
+
+    /**
+     * Bytes of one attachment. The path is public like the rest of the client
+     * namespace, but the payload is not: the service re-runs the conversation
+     * ownership gate (account username, or the anonymous device of the thread).
+     * Images answer inline so the widget can show them; documents answer as a
+     * download.
+     */
+    @GetMapping("/attachment/{uuid}")
+    public Mono<ResponseEntity<byte[]>> downloadAttachment(
+            @PathVariable String uuid,
+            @RequestParam(required = false) String deviceId,
+            @RequestHeader(value = "X-User-ID", required = false) String callerUsername) {
+        return Mono.fromCallable(() -> chatService.downloadAttachment(uuid, callerUsername, deviceId))
+                .subscribeOn(Schedulers.boundedElastic())
+                .map(ChatAttachmentHttp::downloadResponse)
+                .onErrorResume(ApplicationException.class, error -> Mono.just(ChatAttachmentHttp.error(error)));
     }
 
     @PostMapping("/history")

@@ -11,4 +11,11 @@ import lombok.Data;
 public class SelectPlanRequest {
 
     private String planCode;
+
+    /**
+     * When the seller wants the plan to start, yyyy-MM-dd'T'HH:mm. Optional:
+     * blank or absent keeps the old behaviour of starting whenever the admin
+     * confirms the money.
+     */
+    private String startAt;
 }

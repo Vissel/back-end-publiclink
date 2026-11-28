@@ -16,6 +16,11 @@ public class YogaOccurrencesResponse {
     private boolean sellerView;
     /** plan summary for the logged-in buyer banner; null when none */
     private com.qrpublic.apartment.core.model.SellerPlanModel buyerPlan;
+    /**
+     * Name to prefill the booking form with: the caller's full name, falling
+     * back to the account name. Null for anonymous visitors.
+     */
+    private String buyerFullName;
     private String productName;
     private java.math.BigDecimal dropInPrice;
 

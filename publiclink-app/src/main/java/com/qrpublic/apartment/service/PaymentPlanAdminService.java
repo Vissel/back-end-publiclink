@@ -15,6 +15,7 @@ import com.qrpublic.apartment.paymentplan.request.ListPlanUserRequest;
 import com.qrpublic.apartment.paymentplan.request.MarkPaidRequest;
 import com.qrpublic.apartment.paymentplan.request.RegenerateLinkRequest;
 import com.qrpublic.apartment.paymentplan.request.RejectPlanRequest;
+import com.qrpublic.apartment.paymentplan.request.StartPlanRequest;
 import com.qrpublic.apartment.paymentplan.response.CheckPlanResponse;
 import com.qrpublic.apartment.paymentplan.response.CreateSellerPlanResponse;
 import com.qrpublic.apartment.paymentplan.response.CreatedPlanResponse;
@@ -300,7 +301,34 @@ public class PaymentPlanAdminService {
 
             @Override
             public Integer process() {
-                return paymentPlanService.approve(request.getPlanUserCodes(), request.getActiveDate());
+                return paymentPlanService.approve(request.getPlanUserCodes(), request.getStartAt());
+            }
+        });
+    }
+
+    /**
+     * Admin correction of a plan's start, available while the order waits for
+     * payment and after it is running. Used by the per-row action of the setup
+     * page, where the bulk date field would apply one start to every selection.
+     */
+    public Result<Integer> changeStart(StartPlanRequest request, String adminUsername) {
+        return publicLinkServiceTemplate.execute(new ProcessCallback<StartPlanRequest, Integer>() {
+            @Override
+            public StartPlanRequest getRequest() {
+                return request;
+            }
+
+            @Override
+            public void preProcess(StartPlanRequest req) {
+                Assert.notEmpty(req.getPlanUserCodes(), "At least one plan is required.");
+                Assert.hasText(req.getStartAt(), "A start date and time is required.");
+                Assert.hasText(adminUsername, "Admin identity is required.");
+            }
+
+            @Override
+            public Integer process() {
+                return paymentPlanService.changeStart(request.getPlanUserCodes(), request.getStartAt(),
+                        adminUsername);
             }
         });
     }
@@ -346,7 +374,7 @@ public class PaymentPlanAdminService {
             public Integer process() {
                 return paymentPlanService.markPaidAssignments(
                         request.getPlanUserCodes(), request.getNote(), adminUsername,
-                        request.getActiveDate());
+                        request.getStartAt());
             }
         });
     }
@@ -445,6 +473,7 @@ public class PaymentPlanAdminService {
         item.setPlanGroup(model.getPlanGroup());
         item.setActiveDate(model.getActiveDate());
         item.setEndedDate(model.getEndedDate());
+        item.setRequestedStartAt(model.getRequestedStartAt());
         item.setExtendDays(model.getExtendDays());
         item.setExtendsPlanUserCode(model.getExtendsPlanUserCode());
         item.setConvertsPlanUserCode(model.getConvertsPlanUserCode());

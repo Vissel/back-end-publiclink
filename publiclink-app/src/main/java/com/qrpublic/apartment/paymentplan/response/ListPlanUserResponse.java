@@ -30,6 +30,11 @@ public class ListPlanUserResponse {
         private String planGroup;
         private String activeDate;
         private String endedDate;
+        /**
+         * Start the seller asked for when buying the plan themselves, so the
+         * admin sees what the seller expects before choosing an activation date.
+         */
+        private String requestedStartAt;
         /** days bought on another plan; set on an extension order row */
         private Integer extendDays;
         /** the plan this extension order adds its days to */

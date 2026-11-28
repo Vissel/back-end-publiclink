@@ -14,6 +14,7 @@ import com.qrpublic.apartment.user.model.UserType;
 import com.qrpublic.apartment.user.repository.UserAuthEntityRepository;
 import com.qrpublic.apartment.user.repository.UserAvatarRepository;
 import com.qrpublic.apartment.user.repository.UserEntityRepository;
+import com.qrpublic.apartment.user.service.request.ChangeOwnPasswordRequest;
 import com.qrpublic.apartment.user.service.request.ChangePasswordRequest;
 import com.qrpublic.apartment.user.service.request.CreateUserAuthRequest;
 import com.qrpublic.apartment.user.service.request.UserCreateRequest;
@@ -353,6 +354,57 @@ public class UserServiceImpl implements UserService {
                     userEntityRepository.save(existing);
 
                     log.info("Password changed for user: {}", existing.getUsername());
+
+                    ChangePasswordResponse response = new ChangePasswordResponse();
+                    response.setUserName(existing.getUsername());
+                    response.setChanged(true);
+                    response.setMessage("Change password successfully");
+                    return success(response);
+                })
+                .orElse(Result.error(404, "User not found: " + request.getUserName()));
+    }
+
+    @Override
+    public Mono<Result<ChangePasswordResponse>> changeOwnPassword(ChangeOwnPasswordRequest request) {
+        return Mono.fromCallable(() -> transactionTemplate.execute(status -> doChangeOwnPassword(request)))
+                .subscribeOn(Schedulers.boundedElastic());
+    }
+
+    /**
+     * Own-password change. The current password is checked against the stored
+     * hash before anything is written, so holding a valid token is not enough
+     * to take an account over; a wrong current password changes nothing.
+     */
+    protected Result<ChangePasswordResponse> doChangeOwnPassword(ChangeOwnPasswordRequest request) {
+        if (request == null || StringUtils.isBlank(request.getUserName())
+                || StringUtils.isBlank(request.getCurrentEncryptedPassword())
+                || StringUtils.isBlank(request.getNewEncryptedPassword())) {
+            return Result.error(400, "Username, current password and new password are required");
+        }
+
+        String current = rsaClient.decrypt(request.getCurrentEncryptedPassword());
+        String next = rsaClient.decrypt(request.getNewEncryptedPassword());
+        if (StringUtils.isBlank(next) || next.length() < 8) {
+            return Result.error(400, "New password must be at least 8 characters");
+        }
+
+        return userEntityRepository.findByUsername(request.getUserName())
+                .map(existing -> {
+                    if (StringUtils.isBlank(current) || !passwordEncoder.matches(current, existing.getPassword())) {
+                        return Result.<ChangePasswordResponse>error(403, "Current password is not correct");
+                    }
+                    if (passwordEncoder.matches(next, existing.getPassword())) {
+                        return Result.<ChangePasswordResponse>error(400,
+                                "The new password must differ from the current one");
+                    }
+
+                    existing.setPassword(passwordEncoder.encode(next));
+                    // The account has now chosen its own secret, so the
+                    // first-login forced change no longer applies.
+                    existing.setMustChangePassword(false);
+                    userEntityRepository.save(existing);
+
+                    log.info("Own password changed for user: {}", existing.getUsername());
 
                     ChangePasswordResponse response = new ChangePasswordResponse();
                     response.setUserName(existing.getUsername());

@@ -1,6 +1,7 @@
 package com.qrpublic.apartment.user.service;
 
 import com.qrpublic.apartment.adapter.template.Result;
+import com.qrpublic.apartment.user.service.request.ChangeOwnPasswordRequest;
 import com.qrpublic.apartment.user.service.request.ChangePasswordRequest;
 import com.qrpublic.apartment.user.service.request.CreateUserAuthRequest;
 import com.qrpublic.apartment.user.service.request.UserCreateRequest;
@@ -40,6 +41,12 @@ public interface UserService {
     Mono<Result<UserCreateResponse>> generateAccount(String userName, String fullName, String role);
 
     Mono<Result<ChangePasswordResponse>> changePassword(ChangePasswordRequest changePasswordRequest);
+
+    /**
+     * Change an own password: the current one is verified against the stored
+     * hash first, so a stolen token alone cannot take an account over.
+     */
+    Mono<Result<ChangePasswordResponse>> changeOwnPassword(ChangeOwnPasswordRequest request);
 
     /** Own profile picture; a success with a null dataUrl means "none uploaded". */
     Mono<Result<AvatarResponse>> findAvatar(String userName);

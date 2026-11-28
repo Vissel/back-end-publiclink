@@ -31,6 +31,22 @@ public class SelfServiceStateResponse {
      */
     private String planPurpose;
 
+    /**
+     * False while the account has never chosen a purpose. New sellers answer it
+     * on the plan screen itself (the question moved here from the register
+     * form), so the screen shows the choice cards before the catalog. True for
+     * every account that already has one - legacy accounts read as PRODUCT and
+     * are not asked again.
+     */
+    private boolean purposeChosen;
+
+    /**
+     * True once this account has ever been granted a 0 fee plan. The free plan is
+     * a one-time offer, so the plan screen greys it out instead of offering it
+     * again; only an admin can hand out another one.
+     */
+    private boolean freePlanUsed;
+
     /** Newest assignment that is ACTIVE; null when nothing is paid for yet. */
     private PlanUserModel activePlan;
 

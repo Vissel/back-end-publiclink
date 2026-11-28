@@ -18,8 +18,11 @@ import java.sql.Timestamp;
 
 /**
  * Payment plan defined by the seller for one buyer of a yoga environment:
- * buyer name, days bought mapped to a VND amount. Linked to the sale
- * environment created by the seller. A PLAN booking consumes one day.
+ * buyer name and a quota mapped to a VND amount, linked to the sale
+ * environment the seller created. {@code quotaType} says what the quota counts:
+ * DAYS consumes one unit per calendar date (any number of slots in it),
+ * BOOKINGS one unit per booking. {@code usedDays} and {@code usedBookings}
+ * always carry both counts so neither number is ever presented as the other.
  */
 @Entity
 @Table(name = "seller_payment_plan")
@@ -27,6 +30,10 @@ import java.sql.Timestamp;
 @Setter
 @NoArgsConstructor
 public class SellerPaymentPlan {
+
+    public static final String QUOTA_DAYS = "DAYS";
+    public static final String QUOTA_BOOKINGS = "BOOKINGS";
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "seller_plan_id")
@@ -56,6 +63,12 @@ public class SellerPaymentPlan {
 
     @Column(name = "used_days", nullable = false)
     private int usedDays;
+
+    @Column(name = "used_bookings", nullable = false)
+    private int usedBookings;
+
+    @Column(name = "quota_type", nullable = false, length = 10)
+    private String quotaType = QUOTA_DAYS;
 
     @Column(name = "amount_vnd", nullable = false, precision = 15, scale = 2)
     private BigDecimal amountVnd;

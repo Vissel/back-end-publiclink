@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.qrpublic.apartment.chat.convertor.ChatConvertor;
 import com.qrpublic.apartment.chat.response.ChatConversationResponse;
 import com.qrpublic.apartment.chat.response.ChatMessageResponse;
+import com.qrpublic.apartment.chat.response.ChatStatusResponse;
 import com.qrpublic.apartment.chat.core.model.ChatConversationModel;
 import com.qrpublic.apartment.chat.core.model.ChatMessageModel;
 import lombok.extern.slf4j.Slf4j;
@@ -66,10 +67,11 @@ public class ChatEventPublisher {
 
     /**
      * A status transition only: the client re-renders the tick icons of one
-     * message.
+     * message. The payload is a narrow patch, never a full message, so merging
+     * it cannot erase fields the transition did not load (the attachment).
      */
     public void publishStatus(ChatMessageModel message) {
-        ChatMessageResponse payload = ChatConvertor.toMessageResponse(message);
+        ChatStatusResponse payload = ChatConvertor.toStatusResponse(message);
         String json = write(payload);
         if (json == null) {
             return;

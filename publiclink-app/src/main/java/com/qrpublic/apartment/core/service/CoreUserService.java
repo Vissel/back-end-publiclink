@@ -68,6 +68,27 @@ public class CoreUserService {
         return userRepo.findByUserName(username);
     }
 
+    /**
+     * Duplicate guard for self-registration: the email lives only in this
+     * database (the account service stores no email at all), so the local rows
+     * are the directory to compare against. Case-insensitive, because
+     * "A@example.com" and "a@example.com" are the same mailbox. A blank email is
+     * never "in use" - it is simply absent.
+     */
+    @Transactional(readOnly = true)
+    public boolean isEmailInUse(String email) {
+        return email != null && !email.isBlank() && userRepo.existsByEmailIgnoreCase(email.trim());
+    }
+
+    /**
+     * Same guard for the display name. A blank name falls back to the username
+     * at registration, so there is nothing of its own to compare.
+     */
+    @Transactional(readOnly = true)
+    public boolean isNameInUse(String name) {
+        return name != null && !name.isBlank() && userRepo.existsByNameIgnoreCase(name.trim());
+    }
+
     @Transactional
     public Page<User> getUsers(Pageable pageable, String username, String name, String email, String role) {
         return userRepo.findByFilters(username, name, email, role, pageable);
@@ -150,6 +171,21 @@ public class CoreUserService {
     @Transactional
     public void updatePlanPurpose(User existingUser, String planPurpose) {
         existingUser.setPlanPurpose(planPurpose);
+        userRepo.save(existingUser);
+    }
+
+    /**
+     * Own-profile edit from the /self page. The display name always changes;
+     * the email arrives only while the account has none, which the caller has
+     * already asserted. This is the single place those two columns are written,
+     * so no other flow can quietly reopen a locked email.
+     */
+    @Transactional
+    public void updateProfile(User existingUser, String name, String email) {
+        existingUser.setName(name);
+        if (email != null && !email.isBlank()) {
+            existingUser.setEmail(email);
+        }
         userRepo.save(existingUser);
     }
 

@@ -49,7 +49,7 @@ public class SellerPaymentPlanDomain {
 
     @Transactional
     public SellerPlanModel createPlan(String token, String sellerUsername, String buyerName,
-            String buyerEmail, int totalDays, BigDecimal amountVnd) {
+            String buyerEmail, int totalDays, BigDecimal amountVnd, String quotaType) {
         YogaEnvModel env = yogaEnvAccess.resolveForSeller(token, sellerUsername);
         if (buyerName == null || buyerName.isBlank()) {
             throw new ApplicationException("Buyer name is required.", 400);
@@ -67,7 +67,7 @@ public class SellerPaymentPlanDomain {
         SellerPlanModel plan;
         try {
             plan = coreSellerPaymentPlanService.createPlan(env.getEnvId(), sellerUsername,
-                    buyerName.trim(), buyerUsername, blankToNull(buyerEmail), totalDays, amountVnd);
+                    buyerName.trim(), buyerUsername, blankToNull(buyerEmail), totalDays, amountVnd, quotaType);
         } catch (RuntimeException e) {
             // compensate the remote account when the local plan row cannot be
             // written, mirroring the seller register flow's compensation
@@ -86,12 +86,12 @@ public class SellerPaymentPlanDomain {
 
     @Transactional
     public SellerPlanModel updatePlan(String token, String sellerUsername, String sellerPlanCode,
-            Integer totalDays, BigDecimal amountVnd, String buyerEmail, String state) {
+            Integer totalDays, BigDecimal amountVnd, String buyerEmail, String state, String quotaType) {
         YogaEnvModel env = yogaEnvAccess.resolveForSeller(token, sellerUsername);
         SellerPlanModel existing = coreSellerPaymentPlanService.findByCode(sellerPlanCode);
         assertPlanInEnv(existing, env.getEnvId());
         return coreSellerPaymentPlanService.updatePlan(sellerPlanCode, totalDays, amountVnd,
-                buyerEmail, state);
+                buyerEmail, state, quotaType);
     }
 
     @Transactional(readOnly = true)

@@ -3,11 +3,15 @@ package com.qrpublic.apartment.chat.core.service;
 import com.qrpublic.apartment.chat.core.model.ChatConversationModel;
 import com.qrpublic.apartment.chat.core.model.ChatDeviceModel;
 import com.qrpublic.apartment.chat.core.model.ChatDirectionEnum;
+import com.qrpublic.apartment.chat.core.model.ChatAttachmentKind;
+import com.qrpublic.apartment.chat.core.model.ChatAttachmentModel;
 import com.qrpublic.apartment.chat.core.model.ChatMessageModel;
 import com.qrpublic.apartment.chat.core.model.ChatStatusEnum;
+import com.qrpublic.apartment.chat.entity.ChatAttachment;
 import com.qrpublic.apartment.chat.entity.ChatConversation;
 import com.qrpublic.apartment.chat.entity.ChatDevice;
 import com.qrpublic.apartment.chat.entity.ChatMessage;
+import com.qrpublic.apartment.chat.repository.ChatAttachmentRepository;
 import com.qrpublic.apartment.chat.repository.ChatConversationRepository;
 import com.qrpublic.apartment.chat.repository.ChatDeviceRepository;
 import com.qrpublic.apartment.chat.repository.ChatMessageRepository;
@@ -20,7 +24,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.sql.Timestamp;
 import java.time.Instant;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -41,6 +47,9 @@ public class CoreChatService {
 
     @Autowired
     ChatMessageRepository chatMessageRepository;
+
+    @Autowired
+    ChatAttachmentRepository chatAttachmentRepository;
 
     // ------------------------------------------------------------------ device
 
@@ -445,6 +454,79 @@ public class CoreChatService {
             model.setAwaitingAdmin(!last.isEmpty()
                     && ChatDirectionEnum.CLIENT.name().equals(last.get(0).getDirection()));
         }
+        return model;
+    }
+
+    // -------------------------------------------------------------- attachment
+
+    /**
+     * Persists the metadata row of a validated upload. The bytes are already on
+     * disk under {@code storageKey} when this is called; the uuid minted here is
+     * what the download URLs carry.
+     */
+    @Transactional
+    public ChatAttachmentModel saveAttachment(Long messageId, ChatAttachmentModel attachment) {
+        ChatMessage message = chatMessageRepository.findById(messageId)
+                .orElseThrow(() -> new IllegalStateException("Message not found: " + messageId));
+        ChatAttachment entity = new ChatAttachment();
+        entity.setUuid(UUID.randomUUID().toString());
+        entity.setMessage(message);
+        entity.setKind(attachment.getKind().name());
+        entity.setFileName(attachment.getFileName());
+        entity.setMimeType(attachment.getMimeType());
+        entity.setSizeBytes(attachment.getSizeBytes());
+        entity.setStorageKey(attachment.getStorageKey());
+        entity.setCreatedAt(Timestamp.from(Instant.now()));
+        return toAttachmentModel(chatAttachmentRepository.save(entity));
+    }
+
+    @Transactional(readOnly = true)
+    public Optional<ChatAttachmentModel> findAttachmentByUuid(String uuid) {
+        if (uuid == null || uuid.isBlank()) {
+            return Optional.empty();
+        }
+        return chatAttachmentRepository.findByUuid(uuid.trim()).map(this::toAttachmentModel);
+    }
+
+    /**
+     * The conversation an attachment belongs to, so download endpoints can run
+     * the same ownership gate as every other client call.
+     */
+    @Transactional(readOnly = true)
+    public Optional<Long> findConversationIdByAttachmentUuid(String uuid) {
+        if (uuid == null || uuid.isBlank()) {
+            return Optional.empty();
+        }
+        return chatAttachmentRepository.findByUuid(uuid.trim())
+                .map(entity -> entity.getMessage().getConversation().getId());
+    }
+
+    /**
+     * One query for a whole page of messages, so history and replay never pay
+     * an attachment lookup per row.
+     */
+    @Transactional(readOnly = true)
+    public Map<Long, ChatAttachmentModel> findAttachmentsByMessageIds(List<Long> messageIds) {
+        if (messageIds == null || messageIds.isEmpty()) {
+            return Map.of();
+        }
+        Map<Long, ChatAttachmentModel> byMessage = new HashMap<>();
+        for (ChatAttachment entity : chatAttachmentRepository.findByMessageIdIn(messageIds)) {
+            byMessage.put(entity.getMessage().getId(), toAttachmentModel(entity));
+        }
+        return byMessage;
+    }
+
+    public ChatAttachmentModel toAttachmentModel(ChatAttachment entity) {
+        ChatAttachmentModel model = new ChatAttachmentModel();
+        model.setId(entity.getId());
+        model.setUuid(entity.getUuid());
+        model.setMessageId(entity.getMessage() != null ? entity.getMessage().getId() : null);
+        model.setKind(ChatAttachmentKind.valueOf(entity.getKind()));
+        model.setFileName(entity.getFileName());
+        model.setMimeType(entity.getMimeType());
+        model.setSizeBytes(entity.getSizeBytes());
+        model.setStorageKey(entity.getStorageKey());
         return model;
     }
 

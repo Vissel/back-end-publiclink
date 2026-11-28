@@ -11,6 +11,8 @@ public class SellerPlanUpsertRequest {
     private String buyerName;
     private String buyerEmail;
     private Integer totalDays;
+    /** DAYS (one unit per calendar date) or BOOKINGS (one unit per booking) */
+    private String quotaType;
     private java.math.BigDecimal amountVnd;
     private String state;
 }

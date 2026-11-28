@@ -112,6 +112,14 @@ public class PaymentDomainService {
             response.setEstimatedActiveDate(today.toString());
             response.setEstimatedEndDate(today.plusDays(payment.getPlan().getPlanDay()).toString());
         }
+        if (notBlank(payment.getRequestedStartAt())) {
+            // The seller picked when this plan should start, so today's window
+            // would be a promise the plan is not going to keep.
+            response.setEstimatedActiveDate(payment.getRequestedStartAt());
+            if (notBlank(payment.getRequestedEndAt())) {
+                response.setEstimatedEndDate(payment.getRequestedEndAt());
+            }
+        }
         if (notBlank(payment.getConvertsPlanUserCode())) {
             // A conversion order buys the target plan for only the difference, so
             // the page must price it at what is actually due while still showing

@@ -13,4 +13,11 @@ public class SelfRegisterResponse {
     private String name;
     private String email;
     private String message;
+    /**
+     * Which input caused a refusal, when one of them did: {@code username},
+     * {@code email} or {@code name}. Null on success and on failures that belong
+     * to no single field, so the form can mark the right box instead of only
+     * showing a banner.
+     */
+    private String field;
 }

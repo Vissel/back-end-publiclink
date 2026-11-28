@@ -109,6 +109,15 @@
     <changeSet id="037" author="thach">
         <sqlFile path="db/changelog/changeset-037-add-plan-purpose-conversion.sql"/>
     </changeSet>
+    <changeSet id="038" author="thach">
+        <sqlFile path="db/changelog/changeset-038-yoga-class-slot-non-unique.sql"/>
+    </changeSet>
+    <changeSet id="039" author="thach">
+        <sqlFile path="db/changelog/changeset-039-seller-plan-quota-type.sql"/>
+    </changeSet>
+    <changeSet id="040" author="thach">
+        <sqlFile path="db/changelog/changeset-040-add-requested-plan-start.sql"/>
+    </changeSet>
     <!-- Chat tables moved to the chat-app module, which owns the chat_schema.
          publiclink-app stays the sole DDL owner of publiclink-db.
     <changeSet id="021" author="thach">

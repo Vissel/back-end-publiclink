@@ -25,6 +25,9 @@ public class ChatMessageResponse {
 
     private String content;
 
+    /** The image or document carried by this message, null for text-only. */
+    private ChatAttachmentResponse attachment;
+
     /** PENDING / SENT / DELIVERED / SEEN / REPLIED / FAILED. */
     private String status;
 

@@ -42,4 +42,11 @@ public class PaymentModel {
     private String extensionFrom;
     /** ... to (new plan end) */
     private String extensionTo;
+    /**
+     * Start the seller asked for when buying this plan; empty when nobody asked.
+     * The payment page shows this window instead of today's when it is set.
+     */
+    private String requestedStartAt;
+    /** the requested start plus the plan's own length */
+    private String requestedEndAt;
 }

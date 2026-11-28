@@ -13,10 +13,14 @@ import com.qrpublic.apartment.chat.response.ChatMessageResponse;
 import com.qrpublic.apartment.chat.response.ChatHealthResponse;
 import com.qrpublic.apartment.chat.response.ChatStartResponse;
 import com.qrpublic.apartment.chat.core.model.ChatConversationModel;
+import com.qrpublic.apartment.chat.core.model.ChatAttachmentModel;
 import com.qrpublic.apartment.chat.core.model.ChatDeviceModel;
 import com.qrpublic.apartment.chat.core.model.ChatMessageModel;
+import com.qrpublic.apartment.chat.core.service.CoreChatService;
 import com.qrpublic.apartment.chat.domain.ChatConversationDomain;
 import com.qrpublic.apartment.chat.domain.ChatAccountDomain;
+import com.qrpublic.apartment.chat.domain.ChatAttachmentDomain;
+import com.qrpublic.apartment.chat.domain.ChatAttachmentDownload;
 import com.qrpublic.apartment.chat.domain.ChatEventPublisher;
 import com.qrpublic.apartment.chat.domain.ChatIdentityDomain;
 import com.qrpublic.apartment.chat.domain.ChatIdentityResult;
@@ -79,6 +83,12 @@ public class ChatService {
 
     @Autowired
     ZaloBridgeDomain zaloBridgeDomain;
+
+    @Autowired
+    CoreChatService coreChatService;
+
+    @Autowired
+    ChatAttachmentDomain chatAttachmentDomain;
 
     @Value("${chat.max-message-length:2000}")
     private int maxMessageLength;
@@ -158,7 +168,9 @@ public class ChatService {
         });
     }
 
-    /** Internal service-to-player message; console-only and never mirrored to Zalo. */
+    /**
+     * Internal service-to-player message; console-only and never mirrored to Zalo.
+     */
     public Result<ChatMessageResponse> systemMessage(ChatSystemMessageRequest request) {
         return chatServiceTemplate.execute(new ProcessCallback<ChatSystemMessageRequest, ChatMessageResponse>() {
             @Override
@@ -221,6 +233,57 @@ public class ChatService {
                 return ChatConvertor.toMessageResponse(saved);
             }
         });
+    }
+
+    /**
+     * Records a visitor message carrying one image or document and mirrors the
+     * caption (or the {@code [Image] name} placeholder) into the Zalo thread.
+     */
+    public Result<ChatMessageResponse> sendMessageWithAttachment(ChatSendMessageRequest request, byte[] bytes,
+            String fileName, String contentType, String callerUsername) {
+        return chatServiceTemplate.execute(new ProcessCallback<ChatSendMessageRequest, ChatMessageResponse>() {
+            @Override
+            public ChatSendMessageRequest getRequest() {
+                return request;
+            }
+
+            @Override
+            public void preProcess(ChatSendMessageRequest req) {
+                Assert.notNull(req, "Chat message request is required.");
+                Assert.notNull(bytes, "An uploaded file is required.");
+                Assert.isTrue(req.getContent() == null || req.getContent().length() <= maxMessageLength,
+                        "Caption is longer than " + maxMessageLength + " characters.");
+                Assert.isTrue(req.getConversationUuid() != null && !req.getConversationUuid().isBlank()
+                        || req.getDeviceId() != null && !req.getDeviceId().isBlank(),
+                        "Either conversationUuid or deviceId is required.");
+            }
+
+            @Override
+            public ChatMessageResponse process() {
+                ChatConversationModel conversation = resolveConversation(
+                        request.getConversationUuid(), request.getDeviceId());
+                assertCallerOwns(conversation, callerUsername, request.getDeviceId());
+                ChatMessageModel saved = chatMessageDomain.saveClientAttachmentMessage(
+                        conversation.getId(), request.getClientMessageId(), request.getContent(),
+                        bytes, fileName, contentType);
+                return ChatConvertor.toMessageResponse(saved);
+            }
+        });
+    }
+
+    /**
+     * Bytes of one attachment for a participant of its conversation: the same
+     * ownership gate as every other client call, then a plain disk read.
+     */
+    public ChatAttachmentDownload downloadAttachment(String uuid, String callerUsername, String deviceId) {
+        ChatAttachmentModel attachment = coreChatService.findAttachmentByUuid(uuid)
+                .orElseThrow(() -> new ApplicationException("Attachment not found.", 404));
+        Long conversationId = coreChatService.findConversationIdByAttachmentUuid(uuid)
+                .orElseThrow(() -> new ApplicationException("Attachment not found.", 404));
+        ChatConversationModel conversation = coreChatService.findConversationById(conversationId)
+                .orElseThrow(() -> new ApplicationException("Conversation not found.", 404));
+        assertCallerOwns(conversation, callerUsername, deviceId);
+        return new ChatAttachmentDownload(attachment, chatAttachmentDomain.load(attachment.getStorageKey()));
     }
 
     /**

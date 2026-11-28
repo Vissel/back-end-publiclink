@@ -19,6 +19,8 @@ public class ChatMessageModel {
     private ChatDirectionEnum direction;
     private ChatStatusEnum status;
     private String content;
+    /** The one binary payload of this message, null for a text-only message. */
+    private ChatAttachmentModel attachment;
     private String zaloMessageId;
     private Long quoteMessageId;
     private Integer errorCode;

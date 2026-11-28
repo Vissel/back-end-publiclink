@@ -23,4 +23,9 @@
     <changeSet id="003" author="thach">
         <sqlFile path="db/changelog/changeset-003-chat-account-identity.sql"/>
     </changeSet>
+
+    <!-- Images and document attachments on a chat message; bytes on disk, metadata here. -->
+    <changeSet id="004" author="thach">
+        <sqlFile path="db/changelog/changeset-004-chat-attachments.sql"/>
+    </changeSet>
 </databaseChangeLog>

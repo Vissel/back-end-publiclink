@@ -15,4 +15,10 @@ public class CreateSellerPlanRequest {
     private String username;
 
     private String planCode;
+
+    /**
+     * Start the seller asked for, yyyy-MM-dd'T'HH:mm. Optional; the admin
+     * assignment flow leaves it empty and keeps starting on activation day.
+     */
+    private String startAt;
 }

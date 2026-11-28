@@ -53,4 +53,13 @@ public interface UserRepository extends JpaRepository<User, String> {
         @Query("SELECT u FROM User u WHERE u.userName IN :usernames")
         List<User> findByUserNames(@Param("usernames") List<String> usernames);
 
+        /**
+         * Self-registration duplicate guard. Email and display name exist only in
+         * this table, so they are compared here; case-insensitive because the two
+         * halves of the app are deployed on databases whose collations differ.
+         */
+        boolean existsByEmailIgnoreCase(String email);
+
+        boolean existsByNameIgnoreCase(String name);
+
 }

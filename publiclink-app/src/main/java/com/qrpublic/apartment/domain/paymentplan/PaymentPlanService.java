@@ -37,6 +37,12 @@ import java.util.Map;
 @Component
 public class PaymentPlanService {
 
+    /**
+     * Bill note stamped on the automatic confirmation of a 0 fee plan, so the
+     * money trail shows clearly that no admin ever verified a transfer.
+     */
+    private static final String AUTO_FREE_NOTE = "auto-approved free plan";
+
     @Autowired
     private CorePaymentPlanService corePaymentPlanService;
 
@@ -84,13 +90,19 @@ public class PaymentPlanService {
      * admin to send manually. Single transaction so assignment and payment are
      * always consistent.
      *
+     * <p>
+     * A 0 fee plan is the exception: there is no money to receive, so it is
+     * confirmed on the spot instead of waiting in the "waiting for pay" queue.
+     * Doing it here rather than in the caller means the self-service flow and the
+     * admin flow cannot drift apart on when a free plan starts running.
+     *
      * @param adminUsername authenticated admin (X-User-ID); the payment page
      *                      shows this admin's transfer accounts
      */
     @Transactional
     public CreateSellerPlanResponse createSellerPlan(CreateSellerPlanRequest request, String adminUsername) {
         PlanUserModel assignment = corePaymentPlanService.createAssignment(
-                request.getUsername(), request.getPlanCode());
+                request.getUsername(), request.getPlanCode(), request.getStartAt());
 
         BigDecimal fee = assignment.getFee();
         PaymentModel payment = corePaymentService.createPayment(
@@ -98,6 +110,16 @@ public class PaymentPlanService {
 
         String paymentUrl = buildPaymentUrl(payment.getPaymentCode());
         corePaymentService.updatePaymentUrl(payment.getPaymentCode(), paymentUrl);
+
+        String status = payment.getStatus();
+        if (fee != null && fee.signum() == 0) {
+            // Reuses the whole admin confirmation path: payment -> PAID, bill,
+            // CREATE -> ACTIVE with today's window, and the seller notification.
+            markPaidAssignments(List.of(assignment.getPlanUserCode()), AUTO_FREE_NOTE, adminUsername, null);
+            status = "PAID";
+            log.info("Auto-approved free plan assignment [{}] for seller [{}]",
+                    assignment.getPlanUserCode(), request.getUsername());
+        }
 
         log.info("Created plan assignment [{}] and payment [{}] for seller [{}]",
                 assignment.getPlanUserCode(), payment.getPaymentCode(), request.getUsername());
@@ -109,8 +131,18 @@ public class PaymentPlanService {
         response.setFee(fee);
         response.setPlanDay(assignment.getPlanDay());
         response.setEnvCount(assignment.getEnvQuota());
-        response.setStatus(payment.getStatus());
+        response.setStatus(status);
         return response;
+    }
+
+    /**
+     * Whether this account has already taken the one-time free plan. Self-service
+     * asks before selling another 0 fee plan; the admin flow deliberately ignores
+     * it, because only an admin may hand out free plans more than once.
+     */
+    @Transactional(readOnly = true)
+    public boolean freePlanUsed(String username) {
+        return corePaymentPlanService.hasEverHadFreePlan(username);
     }
 
     /**
@@ -215,17 +247,17 @@ public class PaymentPlanService {
     }
 
     /**
-     * Approve: CREATE -> ACTIVE for every selected code, activation date chosen
-     * by admin, end date derived from the plan length.
+     * Approve: CREATE -> ACTIVE for every selected code. An explicit start wins;
+     * blank falls back to what the seller asked for, or today.
      */
     @Transactional
-    public int approve(List<String> planUserCodes, String activeDate) {
+    public int approve(List<String> planUserCodes, String startAt) {
         int count = 0;
         for (String code : planUserCodes) {
-            corePaymentPlanService.activate(code, activeDate);
+            corePaymentPlanService.activate(code, startAt);
             count++;
         }
-        log.info("Approved {} plan assignment(s) with active date [{}]", count, activeDate);
+        log.info("Approved {} plan assignment(s) with start [{}]", count, startAt);
         return count;
     }
 
@@ -311,7 +343,7 @@ public class PaymentPlanService {
      */
     @Transactional
     public int markPaidAssignments(List<String> planUserCodes, String note, String adminUsername,
-            String activeDate) {
+            String startAt) {
         Map<String, PaymentModel> latest = latestPaymentsByAssignment(planUserCodes);
         int count = 0;
         int started = 0;
@@ -335,14 +367,49 @@ public class PaymentPlanService {
                 corePaymentPlanService.applyExtension(planUserCode);
                 extended++;
             } else {
-                PlanUserModel startedPlan = corePaymentPlanService.activate(planUserCode, activeDate);
+                PlanUserModel startedPlan = corePaymentPlanService.activate(planUserCode, startAt);
                 started++;
                 notifyPlanActivated(assignment.getUsername(), startedPlan, adminUsername);
             }
         }
         log.info("Marked {} payment(s) as paid by admin [{}]: {} plan(s) started on [{}], {} plan(s) extended, "
-                + "{} plan(s) converted", count, adminUsername, started, activeDate, extended, converted);
+                + "{} plan(s) converted", count, adminUsername, started, startAt, extended, converted);
         return count;
+    }
+
+    /**
+     * Admin correction of when plans start, for rows still waiting for payment
+     * and for running plans alike. This is the only way to change a start after
+     * activation; the end always follows from the plan length.
+     */
+    @Transactional
+    public int changeStart(List<String> planUserCodes, String startAt, String adminUsername) {
+        int count = 0;
+        for (String planUserCode : planUserCodes) {
+            PlanUserModel updated = corePaymentPlanService.changeStartWindow(planUserCode, startAt);
+            count++;
+            if ("ACTIVE".equals(updated.getPlanState())) {
+                // Links may already be shared, so the seller has to hear the new
+                // dates rather than discover them from a refused order.
+                notifyPlanWindowChanged(updated.getUsername(), updated, adminUsername);
+            }
+        }
+        log.info("Admin [{}] moved the start of {} plan(s) to [{}]", adminUsername, count, startAt);
+        return count;
+    }
+
+    private void notifyPlanWindowChanged(String username, PlanUserModel plan, String adminUsername) {
+        if (username == null || username.isBlank()) {
+            return;
+        }
+        String message = "The admin changed your plan window: it now runs from " + plan.getActiveDate()
+                + " to " + plan.getEndedDate() + ".";
+        try {
+            coreNotificationService.notifyUsernames(List.of(username), "Plan window updated", message,
+                    "PLAN", adminUsername, "PLAN", plan.getPlanUserCode());
+        } catch (RuntimeException e) {
+            log.error("Plan window changed for [{}] but the notification failed: {}", username, e.getMessage());
+        }
     }
 
     /**

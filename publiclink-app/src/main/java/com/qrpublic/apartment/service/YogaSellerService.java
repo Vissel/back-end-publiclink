@@ -130,8 +130,8 @@ public class YogaSellerService {
 
                     @Override
                     public YogaResultResponse<YogaClassCopyModel> process() {
-                        return YogaResultResponse.of(yogaClassDomain.copyClass(request.getToken(),
-                                sellerUsername, request.getClassCode(), request.getTargets()));
+                        return YogaResultResponse.of(
+                                yogaClassDomain.copyClass(request.getToken(), sellerUsername, request));
                     }
                 });
     }
@@ -198,7 +198,7 @@ public class YogaSellerService {
                         SellerPlanModel plan = sellerPaymentPlanDomain.createPlan(request.getToken(),
                                 sellerUsername, request.getBuyerName(), request.getBuyerEmail(),
                                 request.getTotalDays() == null ? 0 : request.getTotalDays(),
-                                request.getAmountVnd());
+                                request.getAmountVnd(), request.getQuotaType());
                         return YogaResultResponse.of(plan);
                     }
                 });
@@ -223,7 +223,8 @@ public class YogaSellerService {
                     public YogaResultResponse<SellerPlanModel> process() {
                         SellerPlanModel plan = sellerPaymentPlanDomain.updatePlan(request.getToken(),
                                 sellerUsername, request.getSellerPlanCode(), request.getTotalDays(),
-                                request.getAmountVnd(), request.getBuyerEmail(), request.getState());
+                                request.getAmountVnd(), request.getBuyerEmail(), request.getState(),
+                                request.getQuotaType());
                         return YogaResultResponse.of(plan);
                     }
                 });

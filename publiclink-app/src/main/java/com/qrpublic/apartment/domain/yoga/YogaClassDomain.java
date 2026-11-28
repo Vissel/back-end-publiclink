@@ -62,14 +62,23 @@ public class YogaClassDomain {
      * a third class on the same frame) never discards the ones the seller got
      * right. The refusals come back in the result instead.
      */
-    public YogaClassCopyModel copyClass(String token, String sellerUsername, String classCode,
-            List<YogaClassCopyRequest.Target> targets) {
+    public YogaClassCopyModel copyClass(String token, String sellerUsername, YogaClassCopyRequest request) {
+        List<YogaClassCopyRequest.Target> targets = request.getTargets();
+        String classCode = request.getClassCode();
         YogaEnvModel env = yogaEnvAccess.resolveForSeller(token, sellerUsername);
         yogaEnvAccess.assertAlive(env);
         YogaClassModel source = coreYogaClassService.findByCode(classCode);
         if (!env.getEnvId().equals(source.getEnvId())) {
             throw new ApplicationException("Class does not belong to this page.", 403);
         }
+
+        // The dialog shows the source name and coach pre-filled; the seller may
+        // edit them or leave them alone. A blank title is never accepted because
+        // the column is required, while a blank coach legitimately clears it.
+        String title = request.getTitle() == null || request.getTitle().isBlank()
+                ? source.getTitle()
+                : request.getTitle().trim();
+        String coach = request.getCoach() == null ? source.getCoach() : request.getCoach().trim();
 
         LocalDate today = yogaEnvAccess.dbToday();
         LocalDate deadline = env.getWillEndedAtMillis() != null
@@ -90,13 +99,20 @@ public class YogaClassDomain {
                         .dayOfWeek(date.getDayOfWeek().getValue())
                         .startTime(target.getStartTime().trim())
                         .endTime(target.getEndTime().trim())
-                        .title(source.getTitle())
-                        .coach(source.getCoach())
+                        .title(title)
+                        .coach(coach)
                         .capacity(source.getCapacity())
                         .active(Boolean.TRUE)
                         .build()));
             } catch (ApplicationException e) {
                 failed.add(failedTarget(target, e.getErrorMessage()));
+            } catch (org.springframework.dao.DataIntegrityViolationException e) {
+                // A database-level refusal (an index the schedule rule does not
+                // know about) is one bad row, not a failed batch: report it the
+                // same way so the seller never sees a bare 500.
+                log.warn("Copy target [{} {}-{}] refused by the database: {}", target.getDate(),
+                        target.getStartTime(), target.getEndTime(), e.getMostSpecificCause().getMessage());
+                failed.add(failedTarget(target, "This exact slot is already taken."));
             }
         }
         log.info("Seller [{}] copied class [{}]: {} created, {} refused", sellerUsername, classCode,

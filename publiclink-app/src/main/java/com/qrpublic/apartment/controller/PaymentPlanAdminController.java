@@ -9,6 +9,7 @@ import com.qrpublic.apartment.paymentplan.request.ListPlanUserRequest;
 import com.qrpublic.apartment.paymentplan.request.MarkPaidRequest;
 import com.qrpublic.apartment.paymentplan.request.RegenerateLinkRequest;
 import com.qrpublic.apartment.paymentplan.request.RejectPlanRequest;
+import com.qrpublic.apartment.paymentplan.request.StartPlanRequest;
 import com.qrpublic.apartment.paymentplan.response.CheckPlanResponse;
 import com.qrpublic.apartment.paymentplan.response.CreatedPlanResponse;
 import com.qrpublic.apartment.paymentplan.response.ExtendPlanResponse;
@@ -40,112 +41,128 @@ import reactor.core.scheduler.Schedulers;
 @RequestMapping("/admin/v1/paymentPlan")
 public class PaymentPlanAdminController {
 
-    @Autowired
-    private PaymentPlanAdminService paymentPlanAdminService;
+        @Autowired
+        private PaymentPlanAdminService paymentPlanAdminService;
 
-    /**
-     * Create a payment plan in the catalog. No seller is required: the plan
-     * exists on its own and can be linked to one later, from this same dialog
-     * or afterwards.
-     */
-    @PostMapping("/create")
-    public Mono<ResponseEntity<CreatedPlanResponse>> create(@RequestBody CreateCatalogPlanRequest request) {
-        return Mono.fromCallable(() -> paymentPlanAdminService.createCatalogPlan(request))
-                .subscribeOn(Schedulers.boundedElastic())
-                .flatMap(ResponseEntityConvertor::convertToMonoResponseEntity);
-    }
+        /**
+         * Create a payment plan in the catalog. No seller is required: the plan
+         * exists on its own and can be linked to one later, from this same dialog
+         * or afterwards.
+         */
+        @PostMapping("/create")
+        public Mono<ResponseEntity<CreatedPlanResponse>> create(@RequestBody CreateCatalogPlanRequest request) {
+                return Mono.fromCallable(() -> paymentPlanAdminService.createCatalogPlan(request))
+                                .subscribeOn(Schedulers.boundedElastic())
+                                .flatMap(ResponseEntityConvertor::convertToMonoResponseEntity);
+        }
 
-    /**
-     * Quota gate in front of the Generate Product Link second screen.
-     */
-    @PostMapping("/check")
-    public Mono<ResponseEntity<CheckPlanResponse>> checkPlan(@RequestBody CheckPlanRequest request) {
-        return Mono.fromCallable(() -> paymentPlanAdminService.checkPlan(request))
-                .subscribeOn(Schedulers.boundedElastic())
-                .flatMap(ResponseEntityConvertor::convertToMonoResponseEntity);
-    }
+        /**
+         * Quota gate in front of the Generate Product Link second screen.
+         */
+        @PostMapping("/check")
+        public Mono<ResponseEntity<CheckPlanResponse>> checkPlan(@RequestBody CheckPlanRequest request) {
+                return Mono.fromCallable(() -> paymentPlanAdminService.checkPlan(request))
+                                .subscribeOn(Schedulers.boundedElastic())
+                                .flatMap(ResponseEntityConvertor::convertToMonoResponseEntity);
+        }
 
-    @GetMapping("/catalog")
-    public Mono<ResponseEntity<PlanCatalogResponse>> catalog() {
-        return Mono.fromCallable(() -> paymentPlanAdminService.catalog())
-                .subscribeOn(Schedulers.boundedElastic())
-                .flatMap(ResponseEntityConvertor::convertToMonoResponseEntity);
-    }
+        @GetMapping("/catalog")
+        public Mono<ResponseEntity<PlanCatalogResponse>> catalog() {
+                return Mono.fromCallable(() -> paymentPlanAdminService.catalog())
+                                .subscribeOn(Schedulers.boundedElastic())
+                                .flatMap(ResponseEntityConvertor::convertToMonoResponseEntity);
+        }
 
-    /**
-     * Setup page tables. state=CREATE for the approval table, ACTIVE (default)
-     * or ALL for the overview table; username carries the search term.
-     */
-    @PostMapping("/list")
-    public Mono<ResponseEntity<ListPlanUserResponse>> list(
-            @RequestBody Pagination<ListPlanUserRequest> request) {
-        return Mono.fromCallable(() -> paymentPlanAdminService.listPlanUsers(request))
-                .subscribeOn(Schedulers.boundedElastic())
-                .flatMap(ResponseEntityConvertor::convertToMonoResponseEntity);
-    }
+        /**
+         * Setup page tables. state=CREATE for the approval table, ACTIVE (default)
+         * or ALL for the overview table; username carries the search term.
+         */
+        @PostMapping("/list")
+        public Mono<ResponseEntity<ListPlanUserResponse>> list(
+                        @RequestBody Pagination<ListPlanUserRequest> request) {
+                return Mono.fromCallable(() -> paymentPlanAdminService.listPlanUsers(request))
+                                .subscribeOn(Schedulers.boundedElastic())
+                                .flatMap(ResponseEntityConvertor::convertToMonoResponseEntity);
+        }
 
-    /**
-     * ACTIVE plans of one seller, for the generate-flow plan select.
-     */
-    @GetMapping("/userPlans")
-    public Mono<ResponseEntity<ListPlanUserResponse>> userPlans(@RequestParam String username) {
-        return Mono.fromCallable(() -> paymentPlanAdminService.listUserPlans(username))
-                .subscribeOn(Schedulers.boundedElastic())
-                .flatMap(ResponseEntityConvertor::convertToMonoResponseEntity);
-    }
+        /**
+         * ACTIVE plans of one seller, for the generate-flow plan select.
+         */
+        @GetMapping("/userPlans")
+        public Mono<ResponseEntity<ListPlanUserResponse>> userPlans(@RequestParam String username) {
+                return Mono.fromCallable(() -> paymentPlanAdminService.listUserPlans(username))
+                                .subscribeOn(Schedulers.boundedElastic())
+                                .flatMap(ResponseEntityConvertor::convertToMonoResponseEntity);
+        }
 
-    @PostMapping("/approve")
-    public Mono<ResponseEntity<Integer>> approve(@RequestBody ApprovePlanRequest request) {
-        return Mono.fromCallable(() -> paymentPlanAdminService.approve(request))
-                .subscribeOn(Schedulers.boundedElastic())
-                .flatMap(ResponseEntityConvertor::convertToMonoResponseEntity);
-    }
+        @PostMapping("/approve")
+        public Mono<ResponseEntity<Integer>> approve(@RequestBody ApprovePlanRequest request) {
+                return Mono.fromCallable(() -> paymentPlanAdminService.approve(request))
+                                .subscribeOn(Schedulers.boundedElastic())
+                                .flatMap(ResponseEntityConvertor::convertToMonoResponseEntity);
+        }
 
-    @PostMapping("/reject")
-    public Mono<ResponseEntity<Integer>> reject(@RequestBody RejectPlanRequest request) {
-        return Mono.fromCallable(() -> paymentPlanAdminService.reject(request))
-                .subscribeOn(Schedulers.boundedElastic())
-                .flatMap(ResponseEntityConvertor::convertToMonoResponseEntity);
-    }
+        @PostMapping("/reject")
+        public Mono<ResponseEntity<Integer>> reject(@RequestBody RejectPlanRequest request) {
+                return Mono.fromCallable(() -> paymentPlanAdminService.reject(request))
+                                .subscribeOn(Schedulers.boundedElastic())
+                                .flatMap(ResponseEntityConvertor::convertToMonoResponseEntity);
+        }
 
-    /**
-     * Money received: the selected payments go to PAID and their plans start
-     * on the given activation date, which moves them out of the "Waiting for
-     * pay" table and into the active plan list.
-     */
-    @PostMapping("/payment/markPaid")
-    public Mono<ResponseEntity<Integer>> markPaid(
-            @RequestBody MarkPaidRequest request,
-            @RequestHeader(value = HeaderConstant.USER_ID_HEADER, defaultValue = "admin") String adminUsername) {
-        return Mono.fromCallable(() -> paymentPlanAdminService.markPaid(request, adminUsername))
-                .subscribeOn(Schedulers.boundedElastic())
-                .flatMap(ResponseEntityConvertor::convertToMonoResponseEntity);
-    }
+        /**
+         * Move the start of the selected assignments, whether they are still waiting
+         * for payment or already running. The end is recomputed from the plan length
+         * and an already running plan notifies its seller, because links shared
+         * before the change keep their own end date.
+         */
+        @PostMapping("/start")
+        public Mono<ResponseEntity<Integer>> changeStart(
+                        @RequestBody StartPlanRequest request,
+                        @RequestHeader(value = HeaderConstant.USER_ID_HEADER, defaultValue = "admin") String adminUsername) {
+                return Mono.fromCallable(() -> paymentPlanAdminService.changeStart(request, adminUsername))
+                                .subscribeOn(Schedulers.boundedElastic())
+                                .flatMap(ResponseEntityConvertor::convertToMonoResponseEntity);
+        }
 
-    /**
-     * Re-issues the payment URL of the selected plans. Used by the "Waiting for
-     * pay" table when a seller lost the link or the previous one expired.
-     */
-    @PostMapping("/payment/regenerateLink")
-    public Mono<ResponseEntity<RegenerateLinkResponse>> regeneratePaymentLink(
-            @RequestBody RegenerateLinkRequest request) {
-        return Mono.fromCallable(() -> paymentPlanAdminService.regeneratePaymentLink(request))
-                .subscribeOn(Schedulers.boundedElastic())
-                .flatMap(ResponseEntityConvertor::convertToMonoResponseEntity);
-    }
+        /**
+         * Money received: the selected payments go to PAID and their plans start
+         * from {@code startAt} (or from what the seller asked for when it is blank),
+         * which moves them out of the "Waiting for pay" table and into the active
+         * plan list.
+         */
+        @PostMapping("/payment/markPaid")
+        public Mono<ResponseEntity<Integer>> markPaid(
+                        @RequestBody MarkPaidRequest request,
+                        @RequestHeader(value = HeaderConstant.USER_ID_HEADER, defaultValue = "admin") String adminUsername) {
+                return Mono.fromCallable(() -> paymentPlanAdminService.markPaid(request, adminUsername))
+                                .subscribeOn(Schedulers.boundedElastic())
+                                .flatMap(ResponseEntityConvertor::convertToMonoResponseEntity);
+        }
 
-    /**
-     * Sells extra days on a running plan: creates an extension order in the
-     * "Waiting for pay" queue together with its own payment link, priced at the
-     * plan's daily rate. The plan's end date only moves when that order is
-     * marked paid.
-     */
-    @PostMapping("/extend")
-    public Mono<ResponseEntity<ExtendPlanResponse>> extendPlan(
-            @RequestBody ExtendPlanRequest request,
-            @RequestHeader(value = HeaderConstant.USER_ID_HEADER, defaultValue = "admin") String adminUsername) {
-        return Mono.fromCallable(() -> paymentPlanAdminService.extendPlan(request, adminUsername))
-                .subscribeOn(Schedulers.boundedElastic())
-                .flatMap(ResponseEntityConvertor::convertToMonoResponseEntity);
-    }
+        /**
+         * Re-issues the payment URL of the selected plans. Used by the "Waiting for
+         * pay" table when a seller lost the link or the previous one expired.
+         */
+        @PostMapping("/payment/regenerateLink")
+        public Mono<ResponseEntity<RegenerateLinkResponse>> regeneratePaymentLink(
+                        @RequestBody RegenerateLinkRequest request) {
+                return Mono.fromCallable(() -> paymentPlanAdminService.regeneratePaymentLink(request))
+                                .subscribeOn(Schedulers.boundedElastic())
+                                .flatMap(ResponseEntityConvertor::convertToMonoResponseEntity);
+        }
+
+        /**
+         * Sells extra days on a running plan: creates an extension order in the
+         * "Waiting for pay" queue together with its own payment link, priced at the
+         * plan's daily rate. The plan's end date only moves when that order is
+         * marked paid.
+         */
+        @PostMapping("/extend")
+        public Mono<ResponseEntity<ExtendPlanResponse>> extendPlan(
+                        @RequestBody ExtendPlanRequest request,
+                        @RequestHeader(value = HeaderConstant.USER_ID_HEADER, defaultValue = "admin") String adminUsername) {
+                return Mono.fromCallable(() -> paymentPlanAdminService.extendPlan(request, adminUsername))
+                                .subscribeOn(Schedulers.boundedElastic())
+                                .flatMap(ResponseEntityConvertor::convertToMonoResponseEntity);
+        }
 }

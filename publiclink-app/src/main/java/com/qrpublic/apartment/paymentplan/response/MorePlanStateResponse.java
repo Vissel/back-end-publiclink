@@ -40,6 +40,13 @@ public class MorePlanStateResponse {
     private String planPurpose;
 
     /**
+     * True once this account has ever been granted a 0 fee plan. Buying more is
+     * not a second chance at the free trial, and a conversion can never land on
+     * one either, so the screen greys free plans out on both tabs.
+     */
+    private boolean freePlanUsed;
+
+    /**
      * Present when this answer came from a conversion request: what happened and
      * how much, so the screen can show the payment it opened or the success it
      * owed without an extra round trip.

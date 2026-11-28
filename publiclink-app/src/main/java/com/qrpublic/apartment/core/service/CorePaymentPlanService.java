@@ -22,6 +22,9 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.sql.Timestamp;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import java.util.List;
 import java.util.UUID;
 
@@ -34,6 +37,12 @@ import java.util.UUID;
 @Slf4j
 @Service
 public class CorePaymentPlanService {
+
+    /**
+     * Wire format of a seller-chosen plan start: whole minutes, no zone offset,
+     * the same string the plan screen's date picker writes.
+     */
+    private static final DateTimeFormatter REQUESTED_START_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm");
 
     @Autowired
     private PaymentPlanRepository paymentPlanRepository;
@@ -113,12 +122,49 @@ public class CorePaymentPlanService {
      */
     @Transactional
     public PlanUserModel createAssignment(String username, String planCode) {
-        PaymentPlan plan = paymentPlanRepository.findByPlanCode(planCode)
-                .orElseThrow(() -> new ResourceNotFoundException("Payment plan not found: " + planCode));
-        return toAssignmentModel(saveAssignment(coreUserService.getUserEntityByUsername(username), plan));
+        return createAssignment(username, planCode, null);
     }
 
-    private PaymentPlanUser saveAssignment(User user, PaymentPlan plan) {
+    /**
+     * Link a catalog plan to a user, optionally from a start the seller chose
+     * themselves.
+     *
+     * <p>
+     * The chosen window is only projected onto the row: the plan still starts
+     * for real at activation, which re-decides between this request and the
+     * admin's date. Projecting it now is what lets the payment page and the
+     * admin queue show the intended dates before any money arrives, exactly the
+     * way an extension order shows the days it is about to add. A CREATE row
+     * never counts as quota, so the projection cannot be spent early.
+     *
+     * @param requestedStartAt yyyy-MM-dd'T'HH:mm, the seller's choice; blank
+     *                         keeps the plan starting on the activation date
+     */
+    @Transactional
+    public PlanUserModel createAssignment(String username, String planCode, String requestedStartAt) {
+        PaymentPlan plan = paymentPlanRepository.findByPlanCode(planCode)
+                .orElseThrow(() -> new ResourceNotFoundException("Payment plan not found: " + planCode));
+        PaymentPlanUser assignment = newAssignment(coreUserService.getUserEntityByUsername(username), plan);
+        if (requestedStartAt != null && !requestedStartAt.isBlank()) {
+            Timestamp start = parseRequestedStart(requestedStartAt);
+            boolean future = !start.before(now());
+            if (future) {
+                assignment.setRequestedStartAt(start);
+                assignment.setActiveDate(start);
+                assignment.setEndedDate(
+                        Timestamp.valueOf(start.toLocalDateTime().plusDays(plan.getPlanDay())));
+            } else {
+                // The seller sat on the popup until their own start slipped by.
+                // Refusing the purchase now would strand them, and activation
+                // would fall back to the admin's date anyway, so fall back here.
+                log.info("Requested start [{}] of plan [{}] for [{}] is already in the past; "
+                        + "falling back to the activation date", requestedStartAt, planCode, username);
+            }
+        }
+        return toAssignmentModel(paymentPlanUserRepository.save(assignment));
+    }
+
+    private PaymentPlanUser newAssignment(User user, PaymentPlan plan) {
         PaymentPlanUser assignment = new PaymentPlanUser();
         assignment.setPlanUserCode(UUID.randomUUID().toString());
         assignment.setUser(user);
@@ -126,7 +172,7 @@ public class CorePaymentPlanService {
         assignment.setEnvQuota(plan.getEnvCount());
         assignment.setUsedCount(0);
         assignment.setPlanState("CREATE");
-        return paymentPlanUserRepository.save(assignment);
+        return assignment;
     }
 
     /**
@@ -427,6 +473,16 @@ public class CorePaymentPlanService {
     }
 
     /**
+     * Whether this account has ever been granted a free (0 fee) plan. The free
+     * plan is a one-time offer, so the history is what counts rather than the
+     * current state: a grant an admin later rejected has still been taken.
+     */
+    @Transactional(readOnly = true)
+    public boolean hasEverHadFreePlan(String username) {
+        return paymentPlanUserRepository.countFreePlanGrants(username) > 0;
+    }
+
+    /**
      * Evaluate the seller against their plan window and quota without writing.
      * Distinguishes "no plan", "not started yet", "expired" and "quota used up"
      * so the caller can show the right message.
@@ -642,10 +698,11 @@ public class CorePaymentPlanService {
      * CREATE/DEACTIVE -> ACTIVE with the admin chosen start date; the end date
      * is derived from the plan length.
      *
-     * @param activeDate yyyy-MM-dd or yyyy-MM-dd HH:mm:ss; today when blank
+     * @param startAt yyyy-MM-dd or yyyy-MM-dd HH:mm[:ss]; blank means "use the
+     *                start the seller asked for, or today"
      */
     @Transactional
-    public PlanUserModel activate(String planUserCode, String activeDate) {
+    public PlanUserModel activate(String planUserCode, String startAt) {
         PaymentPlanUser assignment = getEntityByCode(planUserCode);
         if (assignment.getExtendDays() != null) {
             // Approving an order row would turn it into a real plan window and
@@ -660,11 +717,75 @@ public class CorePaymentPlanService {
             throw new ValidationException("Plan [" + planUserCode
                     + "] is a conversion order. Confirm its payment instead of approving it.");
         }
-        Timestamp start = parseActiveDate(activeDate);
+        Timestamp start = resolveStart(assignment, startAt);
         Timestamp end = Timestamp.valueOf(start.toLocalDateTime().plusDays(assignment.getPlan().getPlanDay()));
         assignment.setPlanState("ACTIVE");
         assignment.setActiveDate(start);
         assignment.setEndedDate(end);
+        return toAssignmentModel(paymentPlanUserRepository.save(assignment));
+    }
+
+    /**
+     * Which instant the plan starts. An explicit admin value always wins, so a
+     * deliberate start on today's date can no longer be mistaken for an
+     * untouched field. With no value the seller's request is honoured while it
+     * is still ahead; a request that already passed gives way to today, so the
+     * seller still gets the full length they paid for instead of a window that
+     * begins before the money arrived.
+     *
+     * @param adminStart the admin's own choice; blank means "not specified"
+     */
+    private Timestamp resolveStart(PaymentPlanUser assignment, String adminStart) {
+        if (adminStart != null && !adminStart.isBlank()) {
+            return parseActiveDate(adminStart);
+        }
+        Timestamp requested = assignment.getRequestedStartAt();
+        if (requested != null && !requested.before(now())) {
+            return requested;
+        }
+        return parseActiveDate(null);
+    }
+
+    /**
+     * Admin correction of when a plan starts. A waiting row gets the start
+     * activation will use; a running row is moved and keeps the plan's full
+     * length, so a correction never silently costs the seller paid days.
+     *
+     * @param startAt yyyy-MM-dd'T'HH:mm or the other shapes parseRequestedStart
+     *                accepts
+     */
+    @Transactional
+    public PlanUserModel changeStartWindow(String planUserCode, String startAt) {
+        PaymentPlanUser assignment = getEntityByCode(planUserCode);
+        if (assignment.getExtendDays() != null || assignment.getConvertsPlanUserCode() != null) {
+            // Same trap as approving one: the row is money for another plan, not
+            // a window of its own.
+            throw new ValidationException("Plan [" + planUserCode
+                    + "] is an order for another plan. Confirm its payment instead of changing its start.");
+        }
+        String state = assignment.getPlanState();
+        if (!"CREATE".equals(state) && !"ACTIVE".equals(state)) {
+            throw new ValidationException("Only a waiting or running plan can have its start changed. Plan ["
+                    + planUserCode + "] is " + state + ".");
+        }
+        Timestamp start = parseRequestedStart(startAt);
+        if ("CREATE".equals(state) && start.before(now())) {
+            // Nothing has been paid yet, so this is still a promise and cannot be
+            // backdated; the admin can correct the dates after activation.
+            throw new ValidationException("A plan that is still waiting for payment cannot start in the past.");
+        }
+        Timestamp end = Timestamp.valueOf(start.toLocalDateTime().plusDays(assignment.getPlan().getPlanDay()));
+        if (!end.after(now())) {
+            throw new ValidationException("The plan would end on " + DateUtils.dateToString(end)
+                    + ", already in the past. Deactivate it instead.");
+        }
+        if ("CREATE".equals(state)) {
+            // Waiting rows carry the intent; activate reads it back.
+            assignment.setRequestedStartAt(start);
+        }
+        assignment.setActiveDate(start);
+        assignment.setEndedDate(end);
+        log.info("Moved the start of plan [{}] to {}", planUserCode, start);
         return toAssignmentModel(paymentPlanUserRepository.save(assignment));
     }
 
@@ -679,15 +800,34 @@ public class CorePaymentPlanService {
         if (activeDate == null || activeDate.isBlank()) {
             return Timestamp.valueOf(LocalDate.now().atStartOfDay());
         }
-        String value = activeDate.trim();
+        try {
+            // One parser for every admin-shaped start: date only, minutes,
+            // seconds, either separator. A bare "yyyy-MM-dd HH:mm" used to be
+            // unparseable and silently collapsed to midnight.
+            return parseRequestedStart(activeDate);
+        } catch (ValidationException e) {
+            log.warn("Unparseable start [{}], falling back to today", activeDate);
+            return Timestamp.valueOf(LocalDate.now().atStartOfDay());
+        }
+    }
+
+    /**
+     * Parse the start the seller picked. Deliberately strict about the shape and
+     * lenient about the separator and the optional seconds, because the same
+     * value can arrive from the picker or from a hand-written request.
+     */
+    private Timestamp parseRequestedStart(String requestedStartAt) {
+        String value = requestedStartAt.trim().replace(' ', 'T');
         try {
             if (value.length() <= 10) {
                 return Timestamp.valueOf(LocalDate.parse(value).atStartOfDay());
             }
-            return Timestamp.valueOf(value.replace(" ", "T").replace("T", " ").trim());
-        } catch (Exception e) {
-            log.warn("Unparseable active date [{}], falling back to today", activeDate);
-            return Timestamp.valueOf(LocalDate.now().atStartOfDay());
+            return value.length() <= 16
+                    ? Timestamp.valueOf(LocalDateTime.parse(value, REQUESTED_START_FORMAT))
+                    : Timestamp.valueOf(LocalDateTime.parse(value));
+        } catch (DateTimeParseException e) {
+            throw new ValidationException("Requested start [" + requestedStartAt
+                    + "] is not a valid date and time.");
         }
     }
 
@@ -745,6 +885,7 @@ public class CorePaymentPlanService {
                 .planGroup(planGroupOf(plan))
                 .activeDate(DateUtils.dateToString(assignment.getActiveDate()))
                 .endedDate(DateUtils.dateToString(assignment.getEndedDate()))
+                .requestedStartAt(DateUtils.dateToString(assignment.getRequestedStartAt()))
                 .extendDays(extendDays)
                 .extendsPlanUserCode(assignment.getExtendsPlanUserCode())
                 .convertsPlanUserCode(convertsCode)

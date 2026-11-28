@@ -4,6 +4,7 @@ import com.qrpublic.apartment.adapter.authentication.request.FindUserRequest;
 import com.qrpublic.apartment.adapter.authentication.response.FindUserResponse;
 import com.qrpublic.apartment.adapter.template.Result;
 import com.qrpublic.apartment.adapter.user.request.GenerateAccountRequest;
+import com.qrpublic.apartment.adapter.user.request.OwnPasswordChangeRequest;
 import com.qrpublic.apartment.adapter.user.request.UserChangePasswordRequest;
 import com.qrpublic.apartment.adapter.user.request.UserRegisterRequest;
 import com.qrpublic.apartment.adapter.user.request.UserRemoveRequest;
@@ -13,6 +14,7 @@ import com.qrpublic.apartment.adapter.user.response.UserRegisterResponse;
 import com.qrpublic.apartment.adapter.user.response.UserRemoveResponse;
 import com.qrpublic.apartment.adapter.user.response.UserUserAuthResponse;
 import com.qrpublic.apartment.user.service.UserService;
+import com.qrpublic.apartment.user.service.request.ChangeOwnPasswordRequest;
 import com.qrpublic.apartment.user.service.request.ChangePasswordRequest;
 import com.qrpublic.apartment.user.service.request.CreateUserAuthRequest;
 import com.qrpublic.apartment.user.service.request.UserCreateRequest;
@@ -78,6 +80,30 @@ public class UserController {
                     int code = result.getErrorCode() > 0 ? result.getErrorCode() : 400;
                     return ResponseEntity.status(code)
                             .<Result<UserChangePasswordResponse>>body(Result.error(code, result.getErrorMessage()));
+                });
+    }
+
+    /**
+     * Own-password change for a signed-in account: the current password is
+     * verified before the new one is written. This is reached server-to-server
+     * only (the gateway denies it from the outside) with the username the
+     * caller already proved through its JWT.
+     */
+    @PostMapping("/changeOwnPassword")
+    public Mono<Result<UserChangePasswordResponse>> changeOwnPassword(
+            @Valid @RequestBody OwnPasswordChangeRequest request) {
+        ChangeOwnPasswordRequest inner = new ChangeOwnPasswordRequest();
+        inner.setUserName(request.getUserName());
+        inner.setCurrentEncryptedPassword(request.getCurrentEncryptedPassword());
+        inner.setNewEncryptedPassword(request.getNewEncryptedPassword());
+
+        return userService.changeOwnPassword(inner)
+                .map(result -> {
+                    if (result.isSuccess()) {
+                        return Result.success(toUserChangePasswordResponse(result.getData()));
+                    }
+                    return Result.<UserChangePasswordResponse>error(result.getErrorCode(),
+                            result.getErrorMessage());
                 });
     }
 

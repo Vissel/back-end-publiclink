@@ -26,6 +26,8 @@ public class PlanUserModel {
     private String planGroup;
     private String activeDate;
     private String endedDate;
+    /** start the seller asked for when buying; null when nobody asked */
+    private String requestedStartAt;
     /** days bought on top of another plan; non-null marks an extension order */
     private Integer extendDays;
     /** plan user code whose end date the extension adds its days to */

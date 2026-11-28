@@ -173,10 +173,6 @@ public class YogaBookingDomain {
                             "Please set your password with the link the seller sent before booking with your plan.",
                             403);
                 }
-                if (coreYogaBookingService.countPlanBookingsOnDate(callerUsername, date) > 0) {
-                    throw new ApplicationException(
-                            "Your plan day for this date is already used. One class per day.", 409);
-                }
                 buyerUsername = callerUsername;
                 resolvedName = plan.getBuyerName();
                 mode = MODE_PLAN;
@@ -195,8 +191,13 @@ public class YogaBookingDomain {
         }
 
         if (MODE_PLAN.equals(mode)) {
-            sellerPlanId = coreSellerPaymentPlanService.consumeDay(
-                    requireActivePlan(env.getEnvId(), buyerUsername).getSellerPlanCode());
+            // Whether this is the buyer's first plan booking on the date decides
+            // if a day is charged; the plan's own unit decides what that means
+            // for the quota. Checked before the insert, so the count is still
+            // the state of the world the booking is about to change.
+            boolean newDay = coreYogaBookingService.countPlanBookingsOnDate(buyerUsername, date) == 0;
+            sellerPlanId = coreSellerPaymentPlanService.consumeQuota(
+                    requireActivePlan(env.getEnvId(), buyerUsername).getSellerPlanCode(), newDay);
         }
 
         YogaBookingModel booking = coreYogaBookingService.book(classCode, date, buyerUsername,
@@ -224,7 +225,12 @@ public class YogaBookingDomain {
 
         YogaBookingModel cancelled = coreYogaBookingService.cancel(bookingCode, callerUsername);
         if (MODE_PLAN.equals(cancelled.getPaymentMode())) {
-            coreSellerPaymentPlanService.refundDay(cancelled.getSellerPlanId());
+            // The day is only worth returning when no other open plan booking
+            // still covers that date; the cancel is already flushed, so the
+            // count sees the remaining bookings.
+            boolean lastOfDay = coreYogaBookingService
+                    .countPlanBookingsOnDate(cancelled.getBuyerUsername(), date) == 0;
+            coreSellerPaymentPlanService.refundQuota(cancelled.getSellerPlanId(), lastOfDay);
         }
         return cancelled;
     }
@@ -295,8 +301,10 @@ public class YogaBookingDomain {
             throw new ApplicationException("This buyer's payment plan is not active.", 403);
         }
         if (plan.getRemainingDays() <= 0) {
-            throw new ApplicationException("The buyer's plan has no day left ("
-                    + plan.getUsedDays() + "/" + plan.getTotalDays() + "). Ask the seller to top it up.", 403);
+            String unit = plan.countsBookings() ? "bookings" : "days";
+            int used = plan.countsBookings() ? plan.getUsedBookings() : plan.getUsedDays();
+            throw new ApplicationException("The buyer's plan has no " + unit + " left ("
+                    + used + "/" + plan.getTotalDays() + "). Ask the seller to top it up.", 403);
         }
         return plan;
     }

@@ -5,6 +5,7 @@ import com.qrpublic.apartment.adapter.authentication.response.FindUserAuthenResp
 import com.qrpublic.apartment.adapter.authentication.response.FindUserResponse;
 import com.qrpublic.apartment.adapter.template.Result;
 import com.qrpublic.apartment.adapter.user.request.GenerateAccountRequest;
+import com.qrpublic.apartment.adapter.user.request.OwnPasswordChangeRequest;
 import com.qrpublic.apartment.adapter.user.request.UserChangePasswordRequest;
 import com.qrpublic.apartment.adapter.user.request.UserRegisterRequest;
 import com.qrpublic.apartment.adapter.user.request.UserRemoveRequest;
@@ -74,6 +75,21 @@ public class OperatedUserClient {
     public Mono<Result<UserChangePasswordResponse>> changePassword(UserChangePasswordRequest request) {
         return webClient.post()
                 .uri("/changePassword")
+                .bodyValue(request)
+                .retrieve()
+                .bodyToMono(new ParameterizedTypeReference<Result<UserChangePasswordResponse>>() {
+                });
+    }
+
+    /**
+     * Change an own password: the account service verifies the current one
+     * against the stored hash before it writes the new one. Business failures
+     * come back inside the Result body (HTTP 200), so a wrong current password
+     * is a readable answer rather than a transport error.
+     */
+    public Mono<Result<UserChangePasswordResponse>> changeOwnPassword(OwnPasswordChangeRequest request) {
+        return webClient.post()
+                .uri("/changeOwnPassword")
                 .bodyValue(request)
                 .retrieve()
                 .bodyToMono(new ParameterizedTypeReference<Result<UserChangePasswordResponse>>() {

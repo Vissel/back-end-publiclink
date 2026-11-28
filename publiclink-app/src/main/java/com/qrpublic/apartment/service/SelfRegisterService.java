@@ -21,6 +21,7 @@ import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
 
 import java.time.Duration;
+import java.util.Optional;
 import java.util.regex.Pattern;
 
 /**
@@ -49,9 +50,23 @@ public class SelfRegisterService {
     private static final Duration REMOTE_TIMEOUT = Duration.ofSeconds(5);
 
     private static final String TAKEN_MESSAGE = "This username is already taken. Please choose another one.";
+    private static final String EMAIL_TAKEN_MESSAGE = "This email address is already registered. Sign in with it, or register with another email.";
+    private static final String NAME_TAKEN_MESSAGE = "An account with this full name already exists. Please make it distinguishable - add a middle name or a number - and try again.";
     private static final String SUCCESS_MESSAGE = "Account created. Sign in to continue.";
     private static final String ROLE_BUYER = "BUYER";
     private static final String ROLE_SELLER = "SELLER";
+
+    /** The form inputs the response can point at, in the order they are checked. */
+    private static final String FIELD_USERNAME = "username";
+    private static final String FIELD_EMAIL = "email";
+    private static final String FIELD_NAME = "name";
+
+    /**
+     * Which stored value the new account would duplicate, with the answer the
+     * register screen shows for it.
+     */
+    private record DuplicateAccount(String field, String message) {
+    }
 
     @Autowired
     private CoreUserService coreUserService;
@@ -69,29 +84,67 @@ public class SelfRegisterService {
             return Mono.just(response(HttpStatus.BAD_REQUEST, username, name, email, problem));
         }
 
+        // Name and email are optional on the register screen. The username
+        // stands in as the display name, so the admin lists, notification text
+        // and transfer copy never show an empty person; the email is simply
+        // absent until the account gives one.
+        String displayName = name.isBlank() ? username : name;
+
         String role = ROLE_BUYER.equalsIgnoreCase(trimOf(request.getRole())) ? ROLE_BUYER : ROLE_SELLER;
-        // Asked on the register screen and stored on the local row only: which
-        // plan group an account may buy from is a business fact, not part of the
-        // identity the account service holds.
-        String planPurpose = PlanGroup.fromPurpose(request.getPlanPurpose()).name();
-        return usernameTakenLocally(username)
-                .flatMap(taken -> taken
-                        ? Mono.just(response(HttpStatus.CONFLICT, username, name, email, TAKEN_MESSAGE))
-                        : registerRemoteThenLocal(username, name, email, request.getPassword(), role, planPurpose))
+        // The purpose question moved from the register form to the plan screen
+        // (step 2). Registration stores only what it was given - players give
+        // none - and leaves the rest unset, so the plan screen can tell "never
+        // chose" apart from "chose PRODUCT".
+        String purposeRaw = trimOf(request.getPlanPurpose());
+        String planPurpose = purposeRaw.isBlank() ? null : PlanGroup.fromPurpose(purposeRaw).name();
+        return firstDuplicate(username, email, name)
+                .flatMap(duplicate -> duplicate
+                        .map(found -> Mono.just(response(HttpStatus.CONFLICT, username, displayName, email,
+                                found.message(), found.field())))
+                        .orElseGet(() -> registerRemoteThenLocal(username, displayName, email,
+                                request.getPassword(), role, planPurpose)))
                 .onErrorResume(ex -> {
                     log.error("Self-registration failed for [{}]", username, ex);
-                    return Mono.just(response(HttpStatus.SERVICE_UNAVAILABLE, username, name, email,
+                    return Mono.just(response(HttpStatus.SERVICE_UNAVAILABLE, username, displayName, email,
                             "The account service is unreachable right now. Please try again in a moment."));
                 });
     }
 
     /**
-     * A row in publiclink-db means the name is used even when the account
-     * service says nothing, so the local check runs first.
+     * Duplicate account guard, in the order the register screen asks for the
+     * values: username, then email, then full name.
+     *
+     * <p>
+     * All three are compared against publiclink-db.user, which is the account
+     * directory: it is the only place an email is stored and the only one
+     * searchable by display name. The username is checked against the account
+     * service too, further down, because an account can exist there without a
+     * local row.
+     *
+     * @return the first clash, or an empty Optional when the account may be
+     *         created. Emptiness here carries a meaning, so no signal may be
+     *         dropped: a {@code Mono} that completes without a value would
+     *         silently skip the registration itself.
      */
-    private Mono<Boolean> usernameTakenLocally(String username) {
-        return Mono.fromCallable(() -> coreUserService.findUserEntityByUsername(username).isPresent())
-                .subscribeOn(Schedulers.boundedElastic());
+    private Mono<Optional<DuplicateAccount>> firstDuplicate(String username, String email, String name) {
+        return Mono.fromCallable(() -> {
+            if (coreUserService.findUserEntityByUsername(username).isPresent()) {
+                return Optional.of(new DuplicateAccount(FIELD_USERNAME, TAKEN_MESSAGE));
+            }
+            // Optional values are compared only when they were given: a blank
+            // email is absent rather than duplicated, and a blank name falls back
+            // to the username already checked above.
+            if (!email.isBlank() && coreUserService.isEmailInUse(email)) {
+                return Optional.of(new DuplicateAccount(FIELD_EMAIL, EMAIL_TAKEN_MESSAGE));
+            }
+            if (!name.isBlank() && coreUserService.isNameInUse(name)) {
+                return Optional.of(new DuplicateAccount(FIELD_NAME, NAME_TAKEN_MESSAGE));
+            }
+            // Typed explicitly: the two Optional.of(...) branches and this one
+            // have to unify for the reactive signature, and the IDE compiler does
+            // not infer the element type from the method's return type.
+            return Optional.<DuplicateAccount>empty();
+        }).subscribeOn(Schedulers.boundedElastic());
     }
 
     private Mono<ResponseEntity<SelfRegisterResponse>> registerRemoteThenLocal(String username, String name,
@@ -100,7 +153,7 @@ public class SelfRegisterService {
                 .timeout(REMOTE_TIMEOUT)
                 // any answer means the account service already knows the name
                 .flatMap(found -> Mono.just(
-                        response(HttpStatus.CONFLICT, username, name, email, TAKEN_MESSAGE)))
+                        response(HttpStatus.CONFLICT, username, name, email, TAKEN_MESSAGE, FIELD_USERNAME)))
                 .switchIfEmpty(Mono.defer(
                         () -> createRemoteAccount(username, name, email, encryptedPassword, role, planPurpose)))
                 // the account service answers 404 for an unknown name: that is
@@ -187,6 +240,12 @@ public class SelfRegisterService {
      * The password itself is opaque here - it is decrypted by the account
      * service - so its length rule is enforced by the browser and by that
      * service. Everything else is checked before a single remote call.
+     *
+     * <p>
+     * Only the username and the password are required. Name and email are
+     * optional: a blank name falls back to the username, and a blank email is
+     * simply absent. Whatever is given is still length- and (for the email)
+     * shape-checked, so a typo is caught before the account exists.
      */
     private String firstProblem(String username, String name, String email, String encryptedPassword) {
         if (username.isBlank()) {
@@ -195,16 +254,13 @@ public class SelfRegisterService {
         if (!USERNAME_PATTERN.matcher(username).matches()) {
             return "Username must be 3-30 characters: letters, numbers, dot, dash or underscore.";
         }
-        if (name.isBlank()) {
-            return "Your name is required.";
-        }
         if (name.length() > MAX_NAME_LENGTH) {
             return "Name must be at most 100 characters.";
         }
-        if (email.isBlank()) {
-            return "An email address is required so we can contact you about your plan and payment.";
+        if (email.length() > MAX_EMAIL_LENGTH) {
+            return "The email address must be at most 100 characters.";
         }
-        if (email.length() > MAX_EMAIL_LENGTH || !EMAIL_PATTERN.matcher(email).matches()) {
+        if (!email.isBlank() && !EMAIL_PATTERN.matcher(email).matches()) {
             return "Please enter a valid email address.";
         }
         if (encryptedPassword == null || encryptedPassword.isBlank()) {
@@ -215,11 +271,17 @@ public class SelfRegisterService {
 
     private ResponseEntity<SelfRegisterResponse> response(HttpStatus status, String username, String name,
             String email, String message) {
+        return response(status, username, name, email, message, null);
+    }
+
+    private ResponseEntity<SelfRegisterResponse> response(HttpStatus status, String username, String name,
+            String email, String message, String field) {
         SelfRegisterResponse body = new SelfRegisterResponse();
         body.setUsername(username);
         body.setName(name);
         body.setEmail(email);
         body.setMessage(message);
+        body.setField(field);
         return ResponseEntity.status(status).<SelfRegisterResponse>body(body);
     }
 

@@ -3,6 +3,7 @@ package com.qrpublic.apartment.service;
 import com.qrpublic.apartment.core.model.PaymentModel;
 import com.qrpublic.apartment.core.model.PaymentPlanModel;
 import com.qrpublic.apartment.core.model.PlanUserModel;
+import com.qrpublic.apartment.core.service.CoreTimezoneService;
 import com.qrpublic.apartment.core.service.CoreUserService;
 import com.qrpublic.apartment.domain.paymentplan.PaymentDomainService;
 import com.qrpublic.apartment.domain.paymentplan.PaymentPlanService;
@@ -15,6 +16,7 @@ import com.qrpublic.apartment.paymentplan.request.ChangePlanPurposeRequest;
 import com.qrpublic.apartment.paymentplan.request.ConvertPlanRequest;
 import com.qrpublic.apartment.paymentplan.request.CreateSellerPlanRequest;
 import com.qrpublic.apartment.paymentplan.request.ExtendPlanRequest;
+import com.qrpublic.apartment.paymentplan.request.PlanWindowRequest;
 import com.qrpublic.apartment.paymentplan.request.SelectPlanRequest;
 import com.qrpublic.apartment.paymentplan.response.CreateSellerPlanResponse;
 import com.qrpublic.apartment.paymentplan.response.ConvertPlanResponse;
@@ -22,6 +24,7 @@ import com.qrpublic.apartment.paymentplan.response.ExtendPlanResponse;
 import com.qrpublic.apartment.paymentplan.response.MorePlanStateResponse;
 import com.qrpublic.apartment.paymentplan.response.PlanCatalogResponse;
 import com.qrpublic.apartment.paymentplan.response.PaymentInfoResponse;
+import com.qrpublic.apartment.paymentplan.response.PlanWindowResponse;
 import com.qrpublic.apartment.paymentplan.response.SelfServiceStateResponse;
 import com.qrpublic.apartment.util.DateUtils;
 import com.qrpublic.apartment.template.model.Result;
@@ -37,6 +40,11 @@ import org.springframework.web.util.UriComponentsBuilder;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.sql.Timestamp;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import java.util.List;
 
 /**
@@ -68,6 +76,12 @@ public class SelfServicePlanService {
      */
     private static final String EXTEND_CONTENT = "mở rộng môi trường thêm %d ngày";
 
+    /**
+     * Wire format of the chosen plan window: whole minutes, no zone offset,
+     * exactly what the plan screen's date picker reads and writes.
+     */
+    private static final DateTimeFormatter WINDOW_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm");
+
     @Autowired
     private PaymentPlanService paymentPlanService;
 
@@ -76,6 +90,9 @@ public class SelfServicePlanService {
 
     @Autowired
     private CoreUserService coreUserService;
+
+    @Autowired
+    private CoreTimezoneService coreTimezoneService;
 
     @Autowired
     private PublicLinkServiceTemplate publicLinkServiceTemplate;
@@ -113,9 +130,95 @@ public class SelfServicePlanService {
 
                     @Override
                     public SelfServiceStateResponse process() {
-                        return buyPlan(username, request.getPlanCode().trim());
+                        return buyPlan(username, request.getPlanCode().trim(), request.getStartAt());
                     }
                 });
+    }
+
+    /**
+     * What window a plan would run for, so the seller can move the start and see
+     * the end follow. Nothing is reserved and nothing is written: the same call
+     * is made on opening the popup and on every change of the start, and the
+     * order only records the answer once the seller confirms it.
+     */
+    public Result<PlanWindowResponse> planWindow(String username, PlanWindowRequest request) {
+        return publicLinkServiceTemplate
+                .execute(new ProcessCallback<String, PlanWindowResponse>() {
+                    @Override
+                    public String getRequest() {
+                        return username;
+                    }
+
+                    @Override
+                    public void preProcess(String caller) {
+                        Assert.hasText(caller, "Account identity is required.");
+                        Assert.notNull(request, "A plan must be selected.");
+                        Assert.hasText(request.getPlanCode(), "A plan must be selected.");
+                    }
+
+                    @Override
+                    public PlanWindowResponse process() {
+                        return calculateWindow(username, request);
+                    }
+                });
+    }
+
+    private PlanWindowResponse calculateWindow(String username, PlanWindowRequest request) {
+        // Same gate as buying: an admin or an unknown account gets the readable
+        // refusal here rather than a popup that leads nowhere.
+        purchasingAccountOrThrow(username);
+        PaymentPlanModel plan = findOnSalePlan(request.getPlanCode().trim());
+        Timestamp start = resolveWindowStart(request.getStartAt());
+        // The same length rule as activation, so the end shown here is the end
+        // the plan really gets once the money is confirmed.
+        Timestamp end = Timestamp.valueOf(start.toLocalDateTime().plusDays(plan.getPlanDay()));
+
+        PlanWindowResponse response = new PlanWindowResponse();
+        response.setStartAt(WINDOW_FORMAT.format(start.toLocalDateTime()));
+        response.setEndAt(WINDOW_FORMAT.format(end.toLocalDateTime()));
+        response.setPlanDay(plan.getPlanDay());
+        return response;
+    }
+
+    /**
+     * The chosen start, or now when the seller has not touched it yet. Truncated
+     * to the minute because that is the picker's own granularity: the minute the
+     * seller is looking at must not read as already gone.
+     */
+    private Timestamp resolveWindowStart(String startAt) {
+        Timestamp now = Timestamp.valueOf(nowToTheMinute());
+        if (startAt == null || startAt.isBlank()) {
+            return now;
+        }
+        LocalDateTime requested = parseWindowStart(startAt.trim());
+        if (requested.isBefore(now.toLocalDateTime())) {
+            throw new ApplicationException(
+                    "The start cannot be earlier than now. Please pick a later date.", 400);
+        }
+        return Timestamp.valueOf(requested);
+    }
+
+    private LocalDateTime nowToTheMinute() {
+        return new Timestamp(coreTimezoneService.getNow().getTime()).toLocalDateTime()
+                .withSecond(0)
+                .withNano(0);
+    }
+
+    private LocalDateTime parseWindowStart(String value) {
+        // The picker writes yyyy-MM-ddTHH:mm; tolerating the space separator and
+        // the seconds variant costs nothing and keeps curl calls from failing.
+        String normalized = value.replace(' ', 'T');
+        try {
+            if (normalized.length() <= 10) {
+                return LocalDate.parse(normalized).atStartOfDay();
+            }
+            return normalized.length() <= 16
+                    ? LocalDateTime.parse(normalized, WINDOW_FORMAT)
+                    : LocalDateTime.parse(normalized);
+        } catch (DateTimeParseException e) {
+            throw new ApplicationException(
+                    "The start is not a valid date and time. Please pick it again.", 400);
+        }
     }
 
     /**
@@ -193,7 +296,7 @@ public class SelfServicePlanService {
 
                     @Override
                     public MorePlanStateResponse process() {
-                        return buyAdditionalPlan(username, request.getPlanCode().trim());
+                        return buyAdditionalPlan(username, request.getPlanCode().trim(), request.getStartAt());
                     }
                 });
     }
@@ -225,10 +328,10 @@ public class SelfServicePlanService {
                 });
     }
 
-    private SelfServiceStateResponse buyPlan(String username, String planCode) {
+    private SelfServiceStateResponse buyPlan(String username, String planCode, String startAt) {
         requireSelfServiceAdmin();
         assertLocalAccount(username);
-        assertPlanOnSale(planCode);
+        PaymentPlanModel plan = findOnSalePlan(planCode);
 
         List<PlanUserModel> assignments = paymentPlanService.assignmentsWithPayments(username);
         PlanUserModel open = firstOpenOrder(assignments);
@@ -242,23 +345,29 @@ public class SelfServicePlanService {
             // for already covers it.
             return buildState(assignments, username);
         }
+        assertFreePlanStillAvailable(plan, username);
 
         CreateSellerPlanRequest createRequest = new CreateSellerPlanRequest();
         createRequest.setUsername(username);
         createRequest.setPlanCode(planCode);
+        createRequest.setStartAt(startAt);
         CreateSellerPlanResponse created = paymentPlanService.createSellerPlan(createRequest, selfServiceAdmin);
 
         // Same hand-off as the admin flow: the assignment and payment are
-        // committed, so the QR generator can build the VietQR against them.
-        eventPublisher.publishEvent(new PaymentCreatedEvent(
-                created.getPaymentCode(),
-                created.getFee(),
-                username,
-                buildPlanLabel(created.getFee(), created.getPlanDay()),
-                selfServiceAdmin));
+        // committed, so the QR generator can build the VietQR against them. A
+        // free plan is already confirmed by createSellerPlan, so there is no
+        // transfer to generate a QR for.
+        if (!isFree(created.getFee())) {
+            eventPublisher.publishEvent(new PaymentCreatedEvent(
+                    created.getPaymentCode(),
+                    created.getFee(),
+                    username,
+                    buildPlanLabel(created.getFee(), created.getPlanDay()),
+                    selfServiceAdmin));
+        }
 
-        log.info("Seller [{}] self-served plan [{}] -> payment [{}]", username, planCode,
-                created.getPaymentCode());
+        log.info("Seller [{}] self-served plan [{}] -> payment [{}] status [{}]", username, planCode,
+                created.getPaymentCode(), created.getStatus());
         return buildState(username);
     }
 
@@ -271,8 +380,16 @@ public class SelfServicePlanService {
         response.setContactEmail(coreUserService.findUserEntityByUsername(username)
                 .map(User::getEmail)
                 .orElse(null));
-        String purpose = purposeOf(username);
-        response.setPlanPurpose(purpose);
+        String storedPurpose = coreUserService.findPlanPurpose(username);
+        response.setPlanPurpose(PlanGroup.fromPurpose(storedPurpose).name());
+        // The register form no longer asks; the choice lives here, so the plan
+        // screen has to know whether it still owes the account an answer. A
+        // blank store is an account that never chose - legacy ones included -
+        // and only those see the choice cards before the catalog.
+        response.setPurposeChosen(storedPurpose != null && !storedPurpose.isBlank());
+        // Tells the screen to grey the free card out rather than let the seller
+        // pick it and get refused only after clicking.
+        response.setFreePlanUsed(paymentPlanService.freePlanUsed(username));
 
         PlanUserModel active = assignments.stream()
                 .filter(assignment -> "ACTIVE".equals(assignment.getPlanState()))
@@ -289,10 +406,11 @@ public class SelfServicePlanService {
                     : SelfServiceStateResponse.STATE_WAITING_TRANSFER);
             return response;
         }
-        if (active != null && hasUsablePlan(username, purpose)) {
-            // Only a plan of the group this account registered for counts as
-            // covering it, so a booking seller holding a product plan is still
-            // offered the booking catalog instead of being sent away satisfied.
+        if (active != null && hasUsablePlan(username, PlanGroup.fromPurpose(storedPurpose).name())) {
+            // Only a plan of the group this account chose (or was registered
+            // with) counts as covering it, so a booking seller holding a
+            // product plan is still offered the booking catalog instead of
+            // being sent away satisfied.
             response.setState(SelfServiceStateResponse.STATE_ACTIVE);
             return response;
         }
@@ -388,10 +506,10 @@ public class SelfServicePlanService {
         return local;
     }
 
-    private MorePlanStateResponse buyAdditionalPlan(String username, String planCode) {
+    private MorePlanStateResponse buyAdditionalPlan(String username, String planCode, String startAt) {
         requireSelfServiceAdmin();
         purchasingAccountOrThrow(username);
-        assertPlanOnSale(planCode);
+        PaymentPlanModel plan = findOnSalePlan(planCode);
 
         List<PlanUserModel> assignments = paymentPlanService.assignmentsWithPayments(username);
         PlanUserModel open = firstOpenOrder(assignments);
@@ -402,21 +520,26 @@ public class SelfServicePlanService {
                     open.getPlanUserCode());
             return buildMoreState(assignments, username);
         }
+        // Buying more is not a second chance at the free trial either.
+        assertFreePlanStillAvailable(plan, username);
 
         CreateSellerPlanRequest createRequest = new CreateSellerPlanRequest();
         createRequest.setUsername(username);
         createRequest.setPlanCode(planCode);
+        createRequest.setStartAt(startAt);
         CreateSellerPlanResponse created = paymentPlanService.createSellerPlan(createRequest, selfServiceAdmin);
 
-        eventPublisher.publishEvent(new PaymentCreatedEvent(
-                created.getPaymentCode(),
-                created.getFee(),
-                username,
-                buildPlanLabel(created.getFee(), created.getPlanDay()),
-                selfServiceAdmin));
+        if (!isFree(created.getFee())) {
+            eventPublisher.publishEvent(new PaymentCreatedEvent(
+                    created.getPaymentCode(),
+                    created.getFee(),
+                    username,
+                    buildPlanLabel(created.getFee(), created.getPlanDay()),
+                    selfServiceAdmin));
+        }
 
-        log.info("Account [{}] bought an extra plan [{}] -> payment [{}]", username, planCode,
-                created.getPaymentCode());
+        log.info("Account [{}] bought an extra plan [{}] -> payment [{}] status [{}]", username, planCode,
+                created.getPaymentCode(), created.getStatus());
         return buildMoreState(username);
     }
 
@@ -479,6 +602,7 @@ public class SelfServicePlanService {
                 .map(User::getEmail)
                 .orElse(null));
         response.setPlanPurpose(purposeOf(username));
+        response.setFreePlanUsed(paymentPlanService.freePlanUsed(username));
         response.setRemainingQuota(paymentPlanService.remainingQuota(username));
         java.util.Date coverageEnd = paymentPlanService.planCoverageEnd(username);
         response.setCoverageEndDate(coverageEnd == null ? null : DateUtils.dateToString(coverageEnd));
@@ -498,16 +622,29 @@ public class SelfServicePlanService {
         return response;
     }
 
-    private void assertPlanOnSale(String planCode) {
-        boolean onSale = paymentPlanService.catalog().stream()
-                .anyMatch(plan -> planCode.equals(plan.getPlanCode()));
-        if (!onSale) {
-            throw new ApplicationException("This plan is no longer on sale. Please pick another one.", 400);
-        }
+    /** A catalog entry priced at zero, which is the one-time free plan. */
+    private static boolean isFree(BigDecimal fee) {
+        return fee != null && fee.signum() == 0;
     }
 
-    private boolean hasUsablePlan(String username) {
-        return paymentPlanService.remainingQuota(username) > 0;
+    private static boolean isFree(PaymentPlanModel plan) {
+        return isFree(plan.getFee());
+    }
+
+    /**
+     * The free plan is a one-time offer per account, and taking it once is
+     * permanent history: an expired or even an admin-rejected free grant still
+     * counts, so a second self-service pick is refused rather than quietly
+     * extending the trial. Only the admin flow is exempt, because handing out
+     * free plans repeatedly is an admin decision to make deliberately.
+     */
+    private void assertFreePlanStillAvailable(PaymentPlanModel plan, String username) {
+        if (isFree(plan) && paymentPlanService.freePlanUsed(username)) {
+            throw new ApplicationException(
+                    "The free plan can only be taken once per account. Please choose a paid plan, "
+                            + "or contact admin.",
+                    409);
+        }
     }
 
     /** Usable links within one purpose group. */
@@ -686,6 +823,13 @@ public class SelfServicePlanService {
                     "A " + groupOf(source) + " plan cannot become a " + groupOf(target)
                             + " plan. Buy a " + groupOf(target) + " plan instead.",
                     400);
+        }
+        if (isFree(target)) {
+            // Converting owes nothing when the target is free, so without this a
+            // paid plan could be walked down onto the one-time trial and the
+            // free allowance would be spent twice over.
+            throw new ApplicationException(
+                    "A conversion cannot move onto the free plan. Please pick a paid plan.", 400);
         }
 
         BigDecimal delta = feeOf(target).subtract(feeOf(source));

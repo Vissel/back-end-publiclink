@@ -120,4 +120,16 @@ public interface PaymentPlanUserRepository extends JpaRepository<PaymentPlanUser
         @Lock(LockModeType.PESSIMISTIC_WRITE)
         @Query("SELECT ppu FROM PaymentPlanUser ppu WHERE ppu.planUserCode IN :codes")
         List<PaymentPlanUser> findByPlanUserCodeInForUpdate(@Param("codes") List<String> planUserCodes);
+
+        /**
+         * How many times an account has been granted a free (0 fee) plan. There is
+         * deliberately no state filter: the free plan is a one-time offer, so a
+         * grant counts even if an admin later rejected or deactivated it. Only real
+         * plan rows are counted, never extension or conversion order rows, which
+         * point at the same free plan without granting it again.
+         */
+        @Query("SELECT COUNT(ppu) FROM PaymentPlanUser ppu JOIN ppu.user u JOIN ppu.plan p " +
+                        "WHERE u.userName = :username AND p.fee = 0 " +
+                        "AND ppu.extendDays IS NULL AND ppu.convertsPlanUserCode IS NULL")
+        long countFreePlanGrants(@Param("username") String username);
 }

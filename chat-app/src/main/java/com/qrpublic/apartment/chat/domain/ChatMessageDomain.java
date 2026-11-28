@@ -1,6 +1,7 @@
 package com.qrpublic.apartment.chat.domain;
 
 import com.qrpublic.apartment.chat.core.model.ChatConversationModel;
+import com.qrpublic.apartment.chat.core.model.ChatAttachmentModel;
 import com.qrpublic.apartment.chat.core.model.ChatDeviceModel;
 import com.qrpublic.apartment.chat.core.model.ChatDirectionEnum;
 import com.qrpublic.apartment.chat.core.model.ChatMessageModel;
@@ -13,6 +14,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.regex.Matcher;
@@ -63,6 +65,9 @@ public class ChatMessageDomain {
     @Autowired
     AdminPushDomain adminPushDomain;
 
+    @Autowired
+    ChatAttachmentDomain chatAttachmentDomain;
+
     @Value("${chat.max-message-length:2000}")
     private int maxMessageLength;
 
@@ -99,6 +104,35 @@ public class ChatMessageDomain {
 
         ChatMessageModel saved = coreChatService.saveMessage(conversation.getId(), ChatDirectionEnum.CLIENT,
                 clip(content), blankToNull(clientMessageId), null);
+        return finishClientMessage(saved, conversation);
+    }
+
+    /**
+     * Stores a client message carrying one image or document. The bytes are
+     * validated and written before the message row exists, so a refused upload
+     * never leaves a half message behind; the caption becomes the content, or a
+     * {@code [Image] name} placeholder when the visitor sent only the file
+     * (which is also the text the administrator sees in Zalo).
+     */
+    public ChatMessageModel saveClientAttachmentMessage(Long conversationId, String clientMessageId, String caption,
+            byte[] bytes, String fileName, String contentType) {
+        Optional<ChatMessageModel> replayed = coreChatService.findByClientMessageId(clientMessageId);
+        if (replayed.isPresent()) {
+            log.info("Duplicate client attachment POST ignored: clientMessageId={}", clientMessageId);
+            return replayed.get();
+        }
+
+        ChatConversationModel conversation = coreChatService.findConversationById(conversationId)
+                .orElseThrow(() -> new ApplicationException("Conversation not found: " + conversationId, 404));
+
+        ChatAttachmentModel stored = chatAttachmentDomain.store(bytes, fileName, contentType);
+        ChatMessageModel saved = coreChatService.saveMessage(conversation.getId(), ChatDirectionEnum.CLIENT,
+                attachmentContent(caption, stored), blankToNull(clientMessageId), null);
+        saved.setAttachment(coreChatService.saveAttachment(saved.getId(), stored));
+        return finishClientMessage(saved, conversation);
+    }
+
+    private ChatMessageModel finishClientMessage(ChatMessageModel saved, ChatConversationModel conversation) {
         chatEventPublisher.publishMessage(saved);
 
         // The inbox badge, so a message the administrator has not opened is
@@ -219,20 +253,56 @@ public class ChatMessageDomain {
         ChatConversationModel conversation = coreChatService.findConversationById(conversationId)
                 .orElseThrow(() -> new ApplicationException("Conversation not found: " + conversationId, 404));
         ChatMessageModel reply = saveAdminMessage(conversation, content, null, null, SOURCE_CONSOLE);
-
-        if (zaloBridgeDomain.isBridgeEnabled()) {
-            // Keeps the Zalo thread honest: the admin sees in Zalo what they answered
-            // elsewhere.
-            zaloBridgeDomain.dispatchAdminReply(clientTag, content, null)
-                    .subscribe(outcome -> log.info("Console reply mirrored to Zalo: delivered={}, reason={}",
-                            outcome.isDelivered(), outcome.getReason()),
-                            error -> log.warn("Console reply mirror failed: {}", error.getMessage()));
-        }
+        mirrorConsoleReplyToZalo(clientTag, content, reply);
         return reply;
+    }
+
+    /**
+     * Console answer carrying one image or document: same ladder as a text
+     * reply, plus the stored attachment the visitor's widget renders.
+     */
+    public ChatMessageModel consoleReplyWithAttachment(Long conversationId, String caption, byte[] bytes,
+            String fileName, String contentType, String clientTag) {
+        ChatConversationModel conversation = coreChatService.findConversationById(conversationId)
+                .orElseThrow(() -> new ApplicationException("Conversation not found: " + conversationId, 404));
+
+        ChatAttachmentModel stored = chatAttachmentDomain.store(bytes, fileName, contentType);
+        String content = attachmentContent(caption, stored);
+        ChatMessageModel reply = createAdminMessage(conversation, content, null, null);
+        reply.setAttachment(coreChatService.saveAttachment(reply.getId(), stored));
+        chatEventPublisher.publishMessage(reply);
+        markAnswered(conversation.getId(), reply, null);
+        log.info("Administrator attachment reply stored for conversation {} (status={})",
+                conversation.getUuid(), reply.getStatus());
+
+        mirrorConsoleReplyToZalo(clientTag, content, reply);
+        return reply;
+    }
+
+    private void mirrorConsoleReplyToZalo(String clientTag, String content, ChatMessageModel reply) {
+        if (!zaloBridgeDomain.isBridgeEnabled()) {
+            return;
+        }
+        // Keeps the Zalo thread honest: the admin sees in Zalo what they answered
+        // elsewhere.
+        zaloBridgeDomain.dispatchAdminReply(clientTag, content, null)
+                .subscribe(outcome -> log.info("Console reply mirrored to Zalo: delivered={}, reason={}",
+                        outcome.isDelivered(), outcome.getReason()),
+                        error -> log.warn("Console reply mirror failed: {}", error.getMessage()));
     }
 
     private ChatMessageModel saveAdminMessage(ChatConversationModel conversation, String content,
             String quoteZaloMsgId, String adminZaloMessageId, String source) {
+        ChatMessageModel reply = createAdminMessage(conversation, content, quoteZaloMsgId, adminZaloMessageId);
+        chatEventPublisher.publishMessage(reply);
+        markAnswered(conversation.getId(), reply, reply.getQuoteMessageId());
+        log.info("Administrator reply stored for conversation {} (source={}, status={})",
+                conversation.getUuid(), source, reply.getStatus());
+        return reply;
+    }
+
+    private ChatMessageModel createAdminMessage(ChatConversationModel conversation, String content,
+            String quoteZaloMsgId, String adminZaloMessageId) {
         Long quotedMessageId = resolveQuotedMessageId(quoteZaloMsgId);
         ChatStatusEnum initial = chatEventPublisher.isClientOnline(conversation.getUuid())
                 ? ChatStatusEnum.SENT
@@ -240,13 +310,16 @@ public class ChatMessageDomain {
 
         ChatMessageModel reply = coreChatService.saveMessage(conversation.getId(), ChatDirectionEnum.ADMIN,
                 clip(content), null, quotedMessageId);
-        reply = coreChatService.advanceStatus(reply.getId(), initial, adminZaloMessageId, null).orElse(reply);
-        chatEventPublisher.publishMessage(reply);
+        return coreChatService.advanceStatus(reply.getId(), initial, adminZaloMessageId, null).orElse(reply);
+    }
 
-        markAnswered(conversation.getId(), reply, quotedMessageId);
-        log.info("Administrator reply stored for conversation {} (source={}, status={})",
-                conversation.getUuid(), source, reply.getStatus());
-        return reply;
+    /**
+     * Caption when the sender typed one, otherwise the Zalo-visible placeholder.
+     */
+    private String attachmentContent(String caption, ChatAttachmentModel stored) {
+        return caption == null || caption.isBlank()
+                ? ChatAttachmentDomain.placeholder(stored.getKind(), stored.getFileName())
+                : clip(caption);
     }
 
     /**
@@ -378,12 +451,25 @@ public class ChatMessageDomain {
     // ------------------------------------------------------------------ reads
 
     public List<ChatMessageModel> listMessages(Long conversationId) {
-        return coreChatService.listMessages(conversationId);
+        return withAttachments(coreChatService.listMessages(conversationId));
     }
 
     /** Anything a reconnecting visitor missed while the stream was closed. */
     public List<ChatMessageModel> replay(Long conversationId, Long afterMessageId) {
-        return coreChatService.replayAfter(conversationId, afterMessageId);
+        return withAttachments(coreChatService.replayAfter(conversationId, afterMessageId));
+    }
+
+    /**
+     * One batched attachment lookup per page of messages, so history, replay and
+     * the inbox preview never pay a query per row.
+     */
+    private List<ChatMessageModel> withAttachments(List<ChatMessageModel> messages) {
+        Map<Long, ChatAttachmentModel> attachments = coreChatService
+                .findAttachmentsByMessageIds(messages.stream().map(ChatMessageModel::getId).toList());
+        if (!attachments.isEmpty()) {
+            messages.forEach(message -> message.setAttachment(attachments.get(message.getId())));
+        }
+        return messages;
     }
 
     public void publishTyping(String conversationUuid, String source, boolean typing) {

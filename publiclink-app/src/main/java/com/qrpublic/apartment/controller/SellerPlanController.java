@@ -5,10 +5,12 @@ import com.qrpublic.apartment.paymentplan.request.ChangePlanPurposeRequest;
 import com.qrpublic.apartment.paymentplan.request.CheckPlanRequest;
 import com.qrpublic.apartment.paymentplan.request.ConvertPlanRequest;
 import com.qrpublic.apartment.paymentplan.request.ExtendPlanRequest;
+import com.qrpublic.apartment.paymentplan.request.PlanWindowRequest;
 import com.qrpublic.apartment.paymentplan.request.SelectPlanRequest;
 import com.qrpublic.apartment.paymentplan.response.CheckPlanResponse;
 import com.qrpublic.apartment.paymentplan.response.ListPlanUserResponse;
 import com.qrpublic.apartment.paymentplan.response.MorePlanStateResponse;
+import com.qrpublic.apartment.paymentplan.response.PlanWindowResponse;
 import com.qrpublic.apartment.paymentplan.response.SelfServiceStateResponse;
 import com.qrpublic.apartment.service.PaymentPlanAdminService;
 import com.qrpublic.apartment.service.SelfServicePlanService;
@@ -67,6 +69,21 @@ public class SellerPlanController {
                 request.setUsername(sellerUsername);
                 request.setProductType(productType);
                 return Mono.fromCallable(() -> paymentPlanAdminService.checkPlan(request))
+                                .subscribeOn(Schedulers.boundedElastic())
+                                .flatMap(ResponseEntityConvertor::convertToMonoResponseEntity);
+        }
+
+        /**
+         * What window a plan would run for. Called when the seller opens the
+         * plan popup and again every time they move the start, so the end date
+         * always matches the start on screen. Pure calculation: nothing is
+         * reserved and nothing is written, so it is safe to call repeatedly.
+         */
+        @PostMapping("/window")
+        public Mono<ResponseEntity<PlanWindowResponse>> planWindow(
+                        @RequestBody PlanWindowRequest request,
+                        @RequestHeader(value = HeaderConstant.USER_ID_HEADER, defaultValue = "") String sellerUsername) {
+                return Mono.fromCallable(() -> selfServicePlanService.planWindow(sellerUsername, request))
                                 .subscribeOn(Schedulers.boundedElastic())
                                 .flatMap(ResponseEntityConvertor::convertToMonoResponseEntity);
         }

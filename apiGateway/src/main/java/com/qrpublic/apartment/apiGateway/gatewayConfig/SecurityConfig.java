@@ -98,6 +98,12 @@ public class SecurityConfig {
                         // below, which exists for the server-to-server user calls.
                         .pathMatchers("/api/v1/user/avatar")
                         .authenticated()
+                        // Own-password change is called by publiclink-app
+                        // server-to-server with the identity it already read from
+                        // the JWT. Left on the permit-all rule below it would be a
+                        // public write, so it is denied from the outside.
+                        .pathMatchers("/api/v1/user/changeOwnPassword")
+                        .denyAll()
                         .pathMatchers("/api/v1/user/**")
                         .permitAll()
                         .anyExchange().authenticated())

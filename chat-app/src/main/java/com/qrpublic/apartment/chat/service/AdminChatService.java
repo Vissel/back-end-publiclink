@@ -11,9 +11,13 @@ import com.qrpublic.apartment.chat.response.ChatMessageResponse;
 import com.qrpublic.apartment.chat.response.StreamTicketResponse;
 import com.qrpublic.apartment.chat.response.VapidPublicKeyResponse;
 import com.qrpublic.apartment.chat.core.model.ChatConversationModel;
+import com.qrpublic.apartment.chat.core.model.ChatAttachmentModel;
 import com.qrpublic.apartment.chat.core.model.ChatMessageModel;
+import com.qrpublic.apartment.chat.core.service.CoreChatService;
 import com.qrpublic.apartment.chat.domain.ChatConversationDomain;
 import com.qrpublic.apartment.chat.domain.AdminPushDomain;
+import com.qrpublic.apartment.chat.domain.ChatAttachmentDomain;
+import com.qrpublic.apartment.chat.domain.ChatAttachmentDownload;
 import com.qrpublic.apartment.chat.domain.ChatEventPublisher;
 import com.qrpublic.apartment.chat.domain.ChatMessageDomain;
 import com.qrpublic.apartment.chat.domain.ZaloBridgeDomain;
@@ -70,6 +74,12 @@ public class AdminChatService {
 
     @Autowired
     AdminPushDomain adminPushDomain;
+
+    @Autowired
+    CoreChatService coreChatService;
+
+    @Autowired
+    ChatAttachmentDomain chatAttachmentDomain;
 
     @Value("${chat.history-limit:500}")
     private int historyLimit;
@@ -193,6 +203,49 @@ public class AdminChatService {
                 return ChatConvertor.toMessageResponse(reply);
             }
         });
+    }
+
+    /**
+     * Console answer carrying one image or document: same ladder as a text
+     * reply, and the visitor's widget renders the stored attachment.
+     */
+    public Result<ChatMessageResponse> replyWithAttachment(String conversationUuid, String caption, byte[] bytes,
+            String fileName, String contentType) {
+        return chatServiceTemplate.execute(new ProcessCallback<String, ChatMessageResponse>() {
+            @Override
+            public String getRequest() {
+                return conversationUuid;
+            }
+
+            @Override
+            public void preProcess(String uuid) {
+                Assert.hasText(uuid, "Conversation uuid is required.");
+                Assert.notNull(bytes, "An uploaded file is required.");
+                Assert.isTrue(caption == null || caption.length() <= maxMessageLength,
+                        "Caption is longer than " + maxMessageLength + " characters.");
+            }
+
+            @Override
+            public ChatMessageResponse process() {
+                ChatConversationModel conversation = findConversation(conversationUuid);
+                ChatMessageModel reply = chatMessageDomain.consoleReplyWithAttachment(
+                        conversation.getId(), caption, bytes, fileName, contentType,
+                        conversation.getClientTag());
+                log.info("Console attachment reply added to conversation {} by administrator",
+                        conversation.getUuid());
+                return ChatConvertor.toMessageResponse(reply);
+            }
+        });
+    }
+
+    /**
+     * Bytes of one attachment for the console. The gateway already required an
+     * administrator JWT, so any administrator may open any thread's payload.
+     */
+    public ChatAttachmentDownload downloadAttachment(String uuid) {
+        ChatAttachmentModel attachment = coreChatService.findAttachmentByUuid(uuid)
+                .orElseThrow(() -> new ApplicationException("Attachment not found.", 404));
+        return new ChatAttachmentDownload(attachment, chatAttachmentDomain.load(attachment.getStorageKey()));
     }
 
     /** Relays "administrator is typing…" to the waiting visitor. */

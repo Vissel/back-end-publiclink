@@ -46,6 +46,15 @@ public class PaymentPlanUser {
     private Timestamp endedDate;
 
     /**
+     * The start the seller asked for when buying the plan themselves. Kept apart
+     * from {@code activeDate} because the order is still unpaid at that point:
+     * activation decides whether this request is honoured or the admin's own
+     * date wins. Null on admin-assigned rows and on every order row.
+     */
+    @Column(name = "requested_start_at")
+    private Timestamp requestedStartAt;
+
+    /**
      * Days bought on top of an already running plan. Non-null marks this row as
      * an extension order: it grants no environment slot of its own, and paying
      * it grows {@code extendsPlanUserCode}'s end date instead.

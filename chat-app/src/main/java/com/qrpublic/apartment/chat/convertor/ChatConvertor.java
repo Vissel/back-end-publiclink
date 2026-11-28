@@ -1,8 +1,11 @@
 package com.qrpublic.apartment.chat.convertor;
 
+import com.qrpublic.apartment.chat.response.ChatAttachmentResponse;
 import com.qrpublic.apartment.chat.response.ChatConversationResponse;
 import com.qrpublic.apartment.chat.response.ChatMessageResponse;
+import com.qrpublic.apartment.chat.response.ChatStatusResponse;
 import com.qrpublic.apartment.chat.core.model.ChatConversationModel;
+import com.qrpublic.apartment.chat.core.model.ChatAttachmentModel;
 import com.qrpublic.apartment.chat.core.model.ChatMessageModel;
 
 import java.sql.Timestamp;
@@ -27,6 +30,7 @@ public final class ChatConvertor {
         response.setConversationUuid(message.getConversationUuid());
         response.setDirection(message.getDirection() == null ? null : message.getDirection().name());
         response.setContent(message.getContent());
+        response.setAttachment(toAttachmentResponse(message.getAttachment()));
         response.setStatus(message.getStatus() == null ? null : message.getStatus().name());
         response.setClientMessageId(message.getClientMessageId());
         response.setCreatedAt(toIso(message.getCreatedAt()));
@@ -64,6 +68,38 @@ public final class ChatConvertor {
         response.setOwnerDisplayName(conversation.getOwnerDisplayName());
         response.setLastMessagePreview(preview(lastMessage));
         return response;
+    }
+
+    /**
+     * Status frames carry only the transition fields: the status model is read
+     * without the attachment join, so a full message payload here would ship
+     * {@code attachment: null} and clients merging it would drop the image or
+     * file they already render.
+     */
+    public static ChatStatusResponse toStatusResponse(ChatMessageModel message) {
+        if (message == null) {
+            return null;
+        }
+        return new ChatStatusResponse(
+                message.getConversationUuid(),
+                message.getId(),
+                message.getClientMessageId(),
+                message.getStatus() == null ? null : message.getStatus().name(),
+                toIso(message.getDeliveredAt()),
+                toIso(message.getSeenAt()),
+                message.getErrorCode());
+    }
+
+    public static ChatAttachmentResponse toAttachmentResponse(ChatAttachmentModel attachment) {
+        if (attachment == null) {
+            return null;
+        }
+        return new ChatAttachmentResponse(
+                attachment.getUuid(),
+                attachment.getKind() == null ? null : attachment.getKind().name(),
+                attachment.getFileName(),
+                attachment.getMimeType(),
+                attachment.getSizeBytes());
     }
 
     public static String preview(ChatMessageModel message) {

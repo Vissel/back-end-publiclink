@@ -19,6 +19,7 @@
         <module>adapter</module>
         <module>user</module>
         <module>chat-app</module>
+        <module>comment-app</module>
         <!-- <module>data-backup</module> -->
     </modules>
     <packaging>pom</packaging>

@@ -50,6 +50,7 @@ ARTIFACTS=(
   "publiclink-app/target/publiclink-exec.jar"
   "user/target/user-0.0.1-SNAPSHOT.jar"
   "chat-app/target/chat-exec.jar"
+  "comment-app/target/comment-exec.jar"
 )
 
 for tool in sudo flock runuser realpath install getent stat mvn npm; do
@@ -141,11 +142,11 @@ export JAVA_HOME
 export PATH="$JAVA_HOME/bin:$PATH"
 echo "▶ Building with JDK ${JAVA_MAJOR} (${JAVA_BIN}; project target: ${REQUIRED_JAVA})"
 
-# ── Step 1: Build backend (4 modules) ─────────────────────────────────────────
+# ── Step 1: Build backend (5 modules) ─────────────────────────────────────────
 echo ""
 echo "══════════════════════════════════════════════════"
 echo "  Building backend: adapter, apiGateway,"
-echo "  publiclink-app, user, chat-app"
+echo "  publiclink-app, user, chat-app, comment-app"
 echo "══════════════════════════════════════════════════"
 echo ""
 
@@ -209,7 +210,7 @@ set -euo pipefail
 umask 077
 tomcat_dir="$1"; publiclink_dir="$2"; build_dir="$3"; artifacts_dir="$4"
 tomcat_user="$5"; tomcat_group="$6"; publiclink_user="$7"; publiclink_group="$8"
-names=(apiGateway.war publiclink-exec.jar user-0.0.1-SNAPSHOT.jar chat-exec.jar)
+names=(apiGateway.war publiclink-exec.jar user-0.0.1-SNAPSHOT.jar chat-exec.jar comment-exec.jar)
 
 # Directory locks serialize installers without adding a lock file to webapps.
 exec 8<"$tomcat_dir"
@@ -334,7 +335,7 @@ echo "▶ Local artifacts    → ${ARTIFACTS_DIR}"
 echo "  Configuration outside ROOT, backend keys, and unrelated files were left unchanged."
 echo "  Services were NOT restarted; endpoint health does not prove the new backend is running."
 echo "  When ready, restart the services manually (chat restart disconnects active streams):"
-echo "    sudo systemctl restart publiclink-gateway publiclink-app publiclink-user publiclink-chat"
+echo "    sudo systemctl restart publiclink-gateway publiclink-app publiclink-user publiclink-chat publiclink-comment"
 echo "    sudo systemctl restart tomcat"
 echo "  Recovery directories are retained; prune old backups after verifying the release."
 echo "Done."

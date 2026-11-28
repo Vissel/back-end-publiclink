@@ -260,6 +260,24 @@ else
   HEALTH_OK=false
 fi
 
+# Check 4: Comment service (comment-app on :9091 through the gateway /comment/** route)
+# The health path is under the permit-all /comment/api/v1/public/** namespace, so a
+# 200 proves nginx, the gateway route and comment-app together without needing a token.
+log_step "Health check 4: Comment service"
+COMMENT_RESULT=$(curl -s --connect-timeout 5 --max-time 10 -w $'\n%{http_code}' https://share-link.top/apiGateway/comment/api/v1/public/health) || COMMENT_RESULT=$'\n000'
+HTTP_CODE_COMMENT="${COMMENT_RESULT##*$'\n'}"
+COMMENT_BODY="${COMMENT_RESULT%$'\n'*}"
+
+if [[ "$HTTP_CODE_COMMENT" == "200" && "$COMMENT_BODY" == *'"status":"UP"'* ]]; then
+  log_done "Comment service: HTTP $HTTP_CODE_COMMENT — $COMMENT_BODY"
+elif [[ "$HTTP_CODE_COMMENT" == "000" ]]; then
+  log_error "Comment service: no response — is publiclink-comment running? (systemctl status publiclink-comment)"
+  HEALTH_OK=false
+else
+  log_error "Comment service: HTTP $HTTP_CODE_COMMENT, body: ${COMMENT_BODY:0:160} (expected 200 with status UP)"
+  HEALTH_OK=false
+fi
+
 # ── Summary ────────────────────────────────────────────────────────────────────
 echo ""
 echo "══════════════════════════════════════════════════"

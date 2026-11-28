@@ -22,6 +22,9 @@ public class GatewayRoutesConfig {
         @Value("${chat.service.url:http://localhost:9090}")
         private String chatServiceUrl;
 
+        @Value("${comment.service.url:http://localhost:9091}")
+        private String commentServiceUrl;
+
         /**
          * The gateway's own context path. Production puts nginx in front, which
          * strips /apiGateway before proxying, so the base path stays "/" and the
@@ -32,8 +35,9 @@ public class GatewayRoutesConfig {
          * <p>
          * Spring Cloud Gateway builds the downstream URL from the full request
          * URI, base path included. Without removing it here, every service receives
-         * /apiGateway/publiclink/..., /apiGateway/api/v1/user/... or
-         * /apiGateway/chat/... and answers 404 - which is exactly what the QA
+         * /apiGateway/publiclink/..., /apiGateway/api/v1/user/...,
+         * /apiGateway/chat/... or /apiGateway/comment/... and answers 404 - which is
+         * exactly what the QA
          * browser saw for chat, avatar and the seller endpoints while the gateway's
          * own /api/v1/auth/** kept working.
          */
@@ -49,6 +53,11 @@ public class GatewayRoutesConfig {
                                 // spring.webflux.base-path=/chat itself, so the path
                                 // arrives unchanged once the gateway prefix is removed.
                                 .route("ChatApplication", r -> routed(r, "/chat/**", chatServiceUrl))
+                                // Comment service. comment-app declares
+                                // spring.webflux.base-path=/comment itself, so the
+                                // path arrives unchanged once the gateway prefix is
+                                // removed, exactly like chat.
+                                .route("CommentApplication", r -> routed(r, "/comment/**", commentServiceUrl))
                                 .build();
         }
 

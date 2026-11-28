@@ -76,12 +76,21 @@ public class SecurityConfig {
                                 // very gateway and validates itself. Everything else under
                                 // /chat/admin/** still requires the JWT.
                                 "/chat/admin/v1/chat/stream",
+                                // Comment service, public read half (comment-app owns this
+                                // namespace): anonymous buyers see the discussion on a
+                                // sale link. Writes live under /comment/api/v1/comments/**
+                                // and intentionally stay on the authenticated catch-all.
+                                "/comment/api/v1/public/**",
                                 "/publiclink/api/v1/publish/**")// temporary allow user creation without auth for
                                                                 // testing
                         .permitAll()
                         // Internal service writes (for example booking chat messages)
                         // must never be exposed through the public gateway.
                         .pathMatchers("/chat/internal/**")
+                        .denyAll()
+                        // Comment moderation deletes and count lookups are service-to-
+                        // service only; the comment-app routes are reachable directly.
+                        .pathMatchers("/comment/internal/**")
                         .denyAll()
                         // Server-side-only admin registration: admin roles only
                         // (authorities carry plain role strings, no ROLE_ prefix)
@@ -103,6 +112,11 @@ public class SecurityConfig {
                         // the JWT. Left on the permit-all rule below it would be a
                         // public write, so it is denied from the outside.
                         .pathMatchers("/api/v1/user/changeOwnPassword")
+                        .denyAll()
+                        // Password readiness is an internal account-service read used
+                        // by seller plan lists and buyer booking checks. It returns no
+                        // credential material and is not a browser-facing endpoint.
+                        .pathMatchers("/api/v1/user/passwordStatus")
                         .denyAll()
                         .pathMatchers("/api/v1/user/**")
                         .permitAll()
